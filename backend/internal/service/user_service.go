@@ -6,8 +6,6 @@ import (
 	"crypto-custody/internal/api/dto"
 	"crypto-custody/internal/model"
 	"crypto-custody/internal/pkg/auth"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 
 	"golang.org/x/crypto/bcrypt"
@@ -23,6 +21,8 @@ func NewUserService(db *gorm.DB, jwtAuth *auth.JWTAuth) *UserService { // 修改
 	return &UserService{db: db, jwtAuth: jwtAuth}
 }
 
+// ctx context.Context：上下文参数，用于控制请求的生命周期，可以传递取消信号、超时等
+// req dto.RegisterRequest：注册请求的数据传输对象（DTO），包含用户注册所需的信息，如用户名、密码和电话等
 func (s *UserService) Register(ctx context.Context, req dto.RegisterRequest) (*model.User, error) {
 	// 检查用户是否已存在
 	var count int64
@@ -32,26 +32,21 @@ func (s *UserService) Register(ctx context.Context, req dto.RegisterRequest) (*m
 	if count > 0 {
 		return nil, errors.New("username already exists")
 	}
-
 	// 密码加密
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, err
 	}
-
 	// 创建用户
 	user := &model.User{
 		Username: req.Username,
 		Password: string(hashedPassword),
-		// Email:    req.Email,
-		// Phone:    req.Phone,
-		Role: "user",
+		Phone:    req.Phone,
+		Role:     "user",
 	}
-
 	if err := s.db.Create(user).Error; err != nil {
 		return nil, err
 	}
-
 	return user, nil
 }
 
@@ -61,18 +56,15 @@ func (s *UserService) Login(ctx context.Context, req dto.LoginRequest) (*dto.Tok
 	if err := s.db.Where("username = ?", req.Username).First(&user).Error; err != nil {
 		return nil, errors.New("invalid credentials")
 	}
-
 	// 验证密码
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
 		return nil, errors.New("invalid credentials")
 	}
-
 	// 生成token
 	accessToken, refreshToken, err := s.jwtAuth.GenerateTokenPair(&user)
 	if err != nil {
 		return nil, err
 	}
-
 	return &dto.TokenResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
@@ -81,58 +73,31 @@ func (s *UserService) Login(ctx context.Context, req dto.LoginRequest) (*dto.Tok
 	}, nil
 }
 
+// 根据 refresh token 刷新 token 对
 func (s *UserService) RefreshToken(ctx context.Context, refreshToken string) (*dto.TokenResponse, error) {
 	// 验证refresh token
-	// claims, err := s.jwtAuth.ValidateRefreshToken(refreshToken)
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	// 获取用户信息
-	// var user model.User
-	// if err := s.db.First(&user, claims.UserID).Error; err != nil {
-	// 	return nil, err
-	// }
-
-	// 生成新的token对
-	// accessToken, newRefreshToken, err := s.jwtAuth.GenerateTokenPair(&user)
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	// return &dto.TokenResponse{
-	// 	AccessToken:  accessToken,
-	// 	RefreshToken: newRefreshToken,
-	// 	TokenType:    "Bearer",
-	// 	ExpiresIn:    3600,
-	// }, nil
-	// todo
-}
-
-func (s *UserService) CreateUser(username, password, role string) error {
-	hashedPassword := hashPassword(password)
-	user := &model.User{
-		Username: username,
-		Password: hashedPassword,
-		Role:     role,
-	}
-	return s.db.Create(user).Error
-}
-
-func (s *UserService) ValidateUser(username, password string) (*model.User, error) {
-	var user model.User
-	if err := s.db.Where("username = ?", username).First(&user).Error; err != nil {
+	claims, err := s.jwtAuth.ValidateRefreshToken(refreshToken)
+	if err != nil {
 		return nil, err
 	}
-
-	if user.Password != hashPassword(password) {
-		return nil, errors.New("invalid password")
+	// 获取用户信息
+	var user model.User
+	userID, ok := (*claims)["user_id"].(string)
+	if !ok {
+		return nil, errors.New("invalid token claims")
 	}
-
-	return &user, nil
-}
-
-func hashPassword(password string) string {
-	hash := sha256.Sum256([]byte(password))
-	return hex.EncodeToString(hash[:])
+	if err := s.db.First(&user, userID).Error; err != nil {
+		return nil, err
+	}
+	// 生成新的token对
+	accessToken, newRefreshToken, err := s.jwtAuth.GenerateTokenPair(&user)
+	if err != nil {
+		return nil, err
+	}
+	return &dto.TokenResponse{
+		AccessToken:  accessToken,
+		RefreshToken: newRefreshToken,
+		TokenType:    "Bearer",
+		ExpiresIn:    3600,
+	}, nil
 }
