@@ -2,6 +2,8 @@
 package service
 
 import (
+	"crypto-custody/internal/pkg/auth"
+
 	"gorm.io/gorm"
 )
 
@@ -12,9 +14,9 @@ type Services struct {
 	Log    *LogService
 }
 
-func NewServices(db *gorm.DB) *Services {
+func NewServices(db *gorm.DB, jwtAuth *auth.JWTAuth) *Services {
 	return &Services{
-		User:   NewUserService(db),
+		User:   NewUserService(db, jwtAuth),
 		Case:   NewCaseService(db),
 		Wallet: NewWalletService(db),
 		Log:    NewLogService(db),

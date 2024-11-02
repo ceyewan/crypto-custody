@@ -83,29 +83,30 @@ func (s *UserService) Login(ctx context.Context, req dto.LoginRequest) (*dto.Tok
 
 func (s *UserService) RefreshToken(ctx context.Context, refreshToken string) (*dto.TokenResponse, error) {
 	// 验证refresh token
-	claims, err := s.jwtAuth.ValidateRefreshToken(refreshToken)
-	if err != nil {
-		return nil, err
-	}
+	// claims, err := s.jwtAuth.ValidateRefreshToken(refreshToken)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	// 获取用户信息
-	var user model.User
-	if err := s.db.First(&user, claims.UserID).Error; err != nil {
-		return nil, err
-	}
+	// var user model.User
+	// if err := s.db.First(&user, claims.UserID).Error; err != nil {
+	// 	return nil, err
+	// }
 
 	// 生成新的token对
-	accessToken, newRefreshToken, err := s.jwtAuth.GenerateTokenPair(&user)
-	if err != nil {
-		return nil, err
-	}
+	// accessToken, newRefreshToken, err := s.jwtAuth.GenerateTokenPair(&user)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
-	return &dto.TokenResponse{
-		AccessToken:  accessToken,
-		RefreshToken: newRefreshToken,
-		TokenType:    "Bearer",
-		ExpiresIn:    3600,
-	}, nil
+	// return &dto.TokenResponse{
+	// 	AccessToken:  accessToken,
+	// 	RefreshToken: newRefreshToken,
+	// 	TokenType:    "Bearer",
+	// 	ExpiresIn:    3600,
+	// }, nil
+	// todo
 }
 
 func (s *UserService) CreateUser(username, password, role string) error {

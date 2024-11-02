@@ -3,6 +3,7 @@ package main
 import (
 	"crypto-custody/config"
 	"crypto-custody/internal/api"
+	"crypto-custody/internal/pkg/auth"
 	"crypto-custody/internal/pkg/db"
 	"crypto-custody/internal/service"
 	"log"
@@ -20,8 +21,11 @@ func main() {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 
+	// 初始化认证工具
+	jwtAuth := auth.NewJWTAuth("your-secret-key")
+
 	// 初始化服务
-	services := service.NewServices(db.GetDB())
+	services := service.NewServices(db.GetDB(), jwtAuth)
 
 	// 启动HTTP服务器
 	server := api.NewServer(cfg, services)

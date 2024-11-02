@@ -1,0 +1,14 @@
+server:
+  port: 8080
+  mode: "development"
+
+database:
+  host: "localhost"
+  port: 3306
+  user: "ceyewan"
+  password: "1027mysql"
+  dbname: "crypto-custody-db"
+
+jwt:
+  secret: "your_jwt_secret"
+  expire: 24 # token过期时间(小时)
