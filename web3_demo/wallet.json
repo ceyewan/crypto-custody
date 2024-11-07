@@ -1,4 +1,13 @@
 {
-  "private_key": "0x0a72af7918114a4a6953c8e0e873c5e0235c58f1a437c7d68d58c61db5f84d2d",
-  "address": "0xe839266a09630a4780921f673de85bf6606c115c"
+  "wallet1": {
+    "private_key": "0x0a72af7918114a4a6953c8e0e873c5e0235c58f1a437c7d68d58c61db5f84d2d",
+    "address": "0xe839266a09630a4780921f673de85bf6606c115c"
+  },
+  "wallet2": {
+    "private_key": "8ff47f75ce3e6d084c03007667ae896c85c220a0b34194801b1cc8dd40599ab9",
+    "address": "0x007d10c5222c2f326D0145Ab9B6148C6ED9c909d"
+  },
+  "X": "33c6bcf9842d60260e2b7c2d634fd73649c84065eab1ed821a9eff03692a5eb3",
+  "Y": "d278daad6a959e5664246bd0cb321aa8d799c447ba853ece7fb8be9eb3bb3e3f",
+  "address": "0x5c2609C5d7340bA88b95Ae5a335eB5a8b3aE0151"
 }
