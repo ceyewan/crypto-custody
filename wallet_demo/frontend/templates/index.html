@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>账户管理系统</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+    <div class="container">
+        <h1>账户管理系统</h1>
+
+        <div class="create-account">
+            <h2>创建新账户</h2>
+            <input type="text" id="publicKeyX" placeholder="Public Key X">
+            <input type="text" id="publicKeyY" placeholder="Public Key Y">
+            <button onclick="AccountAPI.createAccount()">创建账户</button>
+        </div>
+
+        <div class="account-list">
+            <h2>账户列表</h2>
+            <button onclick="AccountAPI.getAccounts()">刷新列表</button>
+            <button onclick="AccountAPI.transferAll()">全部转账</button>
+            <button onclick="AccountAPI.updateBalance()">更新余额</button>
+            <ul id="accounts-list"></ul>
+        </div>
+
+        <div class="pack-transfer-data">
+            <h2>打包交易数据</h2>
+            <input type="text" id="fromAddress" placeholder="From Address">
+            <input type="text" id="toAddress" placeholder="To Address">
+            <input type="text" id="amount" placeholder="Amount">
+            <button onclick="AccountAPI.packTransferData()">打包交易数据</button>
+            <textarea id="packedDataOutput" placeholder="Packed Data" readonly></textarea>
+        </div>
+
+        <div class="send-transaction">
+            <h2>发送交易</h2>
+            <input type="text" id="signature" placeholder="Signature">
+            <button onclick="AccountAPI.sendTransaction()">发送交易</button>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/api.js') }}"></script>
+</body>
+
+</html>
