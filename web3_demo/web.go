@@ -148,9 +148,9 @@ func packTransferData(fromAddress string, toAddress string, client *ethclient.Cl
 	return s, tx, hex.EncodeToString(h[:])
 }
 
-func signedData(data string) string {
+func signedData(data string, privateKeyHex string) string {
 	// 生成私钥
-	privateKey, err := crypto.HexToECDSA("8ff47f75ce3e6d084c03007667ae896c85c220a0b34194801b1cc8dd40599ab9")
+	privateKey, err := crypto.HexToECDSA(privateKeyHex)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -193,26 +193,19 @@ func sendTransfer(s types.EIP155Signer, tx *types.Transaction, sign string, clie
 	}
 }
 
-func PubkeyToAddress(X string, Y string) {
+func PubkeyToAddress(X string, Y string) string {
 	// 生成公钥
 	xInt := new(big.Int)
 	yInt := new(big.Int)
 	xInt.SetString(X, 16)
 	yInt.SetString(Y, 16)
 	pubKey := crypto.PubkeyToAddress(ecdsa.PublicKey{X: xInt, Y: yInt})
-	fmt.Printf("地址: %s\n", pubKey)
+	fmt.Println("地址:", pubKey.Hex())
+	return pubKey.Hex()
 }
 
-// ParseSignatureFromString 从字符串解析签名数据
-func ParseSignatureFromString(rStr string, sStr string, recid int) (string, error) {
-	// 移除可能存在的前缀
-	rStr = strings.TrimPrefix(rStr, "0x")
-	sStr = strings.TrimPrefix(sStr, "0x")
-	// 将字符串转换为 big.Int
-	r := new(big.Int)
-	s := new(big.Int)
-	r.SetString(rStr, 10) // 假设输入是十进制字符串
-	s.SetString(sStr, 10)
+// ParseSignatureFromRSV 从 r、s、v 解析签名数据
+func ParseSignatureFromRSV(r, s *big.Int, v int) []byte {
 	// 创建65字节的签名
 	signature := make([]byte, 65)
 	// 填充 R (32字节)
@@ -222,47 +215,90 @@ func ParseSignatureFromString(rStr string, sStr string, recid int) (string, erro
 	sBytes := s.Bytes()
 	copy(signature[64-len(sBytes):64], sBytes)
 	// 设置 V (1字节)
-	signature[64] = byte(recid)
-	return hex.EncodeToString(signature), nil
+	signature[64] = byte(v)
+	return signature
+}
+
+// ParseSignatureFromString 从字符串解析签名数据
+func ParseSignatureFromString(rStr, sStr, pubX, pubY, data string) (string, error) {
+	fmt.Println("rStr:", rStr, "sStr:", sStr, "pubX:", pubX, "pubY:", pubY, "data:", data)
+	// 将字符串转换为 big.Int
+	rInt := new(big.Int)
+	rInt.SetString(rStr, 16)
+	sInt := new(big.Int)
+	sInt.SetString(sStr, 16)
+	// 将字符串 hash 转换为 common.Hash
+	hash := common.HexToHash(data)
+	recid := GetRecid(rInt, sInt, hash.Bytes(), pubX, pubY)
+	if recid == -1 {
+		log.Fatal("无法恢复公钥")
+	}
+	return hex.EncodeToString(ParseSignatureFromRSV(rInt, sInt, recid)), nil
+}
+
+// 使用 r、s 和公钥计算得到 recid
+func GetRecid(r, s *big.Int, msg []byte, pubX, pubY string) int {
+	// 分别假设 recid 为 0、1，如何和 r、s 组成签名
+	// 从签名中恢复公钥，然后和给定的公钥比较
+	for i := 0; i < 2; i++ {
+		signature := ParseSignatureFromRSV(r, s, i)
+		// 从签名中恢复公钥
+		pubKey, err := crypto.Ecrecover(msg, signature)
+		if err != nil {
+			log.Fatal(err)
+		}
+		// 比较恢复的公钥和给定的公钥
+		fmt.Println("公钥:", hex.EncodeToString(pubKey))
+		fmt.Println("给定的公钥:", "04"+pubX+pubY)
+		if strings.EqualFold(hex.EncodeToString(pubKey), "04"+pubX+pubY) {
+			return i
+		}
+	}
+	return -1
 }
 
 func main() {
-	// 连接到Sepolia测试网
-	client, err := ethclient.Dial("https://sepolia.infura.io/v3/766c230ed91a48a097e2739b966bbbf7")
-	if err != nil {
-		log.Fatal(err)
-	}
+	// // 连接到Sepolia测试网
+	// client, err := ethclient.Dial("https://sepolia.infura.io/v3/766c230ed91a48a097e2739b966bbbf7")
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+	// var pubX, pubY string
+	// fmt.Print("请输入公钥 X: ")
+	// fmt.Scanln(&pubX)
+	// fmt.Print("请输入公钥 Y: ")
+	// fmt.Scanln(&pubY)
+	// // createWallet()
+	// address := PubkeyToAddress(pubX, pubY)
 
-	// createWallet()
-	PubkeyToAddress("437edafad2be683bdbab09765ddec3a31116713902a7e4d297f01a0717a24666", "d9add5911d70377acae63e1b8016497a395d2ec1ad4dee4984fce3e6dbcac77")
+	// // getBalance("0x007d10c5222c2f326D0145Ab9B6148C6ED9c909d", client)
+	// // getBalance(address, client)
+	// // s, tx, data := packTransferData("0x007d10c5222c2f326D0145Ab9B6148C6ED9c909d", address, client, 0.002)
+	// // fmt.Println("交易哈希的十六进制字符串表示:", data)
+	// // sign := signedData(data)
+	// // fmt.Println("签名数据:", sign)
+	// // sendTransfer(s, tx, sign, client)
+	// // getBalance("0x007d10c5222c2f326D0145Ab9B6148C6ED9c909d", client)
+	// // getBalance(address, client)
+	// fmt.Printf("\n====================================\n")
+	// getBalance("0x007d10c5222c2f326D0145Ab9B6148C6ED9c909d", client)
+	// getBalance(address, client)
+	// s, tx, data := packTransferData(address, "0x007d10c5222c2f326D0145Ab9B6148C6ED9c909d", client, 0.001)
+	// fmt.Println("交易哈希的十六进制字符串表示:", data)
+	// // 等待用户输入 r、s 和 recid
+	// var rStr, sStr string
+	// fmt.Print("请输入 r: ")
+	// fmt.Scanln(&rStr)
+	// fmt.Print("请输入 s: ")
+	// fmt.Scanln(&sStr)
+	// sign, _ := ParseSignatureFromString(rStr, sStr, pubX, pubY, data)
+	// fmt.Println("签名数据:", sign)
+	// sendTransfer(s, tx, sign, client)
+	// getBalance("0x007d10c5222c2f326D0145Ab9B6148C6ED9c909d", client)
+	// getBalance(address, client)
 
-	getBalance("0x007d10c5222c2f326D0145Ab9B6148C6ED9c909d", client)
-	getBalance("0x591F94e95F69C60973587282a6E1DB3e715E87FD", client)
-	s, tx, data := packTransferData("0x007d10c5222c2f326D0145Ab9B6148C6ED9c909d", "0x591F94e95F69C60973587282a6E1DB3e715E87FD", client, 0.002)
-	fmt.Println("交易哈希的十六进制字符串表示:", data)
-	// sign, _ := ParseSignatureFromString("86918276961810349294276103416548851884759982251107", "21114507997443180106271312336959055139605776130386972638976836068026642100057", 1)
-	sign := signedData(data)
-	fmt.Println("签名数据:", sign)
-	sendTransfer(s, tx, sign, client)
-	getBalance("0x007d10c5222c2f326D0145Ab9B6148C6ED9c909d", client)
-	getBalance("0x591F94e95F69C60973587282a6E1DB3e715E87FD", client)
-
-	getBalance("0x007d10c5222c2f326D0145Ab9B6148C6ED9c909d", client)
-	getBalance("0x591F94e95F69C60973587282a6E1DB3e715E87FD", client)
-	s, tx, data = packTransferData("0x591F94e95F69C60973587282a6E1DB3e715E87FD", "0x007d10c5222c2f326D0145Ab9B6148C6ED9c909d", client, 0.001)
-	fmt.Println("交易哈希的十六进制字符串表示:", data)
-	// 等待用户输入 r、s 和 recid
-	var rStr, sStr string
-	var recid int
-	fmt.Print("请输入 r: ")
-	fmt.Scanln(&rStr)
-	fmt.Print("请输入 s: ")
-	fmt.Scanln(&sStr)
-	fmt.Print("请输入 recid: ")
-	fmt.Scanln(&recid)
-	sign, _ = ParseSignatureFromString(rStr, sStr, recid)
-	fmt.Println("签名数据:", sign)
-	sendTransfer(s, tx, sign, client)
-	getBalance("0x007d10c5222c2f326D0145Ab9B6148C6ED9c909d", client)
-	getBalance("0x591F94e95F69C60973587282a6E1DB3e715E87FD", client)
+	// rt, _ := ParseSignatureFromString("91f7366be13227aff457cf4eb9559a983a1861d26fa65cdf37f294b9f5c51601", "5578cefb69ee55905d49341b82053692fbacfc652df4c4550ff579be74a77f82", "87043c9ad380a2cdd78a3854cbe2603548a881c099e64440c2e0e6c8f1296b74", "49fe671eaf1f54497d01b1603a1277427f7963bf300bb6c6a9444c75e0006ce0", "4cca684310ba248350490ab3e82363f147e0ab7c3ff78454c1b53d04b3dab60a")
+	// fmt.Println("签名数据:", rt)
+	createWallet()
+	fmt.Println(signedData("9ab47ded8b4c63192140e96f94dc7378a9d5717440aa2058a1244d886ef98fd4", "4d21e7794ac4ed8310945ea72c6b260ac24d6e5803fd9456217de0832f6c7bec"))
 }
