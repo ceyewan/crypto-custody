@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"offline-server/manager"
+	"offline-server/storage/db"
 	"offline-server/web"
 	"offline-server/ws"
 )
@@ -35,6 +36,11 @@ func main() {
 	// 捕获终止信号
 	ctx, cancel := context.WithCancel(context.Background())
 	setupSignalHandler(cancel)
+
+	// 初始化数据库
+	if err := db.Init(); err != nil {
+		log.Fatalf("初始化数据库失败: %v", err)
+	}
 
 	// 启动Manager服务
 	log.Println("正在启动Manager服务...")

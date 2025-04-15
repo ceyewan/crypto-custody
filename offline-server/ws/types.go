@@ -67,25 +67,28 @@ type KeyGenResponsePayload struct {
 
 // KeyGenParamsPayload 密钥生成参数的载荷
 type KeyGenParamsPayload struct {
-	KeyID      string `json:"key_id"`
-	Threshold  int    `json:"threshold"`   // t
-	TotalParts int    `json:"total_parts"` // n
-	PartIndex  int    `json:"part_index"`  // i
-	OutputFile string `json:"output_file"` // 输出的JSON文件名
+	KeyID       string `json:"key_id"`
+	Threshold   int    `json:"threshold"`              // t
+	TotalParts  int    `json:"total_parts"`            // n
+	PartIndex   int    `json:"part_index"`             // i
+	OutputFile  string `json:"output_file"`            // 输出的JSON文件名
+	AccountAddr string `json:"account_addr,omitempty"` // 账户地址，可选
 }
 
 // KeyGenCompletePayload 密钥生成完成的载荷
 type KeyGenCompletePayload struct {
-	KeyID     string `json:"key_id"`
-	PartIndex int    `json:"part_index"` // i
-	ShareJSON string `json:"share_json"` // 序列化的密钥分享JSON字符串
+	KeyID       string `json:"key_id"`
+	PartIndex   int    `json:"part_index"`   // i
+	AccountAddr string `json:"account_addr"` // 账户地址
+	ShareJSON   string `json:"share_json"`   // 序列化的密钥分享JSON字符串
 }
 
 // SignRequestPayload 签名请求的载荷
 type SignRequestPayload struct {
-	KeyID       string `json:"key_id"`
-	Data        string `json:"data"`         // 要签名的数据
-	AccountAddr string `json:"account_addr"` // 账户地址
+	KeyID        string   `json:"key_id"`
+	Data         string   `json:"data"`                   // 要签名的数据
+	AccountAddr  string   `json:"account_addr"`           // 账户地址
+	Participants []string `json:"participants,omitempty"` // 请求参与签名的用户ID列表，可选
 }
 
 // SignInvitePayload 签名邀请的载荷

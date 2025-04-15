@@ -5,23 +5,12 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"offline-server/web/db"
-	"offline-server/web/model"
+	"offline-server/storage/db"
 	"time"
 )
 
 // Run 启动Web服务器
 func Run(port int) {
-	// 初始化数据库
-	if err := db.Init(); err != nil {
-		log.Fatalf("初始化数据库失败: %v", err)
-	}
-
-	// 自动迁移模型
-	if err := db.AutoMigrate(&model.User{}); err != nil {
-		log.Fatalf("数据库迁移失败: %v", err)
-	}
-
 	// 创建Gin引擎
 	router := Register()
 
@@ -47,11 +36,6 @@ func RunWithGracefulShutdown(ctx context.Context, port int) {
 	// 初始化数据库
 	if err := db.Init(); err != nil {
 		log.Fatalf("初始化数据库失败: %v", err)
-	}
-
-	// 自动迁移模型
-	if err := db.AutoMigrate(&model.User{}); err != nil {
-		log.Fatalf("数据库迁移失败: %v", err)
 	}
 
 	// 创建Gin引擎
