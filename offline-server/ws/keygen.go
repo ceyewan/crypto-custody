@@ -31,9 +31,10 @@ func HandleKeyGenRequest(store Storage, msg Message) error {
 
 	keyID := payload.KeyID
 	threshold := payload.Threshold
+	totalParts := payload.TotalParts
 	participants := payload.Participants
 
-	log.Printf("收到密钥生成请求 KeyID: %s, 阈值: %d, 参与方: %v", keyID, threshold, participants)
+	log.Printf("收到密钥生成请求 KeyID: %s, 阈值: %d, 总分片数: %d, 参与方: %v", keyID, threshold, totalParts, participants)
 
 	// 创建密钥生成会话
 	if err := store.CreateKeyGenSession(keyID, threshold, participants); err != nil {
@@ -42,17 +43,20 @@ func HandleKeyGenRequest(store Storage, msg Message) error {
 	}
 
 	// 向参与方发送邀请
-	invite := Message{
-		Type: KeyGenInviteMsg,
-		Payload: KeyGenInvitePayload{
-			KeyID:        keyID,
-			Threshold:    threshold,
-			Participants: participants,
-		},
-	}
+	for i, userID := range participants {
+		partIndex := i + 1 // 参与者索引从1开始
+		invite := Message{
+			Type:   KeyGenInviteMsg,
+			UserID: userID,
+			Payload: KeyGenInvitePayload{
+				KeyID:        keyID,
+				Threshold:    threshold,
+				TotalParts:   totalParts,
+				PartIndex:    partIndex,
+				Participants: participants,
+			},
+		}
 
-	for _, userID := range participants {
-		invite.UserID = userID
 		if err := SendMessageToUser(store, userID, invite); err != nil {
 			log.Printf("向用户 %s 发送邀请失败: %v", userID, err)
 			// 继续发送给其他参与者，不中断流程
@@ -87,9 +91,10 @@ func HandleKeyGenResponse(store Storage, msg Message) error {
 
 	userID := msg.UserID
 	keyID := payload.KeyID
+	partIndex := payload.PartIndex
 	response := payload.Response
 
-	log.Printf("收到密钥生成响应 UserID: %s, KeyID: %s, 同意: %v", userID, keyID, response)
+	log.Printf("收到密钥生成响应 UserID: %s, KeyID: %s, 分片索引: %d, 同意: %v", userID, keyID, partIndex, response)
 
 	// 更新会话状态
 	err = store.UpdateKeyGenSession(keyID, func(session *KeyGenSession) {
@@ -158,15 +163,20 @@ func HandleKeyGenComplete(store Storage, msg Message) error {
 	userID := msg.UserID
 	keyID := payload.KeyID
 	shareJSON := payload.ShareJSON
+	accountAddr := payload.AccountAddr
+	partIndex := payload.PartIndex
 
-	log.Printf("收到密钥生成完成 UserID: %s, KeyID: %s", userID, keyID)
+	log.Printf("收到密钥生成完成 UserID: %s, KeyID: %s, 分片索引: %d, 账户地址: %s", userID, keyID, partIndex, accountAddr)
 
 	// 保存用户的密钥分享
 	store.AddUserShare(userID, keyID, shareJSON)
 
-	// 更新会话状态
+	// 更新会话状态和账户地址
 	err = store.UpdateKeyGenSession(keyID, func(session *KeyGenSession) {
 		session.Completed[userID] = true
+		if session.AccountAddr == "" {
+			session.AccountAddr = accountAddr
+		}
 	})
 	if err != nil {
 		log.Printf("更新密钥生成会话失败: %v", err)
@@ -190,7 +200,7 @@ func HandleKeyGenComplete(store Storage, msg Message) error {
 
 	// 如果所有参与方都完成了密钥生成，通知协调方
 	if allCompleted {
-		log.Printf("所有参与方都完成了密钥生成 KeyID: %s", keyID)
+		log.Printf("所有参与方都完成了密钥生成 KeyID: %s, 账户地址: %s", keyID, session.AccountAddr)
 		return notifyKeyGenSuccess(store, keyID)
 	}
 
@@ -216,6 +226,7 @@ func sendKeyGenParamsToParticipants(store Storage, keyID string) error {
 	threshold := session.Threshold
 	totalParts := len(session.Participants)
 	participants := session.Participants
+	accountAddr := session.AccountAddr
 
 	// 定义消息发送间隔，避免消息拥塞
 	const messageSendDelay = 500 * time.Millisecond
@@ -223,17 +234,18 @@ func sendKeyGenParamsToParticipants(store Storage, keyID string) error {
 	// 为每个参与方发送密钥生成参数
 	for i, userID := range participants {
 		partIndex := i + 1 // 索引从1开始
-		outputFile := fmt.Sprintf("local-share%d.json", partIndex)
+		outputFile := fmt.Sprintf("local-share-%s-%d.json", keyID, partIndex)
 
 		params := Message{
 			Type:   KeyGenParamsMsg,
 			UserID: userID,
 			Payload: KeyGenParamsPayload{
-				KeyID:      keyID,
-				Threshold:  threshold,
-				TotalParts: totalParts,
-				PartIndex:  partIndex,
-				OutputFile: outputFile,
+				KeyID:       keyID,
+				Threshold:   threshold,
+				TotalParts:  totalParts,
+				PartIndex:   partIndex,
+				OutputFile:  outputFile,
+				AccountAddr: accountAddr,
 			},
 		}
 
@@ -298,6 +310,12 @@ func notifyKeyGenFailed(store Storage, keyID string) error {
 // 返回:
 //   - 如果处理过程中出现错误，返回相应错误；否则返回nil
 func notifyKeyGenSuccess(store Storage, keyID string) error {
+	session, exists := store.GetKeyGenSession(keyID)
+	if !exists {
+		log.Printf("找不到密钥生成会话: %s", keyID)
+		return fmt.Errorf("找不到密钥生成会话: %s", keyID)
+	}
+
 	// 找出协调方
 	var coordinator string
 	clients := store.GetAllClients()
@@ -318,8 +336,9 @@ func notifyKeyGenSuccess(store Storage, keyID string) error {
 		Type:   KeyGenConfirmMsg,
 		UserID: coordinator,
 		Payload: map[string]interface{}{
-			"key_id": keyID,
-			"status": "success",
+			"key_id":       keyID,
+			"status":       "success",
+			"account_addr": session.AccountAddr,
 		},
 	}
 

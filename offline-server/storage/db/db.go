@@ -3,6 +3,7 @@ package db
 import (
 	"fmt"
 	"log"
+	"offline-server/storage/model"
 	"os"
 	"time"
 
@@ -55,7 +56,27 @@ func Init() error {
 	// 保存实例
 	instance = db
 
+	// 自动迁移数据库模型
+	if err := autoMigrateModels(); err != nil {
+		return fmt.Errorf("数据库迁移失败: %w", err)
+	}
+
 	return nil
+}
+
+// autoMigrateModels 自动迁移所有数据库模型
+func autoMigrateModels() error {
+	if instance == nil {
+		return fmt.Errorf("数据库未初始化")
+	}
+
+	// 迁移所有模型
+	return instance.AutoMigrate(
+		&model.UserShare{},
+		&model.KeyGenSession{},
+		&model.SignSession{},
+		&model.User{},
+	)
 }
 
 // AutoMigrate 自动迁移数据库模型

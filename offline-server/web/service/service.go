@@ -2,8 +2,8 @@ package service
 
 import (
 	"errors"
-	"offline-server/web/db"
-	"offline-server/web/model"
+	"offline-server/storage/db"
+	"offline-server/storage/model"
 
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -39,6 +39,7 @@ func (s *AuthService) Register(username, password, email string) (*model.User, e
 		Username: username,
 		Password: string(hashedPassword),
 		Email:    email,
+		Role:     "user", // 默认角色为普通用户
 	}
 
 	if err := database.Create(&user).Error; err != nil {

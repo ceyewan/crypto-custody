@@ -2,12 +2,12 @@ package handler
 
 import (
 	"fmt"
-	"math/rand"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
+	"offline-server/storage"
+	"offline-server/storage/model"
 	"offline-server/tools"
 	"offline-server/web/service"
 
@@ -16,7 +16,10 @@ import (
 
 // 全局服务实例
 var (
-	authService = service.NewAuthService()
+	authService   = service.NewAuthService()
+	keyGenStorage = storage.GetKeyGenStorage()
+	signStorage   = storage.GetSignStorage()
+	shareStorage  = storage.GetShareStorage()
 )
 
 // 处理请求参数绑定的通用函数
@@ -182,15 +185,31 @@ func GenerateKey(c *gin.Context) {
 		return
 	}
 
-	// 生成随机的密钥ID
-	keyID := fmt.Sprintf("key_%s_%d", time.Now().Format("20060102150405"), rand.Intn(10000))
+	// 生成密钥ID
+	keyID := fmt.Sprintf("key_%s_%d", time.Now().Format("20060102150405"), time.Now().UnixNano()%10000)
 
-	// 在实际系统中，这里应该将密钥生成任务保存到数据库
+	// 获取发起人ID
+	initiatorID, _ := c.Get("userID")
+	initiatorIDStr := fmt.Sprintf("%v", initiatorID)
+
+	// 创建密钥生成会话
+	err := keyGenStorage.CreateSession(keyID, initiatorIDStr, req.Threshold, len(req.Participants), req.Participants)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("创建密钥生成会话失败: %v", err)})
+		return
+	}
+
+	// 更新会话状态为已邀请
+	err = keyGenStorage.UpdateStatus(keyID, model.StatusInvited)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("更新会话状态失败: %v", err)})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"code":   http.StatusOK,
 		"key_id": keyID,
-		"status": "pending",
+		"status": string(model.StatusInvited),
 	})
 }
 
@@ -200,6 +219,7 @@ func CreateSignature(c *gin.Context) {
 		KeyID        string   `json:"key_id"`
 		Data         string   `json:"data"`
 		Participants []string `json:"participants"`
+		AccountAddr  string   `json:"account_addr"`
 	}
 
 	if !bindJSON(c, &req) {
@@ -222,16 +242,29 @@ func CreateSignature(c *gin.Context) {
 		return
 	}
 
-	// 生成随机的签名ID
-	signID := fmt.Sprintf("sign_%s_%d", time.Now().Format("20060102150405"), rand.Intn(10000))
+	// 获取发起人ID
+	initiatorID, _ := c.Get("userID")
+	initiatorIDStr := fmt.Sprintf("%v", initiatorID)
 
-	// 在实际系统中，这里应该将签名任务保存到数据库
+	// 创建签名会话
+	err := signStorage.CreateSession(req.KeyID, initiatorIDStr, req.Data, req.AccountAddr, req.Participants)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("创建签名会话失败: %v", err)})
+		return
+	}
+
+	// 更新会话状态为已邀请
+	err = signStorage.UpdateStatus(req.KeyID, model.StatusInvited)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("更新会话状态失败: %v", err)})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"code":    http.StatusOK,
-		"sign_id": signID,
+		"sign_id": req.KeyID,
 		"key_id":  req.KeyID,
-		"status":  "pending",
+		"status":  string(model.StatusInvited),
 	})
 }
 
@@ -243,22 +276,76 @@ func KeyStatus(c *gin.Context) {
 		return
 	}
 
-	// 在实际系统中，这里应该从数据库查询任务状态
-	// 现在我们返回一个模拟的状态
+	// 尝试获取密钥生成会话
+	keyGenSession, err := keyGenStorage.GetSession(id)
+	if err == nil {
+		// 返回密钥生成会话状态
+		c.JSON(http.StatusOK, gin.H{
+			"code":   http.StatusOK,
+			"id":     id,
+			"type":   "keygen",
+			"status": string(keyGenSession.Status),
+			"detail": keyGenSession,
+		})
+		return
+	}
 
-	var status string
-	if strings.HasPrefix(id, "key_") {
-		status = "generated"
-	} else if strings.HasPrefix(id, "sign_") {
-		status = "completed"
-	} else {
-		c.JSON(http.StatusNotFound, gin.H{"error": "找不到指定ID的任务"})
+	// 尝试获取签名会话
+	signSession, err := signStorage.GetSession(id)
+	if err == nil {
+		// 返回签名会话状态
+		c.JSON(http.StatusOK, gin.H{
+			"code":   http.StatusOK,
+			"id":     id,
+			"type":   "sign",
+			"status": string(signSession.Status),
+			"detail": signSession,
+		})
+		return
+	}
+
+	// 找不到指定ID的任务
+	c.JSON(http.StatusNotFound, gin.H{"error": "找不到指定ID的任务"})
+}
+
+// GetUserShares 获取用户的密钥分享
+func GetUserShares(c *gin.Context) {
+	// 获取用户ID
+	userID, _ := c.Get("userID")
+	userIDStr := fmt.Sprintf("%v", userID)
+
+	shares, err := shareStorage.GetUserShares(userIDStr)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("获取用户密钥分享失败: %v", err)})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"code":   http.StatusOK,
-		"id":     id,
-		"status": status,
+		"shares": shares,
+	})
+}
+
+// GetUserShare 获取用户的特定密钥分享
+func GetUserShare(c *gin.Context) {
+	keyID := c.Param("keyID")
+	if keyID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "缺少密钥ID参数"})
+		return
+	}
+
+	// 获取用户ID
+	userID, _ := c.Get("userID")
+	userIDStr := fmt.Sprintf("%v", userID)
+
+	share, err := shareStorage.GetUserShare(userIDStr, keyID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("获取用户密钥分享失败: %v", err)})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":  http.StatusOK,
+		"share": share,
 	})
 }

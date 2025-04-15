@@ -16,6 +16,7 @@ func Register() *gin.Engine {
 	// 初始化各模块路由
 	initUserRouter(r)
 	initKeyRouter(r)
+	initShareRouter(r)
 	initPushRouter(r)
 
 	// 处理404请求
@@ -58,6 +59,16 @@ func initKeyRouter(r *gin.Engine) {
 	}
 }
 
+// initShareRouter 初始化密钥分享相关路由
+func initShareRouter(r *gin.Engine) {
+	shareGroup := r.Group("/share")
+	shareGroup.Use(AuthMiddleware()) // 需要认证
+	{
+		shareGroup.GET("", handler.GetUserShares)       // 获取用户所有密钥分享
+		shareGroup.GET("/:keyID", handler.GetUserShare) // 获取用户特定密钥分享
+	}
+}
+
 // initPushRouter 初始化消息推送相关路由
 func initPushRouter(r *gin.Engine) {
 	pushGroup := r.Group("/push")
@@ -82,12 +93,6 @@ func AuthMiddleware() gin.HandlerFunc {
 		userID, role, err := tools.ValidateToken(tokenString)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "无效的认证令牌"})
-			return
-		}
-
-		// 检查是否为管理员
-		if role != "admin" {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "权限不足"})
 			return
 		}
 
