@@ -44,36 +44,49 @@ func (c *Client) Listen() {
 		c.handleDisconnect()
 	}()
 
+	heartbeatTicker := time.NewTicker(30 * time.Second)
+	defer heartbeatTicker.Stop()
+
 	for {
-		// 读取消息
-		_, msgBytes, err := c.conn.ReadMessage()
-		if err != nil {
-			break
-		}
-
-		// 解析消息
-		var msg Message
-		if err := json.Unmarshal(msgBytes, &msg); err != nil {
-			log.Printf("解析消息失败: %v", err)
-			continue
-		}
-
-		// 如果是注册消息，设置客户端ID
-		if msg.Type == RegisterMsg {
-			var payload RegisterPayload
-			payloadBytes, err := json.Marshal(msg.Payload)
+		select {
+		case <-heartbeatTicker.C:
+			// 发送心跳包
+			err := c.conn.WriteMessage(websocket.PingMessage, nil)
 			if err != nil {
-				log.Printf("序列化注册载荷失败: %v", err)
+				log.Printf("发送心跳包失败: %v", err)
+				return
+			}
+		default:
+			// 读取消息
+			_, msgBytes, err := c.conn.ReadMessage()
+			if err != nil {
+				break
+			}
+
+			// 解析消息
+			var msg Message
+			if err := json.Unmarshal(msgBytes, &msg); err != nil {
+				log.Printf("解析消息失败: %v", err)
 				continue
 			}
 
-			if err := json.Unmarshal(payloadBytes, &payload); err == nil {
-				c.userID = payload.UserID
-			}
-		}
+			// 如果是注册消息，设置客户端ID
+			if msg.Type == RegisterMsg {
+				var payload RegisterPayload
+				payloadBytes, err := json.Marshal(msg.Payload)
+				if err != nil {
+					log.Printf("序列化注册载荷失败: %v", err)
+					continue
+				}
 
-		// 处理消息
-		c.handler.HandleMessage(c.conn, msg)
+				if err := json.Unmarshal(payloadBytes, &payload); err == nil {
+					c.userID = payload.UserID
+				}
+			}
+
+			// 处理消息
+			c.handler.HandleMessage(c.conn, msg)
+		}
 	}
 }
 
