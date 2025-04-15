@@ -50,7 +50,7 @@ func main() {
 
 	// 启动Web服务器（支持优雅关闭）
 	log.Println("正在启动Web服务器...")
-	go web.RunWithGracefulShutdown(ctx)
+	go web.RunWithGracefulShutdown(ctx, *webPort)
 	log.Printf("Web服务器已启动，监听端口 %d", *webPort)
 
 	// 等待终止信号

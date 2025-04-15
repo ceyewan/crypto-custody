@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"offline-server/web/db"
@@ -10,7 +11,7 @@ import (
 )
 
 // Run 启动Web服务器
-func Run() {
+func Run(port int) {
 	// 初始化数据库
 	if err := db.Init(); err != nil {
 		log.Fatalf("初始化数据库失败: %v", err)
@@ -26,7 +27,7 @@ func Run() {
 
 	// 启动HTTP服务器
 	server := &http.Server{
-		Addr:         ":8080",
+		Addr:         fmt.Sprintf(":%d", port),
 		Handler:      router,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
@@ -42,7 +43,7 @@ func Run() {
 }
 
 // RunWithGracefulShutdown 启动Web服务器并支持优雅关闭
-func RunWithGracefulShutdown(ctx context.Context) {
+func RunWithGracefulShutdown(ctx context.Context, port int) {
 	// 初始化数据库
 	if err := db.Init(); err != nil {
 		log.Fatalf("初始化数据库失败: %v", err)
@@ -58,7 +59,7 @@ func RunWithGracefulShutdown(ctx context.Context) {
 
 	// 启动HTTP服务器
 	server := &http.Server{
-		Addr:         ":8080",
+		Addr:         fmt.Sprintf(":%d", port),
 		Handler:      router,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
