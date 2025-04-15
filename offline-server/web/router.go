@@ -15,6 +15,7 @@ func Register() *gin.Engine {
 
 	// 初始化各模块路由
 	initUserRouter(r)
+	initKeyRouter(r)
 	initPushRouter(r)
 
 	// 处理404请求
@@ -43,6 +44,17 @@ func initUserRouter(r *gin.Engine) {
 	{
 		adminGroup.GET("/users", handler.ListUsers)               // 获取用户列表
 		adminGroup.PUT("/users/:id/role", handler.UpdateUserRole) // 更新用户角色
+	}
+}
+
+// initKeyRouter 初始化密钥相关路由
+func initKeyRouter(r *gin.Engine) {
+	keyGroup := r.Group("/key")
+	keyGroup.Use(KeyAuthMiddleware()) // 使用专门的中间件验证密钥操作权限
+	{
+		keyGroup.POST("/generate", handler.GenerateKey) // 创建密钥生成任务
+		keyGroup.POST("/sign", handler.CreateSignature) // 创建签名任务
+		keyGroup.GET("/status/:id", handler.KeyStatus)  // 获取密钥或签名任务状态
 	}
 }
 
@@ -76,6 +88,36 @@ func AuthMiddleware() gin.HandlerFunc {
 		// 检查是否为管理员
 		if role != "admin" {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "权限不足"})
+			return
+		}
+
+		// 设置用户信息到上下文
+		c.Set("userID", userID)
+		c.Set("role", role)
+		c.Next()
+	}
+}
+
+// KeyAuthMiddleware 密钥操作权限验证中间件
+func KeyAuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// 从Header获取token
+		tokenString := c.GetHeader("Authorization")
+		if tokenString == "" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "未提供认证令牌"})
+			return
+		}
+
+		// 验证token
+		userID, role, err := tools.ValidateToken(tokenString)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "无效的认证令牌"})
+			return
+		}
+
+		// 检查是否为Coordinator或Admin角色
+		if role != "coordinator" && role != "admin" {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "权限不足，需要Coordinator或Admin角色"})
 			return
 		}
 

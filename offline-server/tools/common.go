@@ -4,7 +4,8 @@ package tools
 type Role string
 
 const (
-	Admin Role = "admin"
-	User  Role = "user"
-	Guest Role = "guest"
+	Admin       Role = "admin"
+	Coordinator Role = "coordinator"
+	Participant Role = "participant"
+	Guest       Role = "guest"
 )

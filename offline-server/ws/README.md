@@ -48,6 +48,10 @@ defer server.Stop()
 
 ## 消息协议
 
+### 消息认证
+
+所有 WebSocket 消息都需要包含有效的 JWT Token 进行身份验证。Token 需要从 Web 服务登录后获取，并在每个 WebSocket 消息中提供。
+
 ### 消息类型与交互流程
 
 #### 注册流程
@@ -56,6 +60,7 @@ defer server.Stop()
    ```json
    {
        "type": "register",
+       "token": "jwt_token_here",
        "payload": {
            "user_id": "client123",
            "role": "participant"
@@ -63,8 +68,9 @@ defer server.Stop()
    }
    ```
    - 参数说明：
-     - `user_id`: 客户端的唯一标识符。
-     - `role`: 客户端角色，支持 `coordinator` 或 `participant`。
+     - `token`: 从 Web 服务登录获取的 JWT 令牌
+     - `user_id`: 客户端的唯一标识符，必须与 JWT 令牌中的用户 ID 匹配
+     - `role`: 客户端角色，支持 `coordinator` 或 `participant`
 
 2. 服务器返回确认消息：
    ```json
@@ -78,10 +84,32 @@ defer server.Stop()
 
 #### 密钥生成流程
 
-1. 协调方发送 `keygen_request` 消息：
+1. 客户端首先通过 Web 服务请求创建密钥生成任务：
+   ```
+   POST /key/generate
+   Authorization: Bearer jwt_token_here
+   Content-Type: application/json
+   
+   {
+       "threshold": 2,
+       "participants": ["client1", "client2"]
+   }
+   ```
+
+2. Web 服务验证用户身份为 Admin 或 Coordinator，验证通过后生成随机的 key_id 并返回：
+   ```json
+   {
+       "code": 200,
+       "key_id": "key123",
+       "status": "pending"
+   }
+   ```
+
+3. 协调方使用返回的 key_id 通过 WebSocket 发送密钥生成请求：
    ```json
    {
        "type": "keygen_request",
+       "token": "jwt_token_here",
        "payload": {
            "key_id": "key123",
            "threshold": 2,
@@ -89,12 +117,8 @@ defer server.Stop()
        }
    }
    ```
-   - 参数说明：
-     - `key_id`: 密钥的唯一标识符。
-     - `threshold`: 密钥生成的阈值。
-     - `participants`: 参与密钥生成的客户端列表。
 
-2. 服务器向参与方发送 `keygen_invite` 消息：
+4. 服务器向参与方发送 `keygen_invite` 消息：
    ```json
    {
        "type": "keygen_invite",
@@ -106,10 +130,11 @@ defer server.Stop()
    }
    ```
 
-3. 参与方响应 `keygen_response` 消息：
+5. 参与方响应 `keygen_response` 消息：
    ```json
    {
        "type": "keygen_response",
+       "token": "jwt_token_here",
        "payload": {
            "key_id": "key123",
            "response": true
@@ -117,7 +142,7 @@ defer server.Stop()
    }
    ```
 
-4. 服务器发送 `keygen_params` 消息：
+6. 服务器发送 `keygen_params` 消息：
    ```json
    {
        "type": "keygen_params",
@@ -131,10 +156,11 @@ defer server.Stop()
    }
    ```
 
-5. 参与方完成后发送 `keygen_complete` 消息：
+7. 参与方完成后发送 `keygen_complete` 消息：
    ```json
    {
        "type": "keygen_complete",
+       "token": "jwt_token_here",
        "payload": {
            "key_id": "key123",
            "share_json": "{...}"
@@ -144,10 +170,33 @@ defer server.Stop()
 
 #### 签名流程
 
-1. 协调方发送 `sign_request` 消息：
+1. 客户端首先通过 Web 服务请求创建签名任务：
+   ```
+   POST /key/sign
+   Authorization: Bearer jwt_token_here
+   Content-Type: application/json
+   
+   {
+       "key_id": "key123",
+       "data": "message_to_sign",
+       "participants": ["client1", "client2"]
+   }
+   ```
+
+2. Web 服务验证用户身份和权限，验证通过后确认签名任务可以执行：
+   ```json
+   {
+       "code": 200,
+       "sign_id": "sign456",
+       "status": "pending"
+   }
+   ```
+
+3. 协调方使用返回的信息通过 WebSocket 发送签名请求：
    ```json
    {
        "type": "sign_request",
+       "token": "jwt_token_here",
        "payload": {
            "key_id": "key123",
            "data": "message_to_sign",
@@ -156,7 +205,7 @@ defer server.Stop()
    }
    ```
 
-2. 服务器向参与方发送 `sign_invite` 消息：
+4. 服务器向参与方发送 `sign_invite` 消息：
    ```json
    {
        "type": "sign_invite",
@@ -168,10 +217,11 @@ defer server.Stop()
    }
    ```
 
-3. 参与方响应 `sign_response` 消息：
+5. 参与方响应 `sign_response` 消息：
    ```json
    {
        "type": "sign_response",
+       "token": "jwt_token_here",
        "payload": {
            "key_id": "key123",
            "response": true
@@ -179,7 +229,7 @@ defer server.Stop()
    }
    ```
 
-4. 服务器发送 `sign_params` 消息：
+6. 服务器发送 `sign_params` 消息：
    ```json
    {
        "type": "sign_params",
@@ -192,10 +242,11 @@ defer server.Stop()
    }
    ```
 
-5. 参与方完成后发送 `sign_result` 消息：
+7. 参与方完成后发送 `sign_result` 消息：
    ```json
    {
        "type": "sign_result",
+       "token": "jwt_token_here",
        "payload": {
            "key_id": "key123",
            "signature": "signed_message"
@@ -224,14 +275,21 @@ defer server.Stop()
 ### `types.go`
 
 - 定义了消息类型和消息结构。
-- **Message**: 基本消息结构，包含类型、用户 ID 和载荷。
+- **Message**: 基本消息结构，包含类型、用户 ID、令牌和载荷。
 - **RegisterPayload**: 注册消息的载荷。
 - **KeyGenRequestPayload**: 密钥生成请求的载荷。
 - **SignRequestPayload**: 签名请求的载荷。
 
 ## 模块使用说明
 
-1. **启动服务**: 使用 `NewServer` 创建服务器实例并调用 `Start` 方法启动服务。
-2. **客户端连接**: 客户端通过 WebSocket 连接到服务器，发送 `register` 消息进行注册。
-3. **密钥生成**: 协调方发送 `keygen_request` 消息，服务器处理并与参与方交互完成密钥生成。
-4. **签名操作**: 协调方发送 `sign_request` 消息，服务器处理并与参与方交互完成签名。
+1. **获取身份令牌**: 通过 Web 服务的登录接口获取 JWT 令牌。
+2. **启动服务**: 使用 `NewServer` 创建服务器实例并调用 `Start` 方法启动服务。
+3. **客户端连接**: 客户端通过 WebSocket 连接到服务器，发送 `register` 消息进行注册，必须包含有效的 JWT 令牌。
+4. **密钥生成请求**: 
+   - 协调方首先通过 Web 服务请求创建密钥生成任务并获取 key_id。
+   - 使用获得的 key_id 通过 WebSocket 发送 `keygen_request` 消息。
+   - 服务器处理并与参与方交互完成密钥生成。
+5. **签名操作**: 
+   - 协调方首先通过 Web 服务请求创建签名任务。
+   - 通过 WebSocket 发送 `sign_request` 消息。
+   - 服务器处理并与参与方交互完成签名。
