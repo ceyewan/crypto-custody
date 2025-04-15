@@ -6,8 +6,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"os/exec"
-	"syscall"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -27,10 +25,9 @@ var (
 
 // Server 表示WebSocket服务器，管理WebSocket连接并处理消息
 type Server struct {
-	store      Storage         // 存储客户端连接和其他数据
-	managerCmd *exec.Cmd       // 管理外部进程
-	handler    *MessageHandler // 消息处理器
-	server     *http.Server    // HTTP服务器实例
+	store   Storage         // 存储客户端连接和其他数据
+	handler *MessageHandler // 消息处理器
+	server  *http.Server    // HTTP服务器实例
 }
 
 // NewServer 创建并初始化一个新的WebSocket服务器实例
@@ -45,18 +42,10 @@ func NewServer() *Server {
 	}
 }
 
-// Start 启动WebSocket服务器，包括初始化外部Manager进程和HTTP服务
+// Start 启动WebSocket服务器，包括初始化HTTP服务
 // 可以指定监听端口，如果端口为0，则自动选择一个可用端口
 // 返回启动过程中可能发生的错误
 func (s *Server) Start(port int) error {
-	// 启动Manager
-	var err error
-	s.managerCmd, err = RunManager()
-	if err != nil {
-		return fmt.Errorf("启动Manager失败: %v", err)
-	}
-	log.Println("Manager已启动")
-
 	// 设置WebSocket处理程序
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", s.handleConnection)
@@ -75,7 +64,7 @@ func (s *Server) Start(port int) error {
 
 	// 获取实际使用的端口
 	actualPort := listener.Addr().(*net.TCPAddr).Port
-	log.Printf("服务器启动在 :%d 端口", actualPort)
+	log.Printf("WebSocket服务器启动在 :%d 端口", actualPort)
 
 	// 启动HTTP服务器
 	go func() {
@@ -109,16 +98,7 @@ func (s *Server) Stop() {
 		}
 	}
 
-	// 终止Manager进程
-	if s.managerCmd != nil && s.managerCmd.Process != nil {
-		if err := s.managerCmd.Process.Signal(syscall.SIGTERM); err != nil {
-			log.Printf("无法正常终止Manager: %v", err)
-			s.managerCmd.Process.Kill()
-		}
-		log.Println("Manager已终止")
-	}
-
-	log.Println("服务器已关闭")
+	log.Println("WebSocket服务器已关闭")
 }
 
 // handleConnection 处理新的WebSocket连接请求
