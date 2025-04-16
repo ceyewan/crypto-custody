@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"offline-server/ws"
+
+	"github.com/gorilla/websocket"
 )
 
 // 生成模拟的签名结果
@@ -18,7 +20,7 @@ func generateMockSignature(data string, keyID string, partIndex int) string {
 // 测试签名流程
 func TestSigningProcess(t *testing.T) {
 	// 使用与密钥生成测试相同的keyID，假设密钥已经生成
-	keyID := "test-key-1744785667"
+	keyID := "test-key-1744787198"
 	accountAddr := "0x1234567890abcdef1234567890abcdef12345678"
 	data := "hello" // 要签名的数据
 
@@ -201,4 +203,25 @@ func TestSigningProcess(t *testing.T) {
 
 	signature := payload["signature"].(string)
 	t.Logf("签名成功! 签名结果: %s", signature)
+
+	// 等待一段时间，确保所有消息都已处理完毕
+	time.Sleep(1 * time.Second)
+
+	// 优雅关闭连接
+	closeConnections := func() {
+		// 先关闭参与者连接
+		for userID, client := range participantClients {
+			t.Logf("关闭参与者 %s 的连接", userID)
+			client.Conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+			client.Conn.Close()
+		}
+
+		// 最后关闭协调者连接
+		t.Log("关闭协调者的连接")
+		coordClient.Conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+		coordClient.Conn.Close()
+	}
+
+	// 执行优雅关闭
+	closeConnections()
 }
