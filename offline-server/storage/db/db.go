@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"log"
 	"offline-server/storage/model"
+	"offline-server/tools"
 	"os"
 	"time"
 
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -61,6 +63,11 @@ func Init() error {
 		return fmt.Errorf("数据库迁移失败: %w", err)
 	}
 
+	// 检查并创建管理员用户
+	if err := ensureAdminUser(); err != nil {
+		return fmt.Errorf("创建管理员用户失败: %w", err)
+	}
+
 	return nil
 }
 
@@ -93,4 +100,45 @@ func GetDB() *gorm.DB {
 		log.Fatal("数据库未初始化")
 	}
 	return instance
+}
+
+// ensureAdminUser 确保管理员用户存在
+func ensureAdminUser() error {
+	if instance == nil {
+		return fmt.Errorf("数据库未初始化")
+	}
+
+	// 检查是否已存在admin用户
+	var count int64
+	instance.Model(&model.User{}).Where("username = ?", "admin").Count(&count)
+
+	// 如果不存在admin用户，则创建
+	if count == 0 {
+		log.Println("未检测到管理员用户，正在创建默认管理员...")
+
+		// 设置默认管理员密码
+		defaultPassword := "admin123"
+
+		// 使用bcrypt生成密码哈希
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(defaultPassword), bcrypt.DefaultCost)
+		if err != nil {
+			return fmt.Errorf("生成密码哈希失败: %w", err)
+		}
+
+		// 创建默认admin用户
+		admin := model.User{
+			Username: "admin",
+			Password: string(hashedPassword),
+			Email:    "admin@example.com",
+			Role:     string(tools.Admin),
+		}
+
+		if err := instance.Create(&admin).Error; err != nil {
+			return fmt.Errorf("创建管理员用户失败: %w", err)
+		}
+
+		log.Println("默认管理员用户创建成功: admin (默认密码: admin123)")
+	}
+
+	return nil
 }
