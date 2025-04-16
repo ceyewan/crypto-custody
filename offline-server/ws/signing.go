@@ -36,7 +36,7 @@ func HandleSignRequest(store Storage, msg Message) error {
 	var participants []string
 
 	// 如果未指定参与者，则使用密钥生成时的参与者
-	if payload.Participants != nil && len(payload.Participants) > 0 {
+	if len(payload.Participants) > 0 {
 		participants = payload.Participants
 	} else {
 		// 从密钥生成会话中获取参与者列表
