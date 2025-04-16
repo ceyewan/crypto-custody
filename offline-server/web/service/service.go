@@ -4,6 +4,7 @@ import (
 	"errors"
 	"offline-server/storage/db"
 	"offline-server/storage/model"
+	"offline-server/tools"
 
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -39,7 +40,7 @@ func (s *AuthService) Register(username, password, email string) (*model.User, e
 		Username: username,
 		Password: string(hashedPassword),
 		Email:    email,
-		Role:     "user", // 默认角色为普通用户
+		Role:     string(tools.Guest), // 默认角色为普通用户
 	}
 
 	if err := database.Create(&user).Error; err != nil {
@@ -93,6 +94,17 @@ func (s *AuthService) ListUsers() ([]model.User, error) {
 
 // UpdateUserRole 更新用户角色
 func (s *AuthService) UpdateUserRole(userID uint, role string) error {
+	// 验证角色是否有效
+	validRole := false
+	switch tools.Role(role) {
+	case tools.Admin, tools.Coordinator, tools.Participant, tools.Guest:
+		validRole = true
+	}
+
+	if !validRole {
+		return errors.New("无效的角色类型")
+	}
+
 	database := db.GetDB()
 	return database.Model(&model.User{}).Where("id = ?", userID).Update("role", role).Error
 }
