@@ -309,9 +309,20 @@ func (s *PersistentStorage) GetSignSession(keyID string) (*SignSession, bool) {
 		KeyID:        dbSession.KeyID,
 		Data:         dbSession.Data,
 		Participants: []string(dbSession.Participants),
-		Responses:    map[string]bool(dbSession.Responses),
-		Results:      map[string]string(dbSession.Results),
 		AccountAddr:  dbSession.AccountAddr,
+	}
+
+	// 确保 Responses 和 Results map 被初始化
+	if dbSession.Responses != nil {
+		session.Responses = map[string]bool(dbSession.Responses)
+	} else {
+		session.Responses = make(map[string]bool)
+	}
+
+	if dbSession.Results != nil {
+		session.Results = map[string]string(dbSession.Results)
+	} else {
+		session.Results = make(map[string]string)
 	}
 
 	return session, true

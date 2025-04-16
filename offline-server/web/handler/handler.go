@@ -49,8 +49,8 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	// 生成JWT token
-	token, err := tools.GenerateToken(int(user.ID), user.Role, 24*time.Hour)
+	// 生成JWT token - 使用用户名而非用户ID
+	token, err := tools.GenerateToken(user.Username, user.Role, 24*time.Hour)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "生成令牌失败"})
 		return
