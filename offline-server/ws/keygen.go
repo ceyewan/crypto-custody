@@ -98,6 +98,10 @@ func HandleKeyGenResponse(store Storage, msg Message) error {
 
 	// 更新会话状态
 	err = store.UpdateKeyGenSession(keyID, func(session *KeyGenSession) {
+		// 确保map已初始化
+		if session.Responses == nil {
+			session.Responses = make(map[string]bool)
+		}
 		session.Responses[userID] = response
 	})
 	if err != nil {
@@ -173,6 +177,10 @@ func HandleKeyGenComplete(store Storage, msg Message) error {
 
 	// 更新会话状态和账户地址
 	err = store.UpdateKeyGenSession(keyID, func(session *KeyGenSession) {
+		// 确保map已初始化
+		if session.Completed == nil {
+			session.Completed = make(map[string]bool)
+		}
 		session.Completed[userID] = true
 		if session.AccountAddr == "" {
 			session.AccountAddr = accountAddr

@@ -23,27 +23,27 @@ var (
 
 // Claims 定义JWT令牌中包含的声明
 type Claims struct {
-	UserID int    `json:"user_id"` // 用户ID
-	Role   string `json:"role"`    // 用户角色
+	UserName string `json:"user_name"` // 用户名
+	Role     string `json:"role"`      // 用户角色
 	jwt.RegisteredClaims
 }
 
 // GenerateToken 生成带有过期时间的JWT令牌
 //
 // 参数:
-//   - userID: 用户ID
+//   - userName: 用户名
 //   - role: 用户角色
 //   - expiration: 令牌有效期
 //
 // 返回:
 //   - string: 生成的JWT令牌字符串
 //   - error: 如果生成过程中出现错误，返回相应错误；否则返回nil
-func GenerateToken(userID int, role string, expiration time.Duration) (string, error) {
+func GenerateToken(userName string, role string, expiration time.Duration) (string, error) {
 	expirationTime := jwt.NewNumericDate(time.Now().Add(expiration))
 
 	claims := &Claims{
-		UserID: userID,
-		Role:   role,
+		UserName: userName,
+		Role:     role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: expirationTime,
 		},
@@ -56,7 +56,7 @@ func GenerateToken(userID int, role string, expiration time.Duration) (string, e
 		return "", fmt.Errorf("生成令牌签名失败: %w", err)
 	}
 
-	log.Printf("已为用户ID: %d 生成令牌", userID)
+	log.Printf("已为用户: %s 生成令牌", userName)
 	return tokenString, nil
 }
 
@@ -94,10 +94,10 @@ func cleanBlacklist() {
 //   - tokenString: 要验证的令牌字符串
 //
 // 返回:
-//   - int: 用户ID，如果验证失败则为-1
+//   - string: 用户名，如果验证失败则为空字符串
 //   - string: 用户角色，如果验证失败则为空字符串
 //   - error: 如果验证过程中出现错误，返回相应错误；否则返回nil
-func ValidateToken(tokenString string) (int, string, error) {
+func ValidateToken(tokenString string) (string, string, error) {
 	// 检查令牌是否在黑名单中
 	blacklistMutex.Lock()
 	if expiry, found := blacklist[tokenString]; found {
@@ -107,7 +107,7 @@ func ValidateToken(tokenString string) (int, string, error) {
 		} else {
 			blacklistMutex.Unlock()
 			log.Printf("令牌已被撤销: %s", tokenString)
-			return -1, "", fmt.Errorf("令牌已被撤销")
+			return "", "", fmt.Errorf("令牌已被撤销")
 		}
 	}
 	blacklistMutex.Unlock()
@@ -124,16 +124,16 @@ func ValidateToken(tokenString string) (int, string, error) {
 
 	if err != nil {
 		log.Printf("解析令牌失败: %v", err)
-		return -1, "", fmt.Errorf("解析令牌失败: %w", err)
+		return "", "", fmt.Errorf("解析令牌失败: %w", err)
 	}
 
 	if !token.Valid {
 		log.Printf("无效令牌: %s", tokenString)
-		return -1, "", fmt.Errorf("无效令牌")
+		return "", "", fmt.Errorf("无效令牌")
 	}
 
-	log.Printf("已验证用户ID: %d 的令牌", claims.UserID)
-	return claims.UserID, claims.Role, nil
+	log.Printf("已验证用户: %s 的令牌", claims.UserName)
+	return claims.UserName, claims.Role, nil
 }
 
 // SetJWTKey 设置用于JWT操作的密钥

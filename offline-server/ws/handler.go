@@ -70,7 +70,8 @@ func (h *MessageHandler) HandleMessage(conn *websocket.Conn, msg Message) error 
 	}
 
 	// 验证用户ID匹配
-	if msg.UserID != "" && msg.UserID != fmt.Sprintf("%d", tokenUserID) {
+	if msg.UserID != "" && msg.UserID != tokenUserID {
+		log.Printf("[ERROR] Token用户ID与消息用户ID不匹配: %s != %s", tokenUserID, msg.UserID)
 		err := fmt.Errorf("请求失败: Token用户ID与消息用户ID不匹配")
 		log.Printf("[ERROR] %v", err)
 		if err := sendErrorMessage(conn, "Token用户ID与消息用户ID不匹配"); err != nil {
@@ -146,7 +147,7 @@ func (h *MessageHandler) handleRegister(conn *websocket.Conn, msg Message) error
 	}
 
 	// 验证Token中的用户ID与注册请求中的用户ID是否匹配
-	if userID != fmt.Sprintf("%d", tokenUserID) {
+	if userID != tokenUserID {
 		err := fmt.Errorf("注册失败: Token用户ID与注册用户ID不匹配")
 		log.Printf("[ERROR] %v", err)
 		if err := sendErrorMessage(conn, "Token用户ID与注册用户ID不匹配"); err != nil {

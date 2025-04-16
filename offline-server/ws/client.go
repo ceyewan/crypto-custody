@@ -60,7 +60,9 @@ func (c *Client) Listen() {
 			// 读取消息
 			_, msgBytes, err := c.conn.ReadMessage()
 			if err != nil {
-				break
+				// 处理连接关闭或错误
+				log.Printf("客户端 %s 读取消息错误: %v", c.userID, err)
+				return // 错误时直接返回，触发defer中的清理
 			}
 
 			// 解析消息
