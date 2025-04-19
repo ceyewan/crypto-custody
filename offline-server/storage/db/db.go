@@ -97,7 +97,12 @@ func AutoMigrate(models ...interface{}) error {
 // GetDB 获取数据库连接实例
 func GetDB() *gorm.DB {
 	if instance == nil {
-		log.Fatal("数据库未初始化")
+		log.Fatal("数据库未初始化，现在正在初始化...")
+		if err := Init(); err != nil {
+			log.Fatalf("数据库初始化失败: %v", err)
+			return nil
+		}
+		log.Println("数据库初始化成功")
 	}
 	return instance
 }

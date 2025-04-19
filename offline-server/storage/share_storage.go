@@ -5,6 +5,8 @@ import (
 	"log"
 	"sync"
 
+	"gorm.io/gorm"
+
 	"offline-server/storage/db"
 	"offline-server/storage/model"
 )
@@ -28,8 +30,8 @@ func GetShareStorage() IShareStorage {
 }
 
 // SaveUserShare 保存用户密钥分享
-func (s *ShareStorage) SaveUserShare(userID, keyID, shareJSON string) error {
-	if userID == "" || keyID == "" {
+func (s *ShareStorage) SaveUserShare(userName, sessionKey, shareJSON string) error {
+	if userName == "" || sessionKey == "" {
 		return ErrInvalidParameter
 	}
 
@@ -41,30 +43,42 @@ func (s *ShareStorage) SaveUserShare(userID, keyID, shareJSON string) error {
 		return ErrDatabaseNotInitialized
 	}
 
-	// 检查是否已存在
+	// 使用 GORM 的 Upsert 操作
+	userShare := model.UserShare{
+		UserName:   userName,
+		SessionKey: sessionKey,
+		ShareJSON:  shareJSON,
+	}
+
+	// 查询是否存在记录
 	var count int64
-	if err := database.Model(&model.UserShare{}).Where("user_id = ? AND key_id = ?", userID, keyID).Count(&count).Error; err != nil {
+	if err := database.Model(&model.UserShare{}).Where("user_name = ? AND session_key = ?", userName, sessionKey).Count(&count).Error; err != nil {
 		log.Printf("查询用户分享失败: %v", err)
 		return err
 	}
 
+	// 根据是否存在记录选择创建或更新
 	if count > 0 {
-		// 更新现有记录
-		return database.Model(&model.UserShare{}).Where("user_id = ? AND key_id = ?", userID, keyID).Update("share_json", shareJSON).Error
+		// 更新已有记录
+		result := database.Model(&model.UserShare{}).Where("user_name = ? AND session_key = ?", userName, sessionKey).Update("share_json", shareJSON)
+		if result.Error != nil {
+			log.Printf("更新用户分享失败: %v", result.Error)
+			return result.Error
+		}
+	} else {
+		// 创建新记录
+		if err := database.Create(&userShare).Error; err != nil {
+			log.Printf("创建用户分享失败: %v", err)
+			return err
+		}
 	}
 
-	// 创建新记录
-	share := model.UserShare{
-		UserID:    userID,
-		KeyID:     keyID,
-		ShareJSON: shareJSON,
-	}
-	return database.Create(&share).Error
+	return nil
 }
 
 // GetUserShare 获取指定用户和密钥ID的分享数据
-func (s *ShareStorage) GetUserShare(userID, keyID string) (string, error) {
-	if userID == "" || keyID == "" {
+func (s *ShareStorage) GetUserShare(userName, sessionKey string) (string, error) {
+	if userName == "" || sessionKey == "" {
 		return "", ErrInvalidParameter
 	}
 
@@ -76,16 +90,21 @@ func (s *ShareStorage) GetUserShare(userID, keyID string) (string, error) {
 		return "", ErrDatabaseNotInitialized
 	}
 
-	var share model.UserShare
-	if err := database.Where("user_id = ? AND key_id = ?", userID, keyID).First(&share).Error; err != nil {
+	var userShare model.UserShare
+	if err := database.Where("user_name = ? AND session_key = ?", userName, sessionKey).First(&userShare).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return "", ErrSessionNotFound
+		}
+		log.Printf("获取用户分享失败: %v", err)
 		return "", err
 	}
-	return share.ShareJSON, nil
+
+	return userShare.ShareJSON, nil
 }
 
 // GetUserShares 获取指定用户的所有密钥分享数据
-func (s *ShareStorage) GetUserShares(userID string) (map[string]string, error) {
-	if userID == "" {
+func (s *ShareStorage) GetUserShares(userName string) (map[string]string, error) {
+	if userName == "" {
 		return nil, ErrInvalidParameter
 	}
 
@@ -97,22 +116,23 @@ func (s *ShareStorage) GetUserShares(userID string) (map[string]string, error) {
 		return nil, ErrDatabaseNotInitialized
 	}
 
-	var shares []model.UserShare
-	if err := database.Where("user_id = ?", userID).Find(&shares).Error; err != nil {
-		log.Printf("获取用户分享失败: %v", err)
+	var userShares []model.UserShare
+	if err := database.Where("user_name = ?", userName).Find(&userShares).Error; err != nil {
+		log.Printf("获取用户分享列表失败: %v", err)
 		return nil, err
 	}
 
-	result := make(map[string]string)
-	for _, share := range shares {
-		result[share.KeyID] = share.ShareJSON
+	shares := make(map[string]string)
+	for _, share := range userShares {
+		shares[share.SessionKey] = share.ShareJSON
 	}
-	return result, nil
+
+	return shares, nil
 }
 
 // DeleteUserShare 删除指定用户和密钥ID的分享数据
-func (s *ShareStorage) DeleteUserShare(userID, keyID string) error {
-	if userID == "" || keyID == "" {
+func (s *ShareStorage) DeleteUserShare(userName, sessionKey string) error {
+	if userName == "" || sessionKey == "" {
 		return ErrInvalidParameter
 	}
 
@@ -124,7 +144,7 @@ func (s *ShareStorage) DeleteUserShare(userID, keyID string) error {
 		return ErrDatabaseNotInitialized
 	}
 
-	result := database.Where("user_id = ? AND key_id = ?", userID, keyID).Delete(&model.UserShare{})
+	result := database.Where("user_name = ? AND session_key = ?", userName, sessionKey).Delete(&model.UserShare{})
 	if result.Error != nil {
 		log.Printf("删除用户分享失败: %v", result.Error)
 		return result.Error
