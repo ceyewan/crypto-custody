@@ -15,7 +15,8 @@ func Register() *gin.Engine {
 
 	// 初始化各模块路由
 	initUserRouter(r)
-	initKeyRouter(r)
+	initKeyGenRouter(r) // 修改为密钥生成专用路由
+	initSignRouter(r)   // 新增签名专用路由
 	initShareRouter(r)
 	initPushRouter(r)
 
@@ -48,24 +49,41 @@ func initUserRouter(r *gin.Engine) {
 	}
 }
 
-// initKeyRouter 初始化密钥相关路由
-func initKeyRouter(r *gin.Engine) {
-	keyGroup := r.Group("/key")
-	keyGroup.Use(KeyAuthMiddleware()) // 使用专门的中间件验证密钥操作权限
+// initKeyGenRouter 初始化密钥生成相关路由
+func initKeyGenRouter(r *gin.Engine) {
+	keyGenGroup := r.Group("/keygen")
+	keyGenGroup.Use(KeyAuthMiddleware()) // 使用专门的中间件验证密钥操作权限
 	{
-		keyGroup.POST("/generate", handler.GenerateKey) // 创建密钥生成任务
-		keyGroup.POST("/sign", handler.CreateSignature) // 创建签名任务
-		keyGroup.GET("/status/:id", handler.KeyStatus)  // 获取密钥或签名任务状态
+		// 密钥生成操作
+		keyGenGroup.POST("/create", handler.GenerateKey)          // 发起密钥生成任务
+		keyGenGroup.GET("/session/:id", handler.GetKeyGenSession) // 获取密钥生成会话
+		keyGenGroup.GET("/status/:id", handler.KeyGenStatus)      // 获取密钥生成任务状态
+	}
+}
+
+// initSignRouter 初始化签名相关路由
+func initSignRouter(r *gin.Engine) {
+	signGroup := r.Group("/sign")
+	signGroup.Use(KeyAuthMiddleware()) // 使用专门的中间件验证密钥操作权限
+	{
+		// 签名操作
+		signGroup.POST("/create", handler.CreateSignature)    // 创建签名任务
+		signGroup.GET("/session/:id", handler.GetSignSession) // 获取签名会话信息
+		signGroup.GET("/status/:id", handler.SignStatus)      // 获取签名任务状态
+
+		// 根据账户地址查询相关信息
+		signGroup.GET("/account/:addr", handler.GetSignByAccount)              // 根据账户地址查询签名会话
+		signGroup.GET("/participants/:addr", handler.GetParticipantsByAccount) // 获取账户参与者
 	}
 }
 
 // initShareRouter 初始化密钥分享相关路由
 func initShareRouter(r *gin.Engine) {
 	shareGroup := r.Group("/share")
-	shareGroup.Use(AuthMiddleware()) // 需要认证
+	shareGroup.Use(AdminAuthMiddleware()) // 需要认证
 	{
-		shareGroup.GET("", handler.GetUserShares)       // 获取用户所有密钥分享
-		shareGroup.GET("/:keyID", handler.GetUserShare) // 获取用户特定密钥分享
+		shareGroup.GET("/:session", handler.GetSessionShares)        // 获取特定会话的密钥分享
+		shareGroup.GET("/account/:addr", handler.GetSharesByAccount) // 通过账户地址获取分享
 	}
 }
 
@@ -90,14 +108,14 @@ func AuthMiddleware() gin.HandlerFunc {
 		}
 
 		// 验证token
-		userID, role, err := tools.ValidateToken(tokenString)
+		userName, role, err := tools.ValidateToken(tokenString)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "无效的认证令牌"})
 			return
 		}
 
 		// 设置用户信息到上下文
-		c.Set("userID", userID)
+		c.Set("userName", userName)
 		c.Set("role", role)
 		c.Next()
 	}
@@ -114,7 +132,7 @@ func KeyAuthMiddleware() gin.HandlerFunc {
 		}
 
 		// 验证token
-		userID, role, err := tools.ValidateToken(tokenString)
+		userName, role, err := tools.ValidateToken(tokenString)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "无效的认证令牌"})
 			return
@@ -127,7 +145,37 @@ func KeyAuthMiddleware() gin.HandlerFunc {
 		}
 
 		// 设置用户信息到上下文
-		c.Set("userID", userID)
+		c.Set("userName", userName)
+		c.Set("role", role)
+		c.Next()
+	}
+}
+
+// AdminAuthMiddleware 管理员权限验证中间件
+func AdminAuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// 从Header获取token
+		tokenString := c.GetHeader("Authorization")
+		if tokenString == "" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "未提供认证令牌"})
+			return
+		}
+
+		// 验证token
+		userName, role, err := tools.ValidateToken(tokenString)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "无效的认证令牌"})
+			return
+		}
+
+		// 检查是否为Admin角色
+		if role != "admin" {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "权限不足，需要Admin角色"})
+			return
+		}
+
+		// 设置用户信息到上下文
+		c.Set("userName", userName)
 		c.Set("role", role)
 		c.Next()
 	}

@@ -2,6 +2,16 @@ package model
 
 import "gorm.io/gorm"
 
+// 定义用户的 Role 类型
+type Role string
+
+const (
+	Admin       Role = "admin"
+	Coordinator Role = "coordinator"
+	Participant Role = "participant"
+	Guest       Role = "guest"
+)
+
 // User 用户模型
 type User struct {
 	gorm.Model

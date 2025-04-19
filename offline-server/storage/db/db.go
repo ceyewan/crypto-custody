@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"offline-server/storage/model"
-	"offline-server/tools"
 	"os"
 	"time"
 
@@ -135,7 +134,7 @@ func ensureAdminUser() error {
 			Username: "admin",
 			Password: string(hashedPassword),
 			Email:    "admin@example.com",
-			Role:     string(tools.Admin),
+			Role:     string(model.Admin),
 		}
 
 		if err := instance.Create(&admin).Error; err != nil {
