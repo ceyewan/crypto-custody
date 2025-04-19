@@ -1,110 +1,43 @@
 package service
 
 import (
-	"errors"
-	"offline-server/storage/db"
+	"offline-server/storage"
 	"offline-server/storage/model"
-	"offline-server/tools"
-
-	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
 )
 
 // AuthService 处理身份验证相关的业务逻辑
-type AuthService struct{}
+type AuthService struct {
+	userStorage storage.IUserStorage
+}
 
 // NewAuthService 创建身份验证服务实例
 func NewAuthService() *AuthService {
-	return &AuthService{}
+	return &AuthService{
+		userStorage: storage.GetUserStorage(),
+	}
 }
 
 // Register 用户注册
 func (s *AuthService) Register(username, password, email string) (*model.User, error) {
-	database := db.GetDB()
-	// 检查用户名是否已存在
-	var existingUser model.User
-	if err := database.Where("username = ?", username).First(&existingUser).Error; err == nil {
-		return nil, errors.New("用户名已存在")
-	} else if err != gorm.ErrRecordNotFound {
-		return nil, err
-	}
-
-	// 密码加密
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return nil, err
-	}
-
-	// 创建用户
-	user := model.User{
-		Username: username,
-		Password: string(hashedPassword),
-		Email:    email,
-		Role:     string(tools.Guest), // 默认角色为普通用户
-	}
-
-	if err := database.Create(&user).Error; err != nil {
-		return nil, err
-	}
-
-	return &user, nil
+	return s.userStorage.CreateUser(username, password, email)
 }
 
 // Login 用户登录
 func (s *AuthService) Login(username, password string) (*model.User, error) {
-	database := db.GetDB()
-	var user model.User
-	if err := database.Where("username = ?", username).First(&user).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("用户名或密码错误")
-		}
-		return nil, err
-	}
-
-	// 验证密码
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
-		return nil, errors.New("用户名或密码错误")
-	}
-
-	return &user, nil
+	return s.userStorage.GetUserByCredentials(username, password)
 }
 
 // GetUserByID 根据ID获取用户信息
 func (s *AuthService) GetUserByID(id uint) (*model.User, error) {
-	database := db.GetDB()
-	var user model.User
-	if err := database.First(&user, id).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("用户不存在")
-		}
-		return nil, err
-	}
-	return &user, nil
+	return s.userStorage.GetUserByID(id)
 }
 
 // ListUsers 获取所有用户列表
 func (s *AuthService) ListUsers() ([]model.User, error) {
-	database := db.GetDB()
-	var users []model.User
-	if err := database.Find(&users).Error; err != nil {
-		return nil, err
-	}
-	return users, nil
+	return s.userStorage.GetAllUsers()
 }
 
 // UpdateUserRole 更新用户角色
 func (s *AuthService) UpdateUserRole(userID uint, role string) error {
-	// 验证角色是否有效
-	validRole := false
-	switch tools.Role(role) {
-	case tools.Admin, tools.Coordinator, tools.Participant, tools.Guest:
-		validRole = true
-	}
-
-	if !validRole {
-		return errors.New("无效的角色类型")
-	}
-
-	database := db.GetDB()
-	return database.Model(&model.User{}).Where("id = ?", userID).Update("role", role).Error
+	return s.userStorage.UpdateUserRole(userID, role)
 }

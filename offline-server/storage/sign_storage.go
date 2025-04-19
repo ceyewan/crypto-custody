@@ -30,8 +30,8 @@ func GetSignStorage() ISignStorage {
 }
 
 // CreateSession 创建新的签名会话
-func (s *SignStorage) CreateSession(keyID, initiatorID, data, accountAddr string, participants []string) error {
-	if keyID == "" || initiatorID == "" || data == "" || len(participants) == 0 {
+func (s *SignStorage) CreateSession(sessionKey, initiator, data, accountAddr string, participants []string) error {
+	if sessionKey == "" || initiator == "" || data == "" || len(participants) == 0 {
 		return ErrInvalidParameter
 	}
 
@@ -45,7 +45,7 @@ func (s *SignStorage) CreateSession(keyID, initiatorID, data, accountAddr string
 
 	// 检查会话是否已存在
 	var count int64
-	if err := database.Model(&model.SignSession{}).Where("key_id = ?", keyID).Count(&count).Error; err != nil {
+	if err := database.Model(&model.SignSession{}).Where("session_key = ?", sessionKey).Count(&count).Error; err != nil {
 		log.Printf("查询签名会话失败: %v", err)
 		return err
 	}
@@ -55,8 +55,8 @@ func (s *SignStorage) CreateSession(keyID, initiatorID, data, accountAddr string
 
 	// 创建新会话
 	session := model.SignSession{
-		KeyID:        keyID,
-		InitiatorID:  initiatorID,
+		SessionKey:   sessionKey,
+		Initiator:    initiator,
 		Data:         data,
 		AccountAddr:  accountAddr,
 		Participants: model.StringSlice(participants),
@@ -74,8 +74,8 @@ func (s *SignStorage) CreateSession(keyID, initiatorID, data, accountAddr string
 }
 
 // GetSession 获取指定密钥ID的签名会话
-func (s *SignStorage) GetSession(keyID string) (*model.SignSession, error) {
-	if keyID == "" {
+func (s *SignStorage) GetSession(sessionKey string) (*model.SignSession, error) {
+	if sessionKey == "" {
 		return nil, ErrInvalidParameter
 	}
 
@@ -88,7 +88,7 @@ func (s *SignStorage) GetSession(keyID string) (*model.SignSession, error) {
 	}
 
 	var session model.SignSession
-	if err := database.Where("key_id = ?", keyID).First(&session).Error; err != nil {
+	if err := database.Where("session_key = ?", sessionKey).First(&session).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, ErrSessionNotFound
 		}
@@ -99,8 +99,8 @@ func (s *SignStorage) GetSession(keyID string) (*model.SignSession, error) {
 }
 
 // UpdateStatus 更新签名会话状态
-func (s *SignStorage) UpdateStatus(keyID string, status model.SessionStatus) error {
-	if keyID == "" {
+func (s *SignStorage) UpdateStatus(sessionKey string, status model.SessionStatus) error {
+	if sessionKey == "" {
 		return ErrInvalidParameter
 	}
 
@@ -112,7 +112,7 @@ func (s *SignStorage) UpdateStatus(keyID string, status model.SessionStatus) err
 		return ErrDatabaseNotInitialized
 	}
 
-	result := database.Model(&model.SignSession{}).Where("key_id = ?", keyID).Update("status", status)
+	result := database.Model(&model.SignSession{}).Where("session_key = ?", sessionKey).Update("status", status)
 	if result.Error != nil {
 		log.Printf("更新签名会话状态失败: %v", result.Error)
 		return result.Error
@@ -126,8 +126,8 @@ func (s *SignStorage) UpdateStatus(keyID string, status model.SessionStatus) err
 }
 
 // UpdateResponse 更新参与者对会话的响应状态
-func (s *SignStorage) UpdateResponse(keyID, userID string, agreed bool) error {
-	if keyID == "" || userID == "" {
+func (s *SignStorage) UpdateResponse(sessionKey, userName string, agreed bool) error {
+	if sessionKey == "" || userName == "" {
 		return ErrInvalidParameter
 	}
 
@@ -141,7 +141,7 @@ func (s *SignStorage) UpdateResponse(keyID, userID string, agreed bool) error {
 
 	// 获取当前会话
 	var session model.SignSession
-	if err := database.Where("key_id = ?", keyID).First(&session).Error; err != nil {
+	if err := database.Where("session_key = ?", sessionKey).First(&session).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return ErrSessionNotFound
 		}
@@ -154,9 +154,9 @@ func (s *SignStorage) UpdateResponse(keyID, userID string, agreed bool) error {
 	if responses == nil {
 		responses = model.StringMap{}
 	}
-	responses[userID] = agreed
+	responses[userName] = agreed
 
-	result := database.Model(&model.SignSession{}).Where("key_id = ?", keyID).Update("responses", responses)
+	result := database.Model(&model.SignSession{}).Where("session_key = ?", sessionKey).Update("responses", responses)
 	if result.Error != nil {
 		log.Printf("更新参与者响应失败: %v", result.Error)
 		return result.Error
@@ -166,8 +166,8 @@ func (s *SignStorage) UpdateResponse(keyID, userID string, agreed bool) error {
 }
 
 // UpdateResult 更新参与者的签名结果
-func (s *SignStorage) UpdateResult(keyID, userID, result string) error {
-	if keyID == "" || userID == "" || result == "" {
+func (s *SignStorage) UpdateResult(sessionKey, userName, result string) error {
+	if sessionKey == "" || userName == "" || result == "" {
 		return ErrInvalidParameter
 	}
 
@@ -181,7 +181,7 @@ func (s *SignStorage) UpdateResult(keyID, userID, result string) error {
 
 	// 获取当前会话
 	var session model.SignSession
-	if err := database.Where("key_id = ?", keyID).First(&session).Error; err != nil {
+	if err := database.Where("session_key = ?", sessionKey).First(&session).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return ErrSessionNotFound
 		}
@@ -194,9 +194,9 @@ func (s *SignStorage) UpdateResult(keyID, userID, result string) error {
 	if results == nil {
 		results = model.StringStringMap{}
 	}
-	results[userID] = result
+	results[userName] = result
 
-	dbResult := database.Model(&model.SignSession{}).Where("key_id = ?", keyID).Update("results", results)
+	dbResult := database.Model(&model.SignSession{}).Where("session_key = ?", sessionKey).Update("results", results)
 	if dbResult.Error != nil {
 		log.Printf("更新参与者签名结果失败: %v", dbResult.Error)
 		return dbResult.Error
@@ -206,8 +206,8 @@ func (s *SignStorage) UpdateResult(keyID, userID, result string) error {
 }
 
 // UpdateSignature 更新最终签名结果并将状态标记为已完成
-func (s *SignStorage) UpdateSignature(keyID, signature string) error {
-	if keyID == "" || signature == "" {
+func (s *SignStorage) UpdateSignature(sessionKey, signature string) error {
+	if sessionKey == "" || signature == "" {
 		return ErrInvalidParameter
 	}
 
@@ -219,7 +219,7 @@ func (s *SignStorage) UpdateSignature(keyID, signature string) error {
 		return ErrDatabaseNotInitialized
 	}
 
-	result := database.Model(&model.SignSession{}).Where("key_id = ?", keyID).Updates(map[string]interface{}{
+	result := database.Model(&model.SignSession{}).Where("session_key = ?", sessionKey).Updates(map[string]interface{}{
 		"signature": signature,
 		"status":    model.StatusCompleted,
 	})
@@ -237,8 +237,8 @@ func (s *SignStorage) UpdateSignature(keyID, signature string) error {
 }
 
 // DeleteSession 删除指定密钥ID的签名会话
-func (s *SignStorage) DeleteSession(keyID string) error {
-	if keyID == "" {
+func (s *SignStorage) DeleteSession(sessionKey string) error {
+	if sessionKey == "" {
 		return ErrInvalidParameter
 	}
 
@@ -250,7 +250,7 @@ func (s *SignStorage) DeleteSession(keyID string) error {
 		return ErrDatabaseNotInitialized
 	}
 
-	result := database.Where("key_id = ?", keyID).Delete(&model.SignSession{})
+	result := database.Where("session_key = ?", sessionKey).Delete(&model.SignSession{})
 	if result.Error != nil {
 		log.Printf("删除签名会话失败: %v", result.Error)
 		return result.Error

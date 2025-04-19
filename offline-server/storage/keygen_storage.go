@@ -30,8 +30,8 @@ func GetKeyGenStorage() IKeyGenStorage {
 }
 
 // CreateSession 创建新的密钥生成会话
-func (s *KeyGenStorage) CreateSession(keyID, initiatorID string, threshold, totalParts int, participants []string) error {
-	if keyID == "" || initiatorID == "" || threshold <= 0 || totalParts <= 0 || len(participants) == 0 {
+func (s *KeyGenStorage) CreateSession(sessionKey, initiator string, threshold, totalParts int, participants []string) error {
+	if sessionKey == "" || initiator == "" || threshold <= 0 || totalParts <= 0 || len(participants) == 0 {
 		return ErrInvalidParameter
 	}
 
@@ -45,7 +45,7 @@ func (s *KeyGenStorage) CreateSession(keyID, initiatorID string, threshold, tota
 
 	// 检查会话是否已存在
 	var count int64
-	if err := database.Model(&model.KeyGenSession{}).Where("key_id = ?", keyID).Count(&count).Error; err != nil {
+	if err := database.Model(&model.KeyGenSession{}).Where("session_key = ?", sessionKey).Count(&count).Error; err != nil {
 		log.Printf("查询密钥生成会话失败: %v", err)
 		return err
 	}
@@ -55,8 +55,8 @@ func (s *KeyGenStorage) CreateSession(keyID, initiatorID string, threshold, tota
 
 	// 创建新会话
 	session := model.KeyGenSession{
-		KeyID:        keyID,
-		InitiatorID:  initiatorID,
+		SessionKey:   sessionKey,
+		Initiator:    initiator,
 		Threshold:    threshold,
 		TotalParts:   totalParts,
 		Participants: model.StringSlice(participants),
@@ -74,8 +74,8 @@ func (s *KeyGenStorage) CreateSession(keyID, initiatorID string, threshold, tota
 }
 
 // GetSession 获取指定密钥ID的生成会话
-func (s *KeyGenStorage) GetSession(keyID string) (*model.KeyGenSession, error) {
-	if keyID == "" {
+func (s *KeyGenStorage) GetSession(sessionKey string) (*model.KeyGenSession, error) {
+	if sessionKey == "" {
 		return nil, ErrInvalidParameter
 	}
 
@@ -88,7 +88,7 @@ func (s *KeyGenStorage) GetSession(keyID string) (*model.KeyGenSession, error) {
 	}
 
 	var session model.KeyGenSession
-	if err := database.Where("key_id = ?", keyID).First(&session).Error; err != nil {
+	if err := database.Where("session_key = ?", sessionKey).First(&session).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, ErrSessionNotFound
 		}
@@ -99,8 +99,8 @@ func (s *KeyGenStorage) GetSession(keyID string) (*model.KeyGenSession, error) {
 }
 
 // UpdateStatus 更新密钥生成会话状态
-func (s *KeyGenStorage) UpdateStatus(keyID string, status model.SessionStatus) error {
-	if keyID == "" {
+func (s *KeyGenStorage) UpdateStatus(sessionKey string, status model.SessionStatus) error {
+	if sessionKey == "" {
 		return ErrInvalidParameter
 	}
 
@@ -112,7 +112,7 @@ func (s *KeyGenStorage) UpdateStatus(keyID string, status model.SessionStatus) e
 		return ErrDatabaseNotInitialized
 	}
 
-	result := database.Model(&model.KeyGenSession{}).Where("key_id = ?", keyID).Update("status", status)
+	result := database.Model(&model.KeyGenSession{}).Where("session_key = ?", sessionKey).Update("status", status)
 	if result.Error != nil {
 		log.Printf("更新密钥生成会话状态失败: %v", result.Error)
 		return result.Error
@@ -126,8 +126,8 @@ func (s *KeyGenStorage) UpdateStatus(keyID string, status model.SessionStatus) e
 }
 
 // UpdateResponse 更新参与者对会话的响应状态
-func (s *KeyGenStorage) UpdateResponse(keyID, userID string, agreed bool) error {
-	if keyID == "" || userID == "" {
+func (s *KeyGenStorage) UpdateResponse(sessionKey, userName string, agreed bool) error {
+	if sessionKey == "" || userName == "" {
 		return ErrInvalidParameter
 	}
 
@@ -141,7 +141,7 @@ func (s *KeyGenStorage) UpdateResponse(keyID, userID string, agreed bool) error 
 
 	// 获取当前会话
 	var session model.KeyGenSession
-	if err := database.Where("key_id = ?", keyID).First(&session).Error; err != nil {
+	if err := database.Where("session_key = ?", sessionKey).First(&session).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return ErrSessionNotFound
 		}
@@ -154,9 +154,9 @@ func (s *KeyGenStorage) UpdateResponse(keyID, userID string, agreed bool) error 
 	if responses == nil {
 		responses = model.StringMap{}
 	}
-	responses[userID] = agreed
+	responses[userName] = agreed
 
-	result := database.Model(&model.KeyGenSession{}).Where("key_id = ?", keyID).Update("responses", responses)
+	result := database.Model(&model.KeyGenSession{}).Where("session_key = ?", sessionKey).Update("responses", responses)
 	if result.Error != nil {
 		log.Printf("更新参与者响应失败: %v", result.Error)
 		return result.Error
@@ -166,8 +166,8 @@ func (s *KeyGenStorage) UpdateResponse(keyID, userID string, agreed bool) error 
 }
 
 // UpdateCompleted 更新参与者完成状态
-func (s *KeyGenStorage) UpdateCompleted(keyID, userID string, completed bool) error {
-	if keyID == "" || userID == "" {
+func (s *KeyGenStorage) UpdateCompleted(sessionKey, userName string, completed bool) error {
+	if sessionKey == "" || userName == "" {
 		return ErrInvalidParameter
 	}
 
@@ -181,7 +181,7 @@ func (s *KeyGenStorage) UpdateCompleted(keyID, userID string, completed bool) er
 
 	// 获取当前会话
 	var session model.KeyGenSession
-	if err := database.Where("key_id = ?", keyID).First(&session).Error; err != nil {
+	if err := database.Where("session_key = ?", sessionKey).First(&session).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return ErrSessionNotFound
 		}
@@ -194,9 +194,9 @@ func (s *KeyGenStorage) UpdateCompleted(keyID, userID string, completed bool) er
 	if completedMap == nil {
 		completedMap = model.StringMap{}
 	}
-	completedMap[userID] = completed
+	completedMap[userName] = completed
 
-	result := database.Model(&model.KeyGenSession{}).Where("key_id = ?", keyID).Update("completed", completedMap)
+	result := database.Model(&model.KeyGenSession{}).Where("session_key = ?", sessionKey).Update("completed", completedMap)
 	if result.Error != nil {
 		log.Printf("更新参与者完成状态失败: %v", result.Error)
 		return result.Error
@@ -206,8 +206,8 @@ func (s *KeyGenStorage) UpdateCompleted(keyID, userID string, completed bool) er
 }
 
 // UpdateAccountAddr 更新会话关联的账户地址
-func (s *KeyGenStorage) UpdateAccountAddr(keyID, accountAddr string) error {
-	if keyID == "" || accountAddr == "" {
+func (s *KeyGenStorage) UpdateAccountAddr(sessionKey, accountAddr string) error {
+	if sessionKey == "" || accountAddr == "" {
 		return ErrInvalidParameter
 	}
 
@@ -219,7 +219,7 @@ func (s *KeyGenStorage) UpdateAccountAddr(keyID, accountAddr string) error {
 		return ErrDatabaseNotInitialized
 	}
 
-	result := database.Model(&model.KeyGenSession{}).Where("key_id = ?", keyID).Update("account_addr", accountAddr)
+	result := database.Model(&model.KeyGenSession{}).Where("session_key = ?", sessionKey).Update("account_addr", accountAddr)
 	if result.Error != nil {
 		log.Printf("更新账户地址失败: %v", result.Error)
 		return result.Error
@@ -233,8 +233,8 @@ func (s *KeyGenStorage) UpdateAccountAddr(keyID, accountAddr string) error {
 }
 
 // DeleteSession 删除指定密钥ID的生成会话
-func (s *KeyGenStorage) DeleteSession(keyID string) error {
-	if keyID == "" {
+func (s *KeyGenStorage) DeleteSession(sessionKey string) error {
+	if sessionKey == "" {
 		return ErrInvalidParameter
 	}
 
@@ -246,7 +246,7 @@ func (s *KeyGenStorage) DeleteSession(keyID string) error {
 		return ErrDatabaseNotInitialized
 	}
 
-	result := database.Where("key_id = ?", keyID).Delete(&model.KeyGenSession{})
+	result := database.Where("session_key = ?", sessionKey).Delete(&model.KeyGenSession{})
 	if result.Error != nil {
 		log.Printf("删除密钥生成会话失败: %v", result.Error)
 		return result.Error

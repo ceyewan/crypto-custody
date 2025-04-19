@@ -88,12 +88,16 @@ const (
 	StatusCreated SessionStatus = "created"
 	// StatusInvited 已发送邀请
 	StatusInvited SessionStatus = "invited"
+	// StatusWaitingInviteResponse 等待邀请响应
+	StatusWaitingInviteResponse SessionStatus = "waiting_invite_response"
 	// StatusAccepted 已接受
 	StatusAccepted SessionStatus = "accepted"
 	// StatusRejected 已拒绝
 	StatusRejected SessionStatus = "rejected"
 	// StatusProcessing 处理中
 	StatusProcessing SessionStatus = "processing"
+	// StatusWaitingProcessResponse 等待处理响应
+	StatusWaitingProcessResponse SessionStatus = "waiting_process_response"
 	// StatusCompleted 已完成
 	StatusCompleted SessionStatus = "completed"
 	// StatusFailed 失败
@@ -103,35 +107,35 @@ const (
 // KeyGenSession 密钥生成会话模型
 type KeyGenSession struct {
 	gorm.Model
-	KeyID        string        `gorm:"uniqueIndex;size:100"` // 密钥ID，唯一标识
-	InitiatorID  string        `gorm:"size:100"`             // 发起人ID
-	Threshold    int           // 阈值 t
-	TotalParts   int           // 总分片数 n
-	Participants StringSlice   `gorm:"type:text"`                 // 参与者ID列表
-	Responses    StringMap     `gorm:"type:text"`                 // 参与者响应状态
-	Completed    StringMap     `gorm:"type:text"`                 // 参与者完成状态
-	AccountAddr  string        `gorm:"size:100"`                  // 账户地址
-	Status       SessionStatus `gorm:"size:20;default:'created'"` // 会话状态
+	SessionKey   string        `gorm:"column:session_key;uniqueIndex;size:100;comment:会话密钥"`
+	Initiator    string        `gorm:"column:initiator;size:100;comment:发起者用户名"`
+	Threshold    int           `gorm:"column:threshold;comment:阈值数量"`
+	TotalParts   int           `gorm:"column:total_parts;comment:总分片数量"`
+	Participants StringSlice   `gorm:"column:participants;type:text;comment:参与者用户名列表"`
+	Responses    StringMap     `gorm:"column:responses;type:text;comment:响应状态映射"`
+	Completed    StringMap     `gorm:"column:completed;type:text;comment:完成状态映射"`
+	AccountAddr  string        `gorm:"column:account_addr;size:100;comment:账户地址"`
+	Status       SessionStatus `gorm:"column:status;size:20;default:'created';comment:会话状态"`
 }
 
 // SignSession 签名会话模型
 type SignSession struct {
 	gorm.Model
-	KeyID        string          `gorm:"uniqueIndex;size:100"`      // 密钥ID，唯一标识
-	InitiatorID  string          `gorm:"size:100"`                  // 发起人ID
-	AccountAddr  string          `gorm:"size:100"`                  // 账户地址
-	Data         string          `gorm:"type:text"`                 // 要签名的数据
-	Participants StringSlice     `gorm:"type:text"`                 // 参与者ID列表
-	Responses    StringMap       `gorm:"type:text"`                 // 参与者响应状态
-	Results      StringStringMap `gorm:"type:text"`                 // 参与者签名结果
-	Signature    string          `gorm:"type:text"`                 // 最终签名结果
-	Status       SessionStatus   `gorm:"size:20;default:'created'"` // 会话状态
+	SessionKey   string          `gorm:"column:session_key;uniqueIndex;size:100;comment:会话密钥"`
+	Initiator    string          `gorm:"column:initiator;size:100;comment:发起者用户名"`
+	AccountAddr  string          `gorm:"column:account_addr;size:100;comment:账户地址"`
+	Data         string          `gorm:"column:data;type:text;comment:签名数据"`
+	Participants StringSlice     `gorm:"column:participants;type:text;comment:参与者用户名列表"`
+	Responses    StringMap       `gorm:"column:responses;type:text;comment:响应状态映射"`
+	Results      StringStringMap `gorm:"column:results;type:text;comment:签名结果映射"`
+	Signature    string          `gorm:"column:signature;type:text;comment:最终签名数据"`
+	Status       SessionStatus   `gorm:"column:status;size:20;default:'created';comment:会话状态"`
 }
 
 // UserShare 用户密钥分享模型
 type UserShare struct {
 	gorm.Model
-	UserID    string `gorm:"size:100;index:idx_user_key,priority:1"` // 用户ID
-	KeyID     string `gorm:"size:100;index:idx_user_key,priority:2"` // 密钥ID
-	ShareJSON string `gorm:"type:text"`                              // 序列化的密钥分享JSON字符串
+	UserName   string `gorm:"column:user_name;size:100;index:idx_user_key,priority:1;comment:用户名"`
+	SessionKey string `gorm:"column:session_key;size:100;index:idx_user_key,priority:2;comment:会话密钥"`
+	ShareJSON  string `gorm:"column:share_json;type:text;comment:分享JSON数据"`
 }

@@ -5,8 +5,8 @@ import "gorm.io/gorm"
 // User 用户模型
 type User struct {
 	gorm.Model
-	Username string `gorm:"uniqueIndex;size:50"`
-	Password string `gorm:"size:200"`
-	Email    string `gorm:"size:100"`
-	Role     string `gorm:"user_roles;"`
+	Username string `gorm:"column:username;uniqueIndex;size:50;comment:用户名"`
+	Password string `gorm:"column:password;size:200;comment:加密后的密码"`
+	Email    string `gorm:"column:email;size:100;comment:用户邮箱"`
+	Role     string `gorm:"column:role;comment:用户角色"`
 }
