@@ -16,6 +16,9 @@ type IUserStorage interface {
 	// GetUserByID 根据ID获取用户信息
 	GetUserByID(id uint) (*model.User, error)
 
+	// GetUserByUsername 根据用户名获取用户信息
+	GetUserByUsername(username string) (*model.User, error)
+
 	// GetAllUsers 获取所有用户列表
 	GetAllUsers() ([]model.User, error)
 
@@ -45,6 +48,9 @@ type IKeyGenStorage interface {
 
 	// GetSession 获取指定密钥ID的生成会话
 	GetSession(sessionKey string) (*model.KeyGenSession, error)
+
+	// GetSessionByAccountAddr 获取指定账户地址的生成会话
+	GetSessionByAccountAddr(accountAddr string) (*model.KeyGenSession, error)
 
 	// UpdateStatus 更新密钥生成会话状态
 	UpdateStatus(sessionKey string, status model.SessionStatus) error

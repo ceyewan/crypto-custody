@@ -227,15 +227,13 @@ func GetSignSessionsByAccount(accountAddr string) ([]*model.SignSession, error) 
 }
 
 // GetParticipantsByAccount 获取账户参与者信息
-func GetParticipantsByAccount(accountAddr string) (*model.KeyGenSession, []string, error) {
+func GetParticipantsByAccount(accountAddr string) (*model.KeyGenSession, error) {
 	// 参数验证
 	if strings.TrimSpace(accountAddr) == "" {
-		return nil, nil, errors.New("账户地址不能为空")
+		return nil, errors.New("账户地址不能为空")
 	}
 
-	// 目前暂无直接按账户地址查询的接口，需要获取所有会话并筛选
-	// 在实际应用中，应该增加一个按账户地址查询的存储接口方法
+	session, err := keyGenStorage.GetSessionByAccountAddr(accountAddr)
 
-	// 返回错误，表示暂未实现此功能
-	return nil, nil, errors.New("功能暂未实现")
+	return session, err
 }

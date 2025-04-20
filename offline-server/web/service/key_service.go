@@ -13,40 +13,55 @@ import (
 // keyGenStorage 密钥生成会话存储接口
 var keyGenStorage storage.IKeyGenStorage = storage.GetKeyGenStorage()
 
+// CreateKenGenSessionKey 创建密钥生成会话密钥
+func CreateKenGenSessionKey(initiator string) (string, error) {
+	// 参数验证
+	if strings.TrimSpace(initiator) == "" {
+		return "", errors.New("发起者不能为空")
+	}
+
+	// 生成会话密钥
+	timestamp := time.Now().Format("20060102150405")
+	sessionKey := fmt.Sprintf("genkey_%s_%s", timestamp, initiator)
+
+	return sessionKey, nil
+}
+
 // CreateKeyGenSession 创建密钥生成会话
-func CreateKeyGenSession(initiator string, threshold int, participants []string) (string, error) {
+func CreateKeyGenSession(initiator string, threshold, total_parts int, participants []string) (string, error) {
 	// 验证参数
 	if threshold < 1 {
 		return "", errors.New("阈值必须大于0")
 	}
-	if len(participants) < threshold {
+	if total_parts < threshold {
 		return "", errors.New("参与者数量必须不少于阈值")
 	}
 
 	// 验证所有参与者用户名是否存在
 	for _, participant := range participants {
 		// 检查用户是否存在
-		user, err := userStorage.GetUserByID(0) // 这里需要根据用户名查询用户，临时用ID 0替代
+		user, err := userStorage.GetUserByUsername(participant)
 		if err != nil || user == nil {
 			return "", fmt.Errorf("用户 %s 不存在", participant)
 		}
 	}
 
 	// 生成会话密钥
-	timestamp := time.Now().Format("20060102150405")
-	sessionKey := fmt.Sprintf("key_%s_%s", timestamp, initiator)
+	sessionKey, _ := CreateKenGenSessionKey(initiator)
 
 	// 调用存储接口创建会话
 	err := keyGenStorage.CreateSession(
 		sessionKey,
 		initiator,
 		threshold,
-		len(participants),
+		total_parts,
 		participants,
 	)
 	if err != nil {
 		return "", fmt.Errorf("创建密钥生成会话失败: %v", err)
 	}
+
+	// TODO: 发送邀请通知给参与者
 
 	// 更新会话状态为已邀请
 	err = keyGenStorage.UpdateStatus(sessionKey, model.StatusInvited)
