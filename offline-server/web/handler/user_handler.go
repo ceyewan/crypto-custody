@@ -5,7 +5,6 @@ import (
 	"offline-server/storage/model"
 	"offline-server/tools"
 	"offline-server/web/service"
-	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -138,12 +137,7 @@ func ListUsers(c *gin.Context) {
 // UpdateUserRole 更新用户角色
 func UpdateUserRole(c *gin.Context) {
 	// 获取用户ID参数
-	userIDStr := c.Param("id")
-	userID, err := strconv.ParseUint(userIDStr, 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的用户ID"})
-		return
-	}
+	userName := c.Param("id")
 
 	// 获取请求体中的角色信息
 	var req UpdateRoleRequest
@@ -158,7 +152,7 @@ func UpdateUserRole(c *gin.Context) {
 	}
 
 	// 调用服务层更新用户角色
-	err = service.UpdateUserRole(uint(userID), req.Role)
+	err := service.UpdateUserRole(userName, req.Role)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "更新用户角色失败"})
 		return

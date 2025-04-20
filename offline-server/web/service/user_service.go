@@ -63,9 +63,9 @@ func GetAllUsers() ([]model.User, error) {
 }
 
 // UpdateUserRole 更新用户角色
-func UpdateUserRole(userID uint, role string) error {
+func UpdateUserRole(userName, role string) error {
 	// 验证用户是否存在
-	user, err := userStorage.GetUserByID(userID)
+	user, err := userStorage.GetUserByUsername(userName)
 	if err != nil {
 		return errors.New("用户不存在")
 	}
@@ -94,7 +94,7 @@ func UpdateUserRole(userID uint, role string) error {
 
 		adminCount := 0
 		for _, u := range users {
-			if u.Role == string(model.Admin) && u.ID != userID {
+			if u.Role == string(model.Admin) && u.Username != userName {
 				adminCount++
 			}
 		}
@@ -105,5 +105,5 @@ func UpdateUserRole(userID uint, role string) error {
 	}
 
 	// 调用存储接口更新用户角色
-	return userStorage.UpdateUserRole(userID, role)
+	return userStorage.UpdateUserRole(user.ID, role)
 }

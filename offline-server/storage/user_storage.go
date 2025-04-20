@@ -134,6 +134,32 @@ func (s *UserStorage) GetUserByID(id uint) (*model.User, error) {
 	return &user, nil
 }
 
+// GetUserByUsername 根据用户名获取用户信息
+func (s *UserStorage) GetUserByUsername(username string) (*model.User, error) {
+	if username == "" {
+		return nil, ErrInvalidParameter
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	database := db.GetDB()
+	if database == nil {
+		return nil, ErrDatabaseNotInitialized
+	}
+
+	var user model.User
+	if err := database.Where("username = ?", username).First(&user).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, ErrUserNotFound
+		}
+		log.Printf("查询用户失败: %v", err)
+		return nil, err
+	}
+
+	return &user, nil
+}
+
 // GetAllUsers 获取所有用户列表
 func (s *UserStorage) GetAllUsers() ([]model.User, error) {
 	s.mu.RLock()

@@ -98,6 +98,31 @@ func (s *KeyGenStorage) GetSession(sessionKey string) (*model.KeyGenSession, err
 	return &session, nil
 }
 
+// GetSessionByAccountAddr 获取指定账户地址的密钥生成会话
+func (s *KeyGenStorage) GetSessionByAccountAddr(accountAddr string) (*model.KeyGenSession, error) {
+	if accountAddr == "" {
+		return nil, ErrInvalidParameter
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	database := db.GetDB()
+	if database == nil {
+		return nil, ErrDatabaseNotInitialized
+	}
+
+	var session model.KeyGenSession
+	if err := database.Where("account_addr = ?", accountAddr).First(&session).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, ErrSessionNotFound
+		}
+		log.Printf("获取密钥生成会话失败: %v", err)
+		return nil, err
+	}
+	return &session, nil
+}
+
 // UpdateStatus 更新密钥生成会话状态
 func (s *KeyGenStorage) UpdateStatus(sessionKey string, status model.SessionStatus) error {
 	if sessionKey == "" {

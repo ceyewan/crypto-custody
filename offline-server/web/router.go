@@ -66,14 +66,14 @@ func initSignRouter(r *gin.Engine) {
 	signGroup := r.Group("/sign")
 	signGroup.Use(KeyAuthMiddleware()) // 使用专门的中间件验证密钥操作权限
 	{
+		signGroup.GET("/participants/:addr", handler.GetParticipantsByAccount) // 获取账户参与者
 		// 签名操作
 		signGroup.POST("/create", handler.CreateSignature)    // 创建签名任务
 		signGroup.GET("/session/:id", handler.GetSignSession) // 获取签名会话信息
 		signGroup.GET("/status/:id", handler.SignStatus)      // 获取签名任务状态
 
 		// 根据账户地址查询相关信息
-		signGroup.GET("/account/:addr", handler.GetSignByAccount)              // 根据账户地址查询签名会话
-		signGroup.GET("/participants/:addr", handler.GetParticipantsByAccount) // 获取账户参与者
+		signGroup.GET("/account/:addr", handler.GetSignByAccount) // 根据账户地址查询签名会话
 	}
 }
 

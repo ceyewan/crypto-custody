@@ -14,7 +14,7 @@ import (
 
 // 签名会话创建请求结构
 type CreateSignSessionRequest struct {
-	KeyID        string   `json:"key_id" binding:"required"`       // 关联的密钥ID
+	SessionKey   string   `json:"session_key" binding:"required"`  // 关联的密钥ID
 	Data         string   `json:"data" binding:"required"`         // 需要签名的数据
 	AccountAddr  string   `json:"account_addr" binding:"required"` // 账户地址
 	Participants []string `json:"participants,omitempty"`          // 参与者列表(可选)，不提供则使用密钥生成时的参与者
@@ -22,7 +22,7 @@ type CreateSignSessionRequest struct {
 
 // 签名请求结构
 type CreateSignatureRequest struct {
-	KeyID        string   `json:"key_id" binding:"required"`
+	SessionKey   string   `json:"session_key" binding:"required"`
 	Data         string   `json:"data" binding:"required"`
 	Participants []string `json:"participants" binding:"required"`
 	AccountAddr  string   `json:"account_addr" binding:"required"`
@@ -35,10 +35,11 @@ func CreateSignSession(c *gin.Context) {
 		return
 	}
 
-	userID := c.GetString("userID")
+	initiator := c.GetString("userName")
 
-	// 生成唯一的会话密钥（这里使用密钥ID作为会话密钥）
-	sessionKey := fmt.Sprintf("sign_%s_%d", time.Now().Format("20060102150405"), time.Now().UnixNano()%10000)
+	// 生成会话密钥
+	timestamp := time.Now().Format("20060102150405")
+	sessionKey := fmt.Sprintf("genkey_%s_%s", timestamp, initiator)
 
 	// 确定参与者列表
 	participants := req.Participants
@@ -352,11 +353,11 @@ func GetParticipantsByAccount(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"code":         200,
-		"key_id":       session.SessionKey,
+		"session_key":  session.SessionKey,
 		"account_addr": session.AccountAddr,
 		"threshold":    session.Threshold,
-		"participants": participants,
 		"total_parts":  session.TotalParts,
+		"participants": participants,
 		"created_at":   session.CreatedAt,
 	})
 }
