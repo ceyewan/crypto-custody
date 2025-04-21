@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="SecureStorageApplet" default="dist" basedir=".">
+    <description>
+        Secure Storage Applet Build File
+    </description>
+    
+    <!-- 设置全局属性 -->
+    <property name="src" location="src"/>
+    <property name="build" location="build"/>
+    <property name="dist"  location="dist"/>
+    <property name="lib"  location="lib"/>
+    <!-- JavaCard SDK 路径，根据实际安装路径修改 -->
+    <property name="jc.home" location="/path/to/javacard-sdk" />
+    <!-- 使用指定版本的JavaCard SDK -->
+    <property name="jcversion" value="3.0.5"/>
+    
+    <!-- ant-javacard任务定义 -->
+    <taskdef name="javacard" classname="pro.javacard.ant.JavaCard" classpath="${lib}/ant-javacard.jar"/>
+    
+    <target name="init">
+        <!-- 创建时间戳 -->
+        <tstamp/>
+        <!-- 创建编译输出目录结构 -->
+        <mkdir dir="${build}"/>
+        <mkdir dir="${dist}"/>
+    </target>
+
+    <target name="compile" depends="init" description="编译源代码">
+        <!-- 不需要手动编译，ant-javacard会处理 -->
+    </target>
+
+    <target name="cap" depends="init" description="构建CAP文件">
+        <!-- 构建CAP文件 -->
+        <javacard jckit="${jc.home}">
+            <cap targetsdk="${jcversion}" sources="${src}" output="${dist}/secureChip.cap"
+                 aid="0x01:0x02:0x03:0x04:0x05:0x06:0x07:0x08:0x09" package="secureChip" version="1.0">
+                <applet class="secureChip.SecureStorageApplet" aid="0x01:0x02:0x03:0x04:0x05:0x06:0x07:0x08:0x09:0x00"/>
+            </cap>
+        </javacard>
+    </target>
+
+    <target name="dist" depends="cap" description="生成安装包">
+        <!-- 将所有需要的文件放入安装包 -->
+        
+        <!-- 创建安装脚本 -->
+        <echo file="${dist}/install.sh">#!/bin/bash
+# 安装Applet到芯片
+# 需要GlobalPlatformPro工具
+gp -install secureChip.cap
+        </echo>
+        <chmod file="${dist}/install.sh" perm="755"/>
+    </target>
+
+    <target name="clean" description="清理构建文件">
+        <delete dir="${build}"/>
+        <delete dir="${dist}"/>
+    </target>
+</project>
