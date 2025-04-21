@@ -1,8 +1,8 @@
 <project name="SecurityChipApplet" default="all">
 
     <!-- ========== Properties ========== -->
-    <property name="jcdk.home" location="/Users/harrick/CodeField/JavaCardApplet/sdks/jc305u4_kit"/>
-    <property name="ant-javacard.jar" location="/Users/harrick/CodeField/JavaCardApplet/ant-javacard.jar"/>
+    <property name="jcdk.home" location="./lib/jc305u4_kit"/>
+    <property name="ant-javacard.jar" location="./lib/ant-javacard.jar"/>
     
     <property name="src.dir" location="."/> <!-- Source root is the current directory -->
     <property name="build.dir" location="build"/>
