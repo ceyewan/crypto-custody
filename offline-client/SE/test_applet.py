@@ -10,8 +10,8 @@ import os
 from smartcard.System import readers
 from smartcard.util import toHexString, toBytes
 
-# 应用AID (Applet Identifier)
-AID = [0x65, 0x66, 0x67, 0x68, 0x69, 0x01]
+# 应用AID (Applet Identifier) - 与 build.xml 中定义的一致
+AID = [0xA0, 0x00, 0x00, 0x00, 0x62, 0xCF, 0x01, 0x01]
 
 # 指令常量
 CLA = 0x80  # 命令类
