@@ -39,7 +39,7 @@ public class SecurityChipApplet extends Applet {
     private static final short SW_FILE_FULL = ISO7816.SW_FILE_FULL; // 存储空间已满
     
     // 存储限制常量
-    private static final byte MAX_RECORDS = 20;                // 最大记录数量
+    private static final byte MAX_RECORDS = 30;                // 最大记录数量
     private static final byte MAX_USERNAME_LENGTH = 32;        // 用户名最大长度
     private static final byte MAX_ADDR_LENGTH = 64;            // 地址最大长度
     private static final short MAX_MESSAGE_LENGTH = 1024;      // 消息最大长度(调整为1KB)
@@ -83,7 +83,6 @@ public class SecurityChipApplet extends Applet {
         // 修复大数组分配问题 - 拆分计算以避免整数溢出
         short messageArraySize = (short)(MAX_RECORDS * MAX_MESSAGE_LENGTH);
         messages = new byte[messageArraySize]; // 调整后的大小应该符合JavaCard限制
-        
         messageLengths = new short[MAX_RECORDS];
         recordCount = 0;
         
@@ -114,12 +113,12 @@ public class SecurityChipApplet extends Applet {
      * @param apdu APDU对象，包含命令和数据
      */
     public void process(APDU apdu) {
-        if (selectingApplet()) {
+        if (selectingApplet()) { // 是否选择了当前 Applet
             return;
         }
         
-        byte[] apduBuffer = apdu.getBuffer(); // 使用更明确的变量名
-        byte ins = apduBuffer[ISO7816.OFFSET_INS];
+        byte[] apduBuffer = apdu.getBuffer(); // 获取APDU命令
+        byte ins = apduBuffer[ISO7816.OFFSET_INS]; // 获取指令字节（INS）
         
         // 根据指令字节分发到不同的处理方法
         switch (ins) {
@@ -155,35 +154,38 @@ public class SecurityChipApplet extends Applet {
         if (currentOperation != OP_NONE) {
             ISOException.throwIt(SW_CONDITIONS_NOT_SATISFIED);
         }
-        
+
         byte[] apduBuffer = apdu.getBuffer();
+        // 接收APDU命令数据部分，并设置lc为数据接收长度
         short lc = apdu.setIncomingAndReceive();
         
         // 检查是否有空间存储新记录
         if (recordCount >= MAX_RECORDS) {
             ISOException.throwIt(SW_FILE_FULL);
         }
-        
+
         // 解析APDU数据
         short offset = ISO7816.OFFSET_CDATA;
-        
+
         // 获取并验证用户名长度
+        if (offset >= (short)(ISO7816.OFFSET_CDATA + lc)) { ISOException.throwIt(SW_WRONG_LENGTH); } // 检查是否有足够数据读长度
         byte userNameLength = apduBuffer[offset++];
-        if (userNameLength > MAX_USERNAME_LENGTH || userNameLength <= 0 || offset > lc) { // 增加边界检查
+        if (userNameLength > MAX_USERNAME_LENGTH || userNameLength <= 0) {
             ISOException.throwIt(SW_WRONG_LENGTH);
         }
-        
+        short userNameDataOffset = offset; // 记录用户名数据在缓冲区中的起始位置
+
         // 检查用户名数据是否完整
         if ((short)(offset + userNameLength) > (short)(ISO7816.OFFSET_CDATA + lc)) {
              ISOException.throwIt(SW_WRONG_LENGTH);
         }
-        
+
         // 保存用户名到永久存储
-        short userNameOffset = (short)(recordCount * MAX_USERNAME_LENGTH);
-        Util.arrayCopy(apduBuffer, offset, userNames, userNameOffset, userNameLength);
+        short userNamePermOffset = (short)(recordCount * MAX_USERNAME_LENGTH);
+        Util.arrayCopy(apduBuffer, userNameDataOffset, userNames, userNamePermOffset, userNameLength);
         userNameLengths[recordCount] = userNameLength;
-        offset += userNameLength;
-        
+        offset += userNameLength; // 更新偏移量，跳过用户名数据
+
         // 获取并验证地址长度
         if (offset >= (short)(ISO7816.OFFSET_CDATA + lc)) { // 检查是否还有数据读取地址长度
              ISOException.throwIt(SW_WRONG_LENGTH);
@@ -192,25 +194,36 @@ public class SecurityChipApplet extends Applet {
         if (addrLength > MAX_ADDR_LENGTH || addrLength <= 0) {
             ISOException.throwIt(SW_WRONG_LENGTH);
         }
-        
+        short addrDataOffset = offset; // 记录地址数据在缓冲区中的起始位置
+
         // 检查地址数据是否完整
         if ((short)(offset + addrLength) > (short)(ISO7816.OFFSET_CDATA + lc)) {
              ISOException.throwIt(SW_WRONG_LENGTH);
         }
-        
+
         // 保存地址到永久存储
-        short addrOffset = (short)(recordCount * MAX_ADDR_LENGTH);
-        Util.arrayCopy(apduBuffer, offset, addresses, addrOffset, addrLength);
+        short addrPermOffset = (short)(recordCount * MAX_ADDR_LENGTH);
+        Util.arrayCopy(apduBuffer, addrDataOffset, addresses, addrPermOffset, addrLength);
         addressLengths[recordCount] = addrLength;
-        
+        // offset += addrLength; // 不再需要移动 offset
+
         // 准备消息存储 - 设置状态为存储操作
-        currentRecordIndex = recordCount;
+        currentRecordIndex = recordCount; // 此时 recordCount 是新记录的索引
         currentOperation = OP_STORE;
         currentMessageOffset = 0;
-        // bufferOffset = 0; // 确认是否需要重置
-        
+
         // 将消息长度初始化为0
         messageLengths[currentRecordIndex] = 0;
+
+        // 构建调试信息：记录索引(1) + 记录总数(1) + 用户名长度(1) + 地址长度(1)
+        byte[] debugInfo = new byte[4];
+        debugInfo[0] = currentRecordIndex;
+        debugInfo[1] = recordCount;
+        debugInfo[2] = userNameLength;
+        debugInfo[3] = addrLength;
+        
+        // 发送带调试信息的显式响应
+        sendExplicitResponse(apdu, SW_OPERATION_COMPLETE, debugInfo);
     }
     
     /**
@@ -235,6 +248,19 @@ public class SecurityChipApplet extends Applet {
         short messageOffset = (short)(currentRecordIndex * MAX_MESSAGE_LENGTH + currentMessageOffset);
         Util.arrayCopy(apduBuffer, ISO7816.OFFSET_CDATA, messages, messageOffset, lc);
         currentMessageOffset += lc; // 更新已处理的消息长度
+        
+        // 构建调试信息：记录索引(1) + 当前消息偏移量(2) + 本次处理块大小(2)
+        byte[] debugInfo = new byte[5];
+        debugInfo[0] = currentRecordIndex;
+        // 当前消息偏移量(高字节、低字节)
+        debugInfo[1] = (byte)((currentMessageOffset >> 8) & 0xFF);
+        debugInfo[2] = (byte)(currentMessageOffset & 0xFF);
+        // 本次处理块大小(高字节、低字节)
+        debugInfo[3] = (byte)((lc >> 8) & 0xFF);
+        debugInfo[4] = (byte)(lc & 0xFF);
+        
+        // 发送带调试信息的显式响应
+        sendExplicitResponse(apdu, SW_OPERATION_COMPLETE, debugInfo);
     }
     
     /**
@@ -250,11 +276,23 @@ public class SecurityChipApplet extends Applet {
         // 设置消息的最终长度
         messageLengths[currentRecordIndex] = currentMessageOffset;
         
+        // 构建调试信息：记录索引(1) + 最终消息长度(2) + 记录总数(1)
+        byte[] debugInfo = new byte[4];
+        debugInfo[0] = currentRecordIndex;
+        // 最终消息长度(高字节、低字节)
+        debugInfo[1] = (byte)((currentMessageOffset >> 8) & 0xFF);
+        debugInfo[2] = (byte)(currentMessageOffset & 0xFF);
+        // 记录总数
+        debugInfo[3] = recordCount;
+        
         // 仅在成功完成存储后增加记录计数
         recordCount++;
         
         // 重置Applet状态为空闲
         resetOperationState();
+        
+        // 发送带调试信息的显式响应
+        sendExplicitResponse(apdu, SW_OPERATION_COMPLETE, debugInfo);
     }
     
     /**
@@ -401,10 +439,16 @@ public class SecurityChipApplet extends Applet {
             ISOException.throwIt(SW_CONDITIONS_NOT_SATISFIED);
         }
         
+        // 构建调试信息：当前操作状态(1) + 当前记录索引(1)
+        byte[] debugInfo = new byte[2];
+        debugInfo[0] = currentOperation;
+        debugInfo[1] = currentRecordIndex;
+        
         // 重置读取操作状态为空闲
         resetOperationState();
         
-        // 返回成功状态 - 操作完成 (默认 9000)
+        // 发送带调试信息的显式响应
+        sendExplicitResponse(apdu, SW_OPERATION_COMPLETE, debugInfo);
     }
 
     /**
@@ -440,6 +484,31 @@ public class SecurityChipApplet extends Applet {
         currentOperation = OP_NONE;
         currentMessageOffset = 0;
         currentRecordIndex = -1; // 或其他无效值
-        // bufferOffset = 0; // 如果需要
+    }
+
+    /**
+     * 构造并发送显式响应 - 包含调试信息
+     * @param apdu APDU命令对象
+     * @param status 状态码
+     * @param debugInfo 调试信息
+     */
+    private void sendExplicitResponse(APDU apdu, short status, byte[] debugInfo) {
+        byte[] buffer = apdu.getBuffer();
+        short debugLength = (short) debugInfo.length;
+
+        // 检查缓冲区是否足够大以容纳调试信息
+        if (debugLength > (short) (buffer.length - 2)) { // 预留2字节用于状态码
+            ISOException.throwIt(SW_WRONG_LENGTH);
+        }
+
+        // 将调试信息写入缓冲区
+        Util.arrayCopyNonAtomic(debugInfo, (short) 0, buffer, (short) 0, debugLength);
+
+        // 添加状态码到缓冲区末尾
+        buffer[debugLength] = (byte) ((status >> 8) & 0xFF); // 高字节
+        buffer[debugLength + 1] = (byte) (status & 0xFF);    // 低字节
+
+        // 设置传出长度并发送响应数据
+        apdu.setOutgoingAndSend((short) 0, (short) (debugLength + 2));
     }
 }
