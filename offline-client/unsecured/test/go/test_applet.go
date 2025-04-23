@@ -1,6 +1,7 @@
 package main
 
 import (
+	crypto_rand "crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -21,6 +22,7 @@ const (
 	CLA                 = 0x80 // 命令类
 	INS_STORE_DATA      = 0x10 // 存储数据命令
 	INS_READ_DATA       = 0x20 // 读取数据命令
+	INS_DELETE_DATA     = 0x30 // 删除数据命令
 	SW_SUCCESS          = 0x9000
 	SW_RECORD_NOT_FOUND = 0x6A83
 	SW_FILE_FULL        = 0x6A84
@@ -282,6 +284,54 @@ func (r *CardReader) ReadData(username string, addr []byte) ([]byte, error) {
 	return data, nil
 }
 
+// DeleteData 删除数据 - 根据用户名和地址删除记录
+func (r *CardReader) DeleteData(username string, addr []byte) error {
+	// 确保输入数据符合长度要求
+	usernameBytes := usernameToBytes(username)
+	addrBytes := ensureAddrLength(addr)
+
+	// 构造完整数据
+	fullData := make([]byte, 0, USERNAME_LENGTH+ADDR_LENGTH)
+	fullData = append(fullData, usernameBytes...)
+	fullData = append(fullData, addrBytes...)
+
+	// 构建APDU命令
+	command := []byte{CLA, INS_DELETE_DATA, 0x00, 0x00, byte(len(fullData))}
+	command = append(command, fullData...)
+
+	log.Printf("\n=== 删除数据命令 ===\n")
+	log.Printf("APDU: %X...(显示前20字节)\n", command[:min(20, len(command))])
+	log.Printf("命令解析:\n")
+	log.Printf("  CLA: 0x%02X (命令类)\n", CLA)
+	log.Printf("  INS: 0x%02X (删除数据指令)\n", INS_DELETE_DATA)
+	log.Printf("  P1: 0x00\n")
+	log.Printf("  P2: 0x00\n")
+	log.Printf("  Lc: 0x%02X (数据总长=%d)\n", len(fullData), len(fullData))
+	log.Printf("  Data: [用户名(32字节)][地址(64字节)]\n")
+	log.Printf("    用户名(哈希值): %X\n", usernameBytes[:min(16, len(usernameBytes))])
+	log.Printf("    地址(前16字节): %X...\n", addrBytes[:min(16, len(addrBytes))])
+
+	// 发送命令
+	resp, err := r.card.Transmit(command)
+	if err != nil {
+		return fmt.Errorf("发送删除数据命令失败: %v", err)
+	}
+
+	sw, data := extractResponseAndSW(resp)
+	if sw == SW_RECORD_NOT_FOUND {
+		return fmt.Errorf("记录未找到 (状态码: 0x%04X)", sw)
+	} else if sw != SW_SUCCESS {
+		return fmt.Errorf("删除数据返回错误状态码: 0x%04X", sw)
+	}
+
+	log.Printf("\n=== 删除数据响应 ===\n")
+	log.Printf("响应数据: %X\n", resp)
+	log.Printf("状态码: 0x%04X (成功)\n", sw)
+	log.Printf("解析响应: 删除的记录索引=%d, 剩余记录数=%d\n", data[0], data[1])
+
+	return nil
+}
+
 // 辅助函数: 从APDU响应中提取状态码和数据
 func extractResponseAndSW(resp []byte) (uint16, []byte) {
 	if len(resp) < 2 {
@@ -303,14 +353,14 @@ func min(a, b int) int {
 // 生成随机消息
 func generateRandomMessage(length int) []byte {
 	message := make([]byte, length)
-	rand.Read(message)
+	crypto_rand.Read(message)
 	return message
 }
 
 // 生成随机地址
 func generateRandomAddress(length int) []byte {
 	addr := make([]byte, length)
-	rand.Read(addr)
+	crypto_rand.Read(addr)
 	return addr
 }
 
@@ -493,6 +543,106 @@ func runOverwriteTest(reader *CardReader) {
 	} else {
 		fmt.Printf("   覆盖测试失败: 消息未正确更新\n")
 	}
+}
+
+func runDeleteTest(reader *CardReader) {
+	fmt.Println("\n=== 删除数据测试 ===")
+	log.Printf("\n\n=== 删除数据测试 ===\n")
+
+	// 1. 存储数据 -> 2. 读取数据 -> 3. 删除数据 -> 4. 尝试再次读取（应该失败）-> 5. 重新存储
+
+	username := "delete_test_user"
+	addr := []byte("Delete Test Address - This address should be exactly 64 bytes for testing!")
+	message := []byte("Test message for delete operation")
+
+	// 1. 存储数据
+	fmt.Printf(">> 步骤1: 存储测试数据\n")
+	log.Printf(">> 步骤1: 存储测试数据\n")
+	log.Printf("   用户名: %s\n", username)
+	log.Printf("   地址: %s\n", string(addr))
+	log.Printf("   消息: %s\n", string(message))
+
+	err := reader.StoreData(username, addr, message)
+	if err != nil {
+		fmt.Printf("   存储失败: %v\n", err)
+		log.Printf("   存储失败: %v\n", err)
+		return
+	}
+	fmt.Printf("   存储成功\n")
+
+	// 2. 读取数据
+	fmt.Printf(">> 步骤2: 读取数据验证\n")
+	log.Printf(">> 步骤2: 读取数据验证\n")
+
+	retrievedMessage, err := reader.ReadData(username, addr)
+	if err != nil {
+		fmt.Printf("   读取失败: %v\n", err)
+		log.Printf("   读取失败: %v\n", err)
+		return
+	}
+
+	// 验证读取的数据
+	originalTruncated := ensureMessageLength(message)
+	matched := compareByteArrays(originalTruncated, retrievedMessage)
+	fmt.Printf("   读取成功，数据验证: %s\n", boolToCheckmark(matched))
+	log.Printf("   读取成功，数据验证: %s\n", boolToVerifiedStr(matched))
+
+	// 3. 删除数据
+	fmt.Printf(">> 步骤3: 删除数据\n")
+	log.Printf(">> 步骤3: 删除数据\n")
+
+	err = reader.DeleteData(username, addr)
+	if err != nil {
+		fmt.Printf("   删除失败: %v\n", err)
+		log.Printf("   删除失败: %v\n", err)
+		return
+	}
+	fmt.Printf("   删除成功\n")
+
+	// 4. 尝试再次读取（应该失败）
+	fmt.Printf(">> 步骤4: 尝试读取已删除数据（应该失败）\n")
+	log.Printf(">> 步骤4: 尝试读取已删除数据（应该失败）\n")
+
+	_, err = reader.ReadData(username, addr)
+	if err == nil {
+		fmt.Printf("   错误: 成功读取了已删除的数据!\n")
+		log.Printf("   错误: 成功读取了已删除的数据!\n")
+		return
+	}
+	fmt.Printf("   预期的读取失败: %v\n", err)
+	log.Printf("   预期的读取失败: %v\n", err)
+
+	// 5. 重新存储数据
+	fmt.Printf(">> 步骤5: 重新存储数据到已删除的位置\n")
+	log.Printf(">> 步骤5: 重新存储数据到已删除的位置\n")
+
+	newMessage := []byte("New message after deletion")
+	err = reader.StoreData(username, addr, newMessage)
+	if err != nil {
+		fmt.Printf("   重新存储失败: %v\n", err)
+		log.Printf("   重新存储失败: %v\n", err)
+		return
+	}
+	fmt.Printf("   重新存储成功\n")
+
+	// 6. 再次读取以验证
+	fmt.Printf(">> 步骤6: 读取重新存储的数据\n")
+	log.Printf(">> 步骤6: 读取重新存储的数据\n")
+
+	retrievedNewMessage, err := reader.ReadData(username, addr)
+	if err != nil {
+		fmt.Printf("   读取失败: %v\n", err)
+		log.Printf("   读取失败: %v\n", err)
+		return
+	}
+
+	// 验证读取的新数据
+	newMessageTruncated := ensureMessageLength(newMessage)
+	newMatched := compareByteArrays(newMessageTruncated, retrievedNewMessage)
+	fmt.Printf("   读取成功，新数据验证: %s\n", boolToCheckmark(newMatched))
+	log.Printf("   读取成功，新数据验证: %s\n", boolToVerifiedStr(newMatched))
+
+	fmt.Printf("\n>> 删除测试完成: %s\n", boolToCheckmark(matched && newMatched && err == nil))
 }
 
 func runCapacityTest(reader *CardReader, count int) {
@@ -694,19 +844,22 @@ func runTests() error {
 		return fmt.Errorf("选择Applet失败: %v", err)
 	}
 
-	// 运行基础功能测试
+	// 运行基本测试
 	runBasicTests(reader)
 
 	// 运行覆盖测试
 	runOverwriteTest(reader)
 
-	// 运行随机测试
+	// 运行删除测试
+	runDeleteTest(reader)
+
+	// 运行随机数据测试
 	runRandomTest(reader, 20)
 
-	// 运行容量测试 - 尝试接近100条的限制
-	runCapacityTest(reader, 110) // 尝试超过100条，看看会在哪里停止
+	// 运行容量测试
+	runCapacityTest(reader, 110) // 尝试存储超过限制的记录
 
-	log.Printf("\n=== 安全芯片Applet测试完成 - %s ===\n", time.Now().Format("2006-01-02 15:04:05"))
+	log.Printf("=== 安全芯片Applet测试结束 - %s ===\n", time.Now().Format("2006-01-02 15:04:05"))
 	return nil
 }
 
