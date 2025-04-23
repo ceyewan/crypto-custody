@@ -6,6 +6,7 @@
 - 存储固定长度的用户名(32字节)、地址(64字节)和消息数据(32字节)
 - 通过用户名和地址检索存储的消息数据
 - 支持覆盖已存在的(userName, Addr)对的数据
+- 支持删除已存在的(userName, Addr)对的数据
 
 ## APDU 通信基础
 
@@ -22,12 +23,13 @@ APDU (Application Protocol Data Unit) 是智能卡与主机之间的通信单元
 
 ## 支持的指令
 
-本 Applet 支持两种基本指令:
+本 Applet 支持三种基本指令:
 
 | 指令名称 | INS值 | 描述 |
 |---------|------|------|
 | STORE_DATA | 0x10 | 存储新记录或更新现有记录 |
 | READ_DATA | 0x20 | 读取现有记录 |
+| DELETE_DATA | 0x30 | 删除现有记录 |
 
 ## 1. 存储数据指令 (STORE_DATA)
 
@@ -111,12 +113,60 @@ Lc: 变长 (至少96字节: 32+64=96)
 << [32字节message] 90 00
 ```
 
+## 3. 删除数据指令 (DELETE_DATA)
+
+### 请求格式
+
+```
+CLA: 0x80 (默认JavaCard应用类)
+INS: 0x30 (删除数据指令)
+P1: 0x00 (保留)
+P2: 0x00 (保留)
+Lc: 0x60 (总数据长度: 32+64=96字节)
+数据: [userName(32字节)][addr(64字节)]
+```
+
+### 数据字段说明
+
+- `userName`: 固定32字节，要删除的记录的用户名
+- `addr`: 固定64字节，要删除的记录的地址
+
+### 响应格式
+
+成功时返回2字节数据:
+- 字节0: 被删除的记录索引 (0-99)
+- 字节1: 删除后剩余的记录总数
+
+### 错误码
+
+| 状态码 | 描述 |
+|-------|------|
+| 0x9000 | 成功 |
+| 0x6700 | 错误的数据长度 |
+| 0x6A83 | 记录未找到 |
+
+### 示例 (以十六进制表示)
+
+```
+>> 80 30 00 00 60 
+   [32字节userName] [64字节addr]
+
+<< [记录索引] [剩余记录数] 90 00
+```
+
 ## 性能与容量限制
 
 - 最大记录数: 100条
 - 用户名长度: 固定32字节
 - 地址长度: 固定64字节 
 - 消息长度: 固定32字节
+
+## 内部实现说明
+
+- 记录存储采用槽位管理机制，支持删除后重用空间
+- 使用标记数组记录每个槽位的使用状态，提高存储效率
+- 删除记录时不会物理删除数据，仅标记为未使用状态
+- 新增记录时优先使用已删除的空闲槽位
 
 ## 最佳实践
 
@@ -130,79 +180,45 @@ Lc: 变长 (至少96字节: 32+64=96)
 
 4. **数据格式化**: 确保所有字段严格按照指定的字节长度发送
 
+5. **删除后重新存储**: 删除记录后，可立即在相同位置存储新数据
+
 ## 开发示例
 
-### Java客户端代码示例
+### Go客户端代码示例
 
-```java
-public class SecurityChipClient {
-    private CardChannel channel; // 假设已获取到卡通道
-    
-    // 存储数据
-    public void storeData(byte[] userName, byte[] address, byte[] message) throws Exception {
-        if (userName.length != 32 || address.length != 64 || message.length != 32) {
-            throw new IllegalArgumentException("数据长度不符合要求");
-        }
-        
-        CommandAPDU command = new CommandAPDU(
-            0x80,           // CLA
-            0x10,           // INS (STORE_DATA)
-            0x00,           // P1
-            0x00,           // P2
-            concatenate(userName, address, message) // 数据
-        );
-        
-        ResponseAPDU response = channel.transmit(command);
-        
-        if (response.getSW() != 0x9000) {
-            throw new Exception("存储失败，错误码: " + Integer.toHexString(response.getSW()));
-        }
-        
-        byte[] responseData = response.getData();
-        System.out.println("存储成功！记录索引: " + responseData[0] + 
-                          ", 记录总数: " + responseData[1]);
+```go
+// DeleteData 删除数据
+func (r *CardReader) DeleteData(username string, addr []byte) error {
+    // 确保输入数据符合长度要求
+    usernameBytes := usernameToBytes(username)
+    addrBytes := ensureAddrLength(addr)
+
+    // 构造完整数据
+    fullData := make([]byte, 0, USERNAME_LENGTH+ADDR_LENGTH)
+    fullData = append(fullData, usernameBytes...)
+    fullData = append(fullData, addrBytes...)
+
+    // 构建APDU命令
+    command := []byte{0x80, 0x30, 0x00, 0x00, byte(len(fullData))}
+    command = append(command, fullData...)
+
+    // 发送命令
+    resp, err := r.card.Transmit(command)
+    if err != nil {
+        return fmt.Errorf("发送删除数据命令失败: %v", err)
+    }
+
+    // 检查响应状态码
+    if len(resp) < 2 {
+        return fmt.Errorf("响应数据不完整")
     }
     
-    // 读取数据
-    public byte[] readData(byte[] userName, byte[] address) throws Exception {
-        if (userName.length != 32 || address.length != 64) {
-            throw new IllegalArgumentException("数据长度不符合要求");
-        }
-        
-        CommandAPDU command = new CommandAPDU(
-            0x80,           // CLA
-            0x20,           // INS (READ_DATA)
-            0x00,           // P1
-            0x00,           // P2
-            concatenate(userName, address) // 数据
-        );
-        
-        ResponseAPDU response = channel.transmit(command);
-        
-        if (response.getSW() != 0x9000) {
-            throw new Exception("读取失败，错误码: " + Integer.toHexString(response.getSW()));
-        }
-        
-        return response.getData(); // 返回32字节消息
+    sw := uint16(resp[len(resp)-2])<<8 | uint16(resp[len(resp)-1])
+    if sw != 0x9000 {
+        return fmt.Errorf("删除数据失败，状态码: 0x%04X", sw)
     }
     
-    // 辅助方法：连接多个字节数组
-    private byte[] concatenate(byte[]... arrays) {
-        int totalLength = 0;
-        for (byte[] array : arrays) {
-            totalLength += array.length;
-        }
-        
-        byte[] result = new byte[totalLength];
-        int currentIndex = 0;
-        
-        for (byte[] array : arrays) {
-            System.arraycopy(array, 0, result, currentIndex, array.length);
-            currentIndex += array.length;
-        }
-        
-        return result;
-    }
+    return nil
 }
 ```
 
