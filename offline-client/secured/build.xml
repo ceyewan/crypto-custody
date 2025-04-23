@@ -1,0 +1,61 @@
+<project name="SecurityChipApplet" default="all">
+
+    <!-- ========== Properties ========== -->
+    <property name="jcdk.home" location="../lib/jc305u4_kit"/>
+    <property name="ant-javacard.jar" location="../lib/ant-javacard.jar"/>
+    
+    <property name="src.dir" location="."/> <!-- Source root is the current directory -->
+    <property name="build.dir" location="build"/>
+    <property name="classes.dir" location="${build.dir}/classes"/>
+    <property name="cap.dir" location="${build.dir}/cap"/>
+
+    <property name="package.name" value="securitychip"/>
+    <property name="package.aid" value="A0:00:00:00:62:CF:01"/>
+    <property name="applet.class" value="${package.name}.SecurityChipApplet"/>
+    <property name="applet.aid" value="A0:00:00:00:62:CF:01:01"/>
+    <property name="cap.file.name" value="${package.name}.cap"/>
+
+    <!-- Define ant-javacard tasks -->
+    <taskdef name="javacard" classname="pro.javacard.ant.JavaCard" classpath="${ant-javacard.jar}"/>
+
+    <!-- ========== Targets ========== -->
+    <target name="clean">
+        <delete dir="${build.dir}"/>
+    </target>
+
+    <target name="init">
+        <mkdir dir="${build.dir}"/>
+        <mkdir dir="${classes.dir}"/>
+        <mkdir dir="${cap.dir}"/>
+    </target>
+
+    <target name="compile" depends="init" description="Compile Java sources">
+        <!-- 添加JavaCard API的jar包到类路径 -->
+        <javac srcdir="${src.dir}"
+               destdir="${classes.dir}"
+               debug="on"
+               includeantruntime="false">
+            <include name="${package.name}/**/*.java"/>
+            <classpath>
+                <pathelement location="${jcdk.home}/lib/api_classic.jar"/>
+                <pathelement location="${jcdk.home}/lib/api.jar"/>
+            </classpath>
+        </javac>
+    </target>
+
+    <target name="convert" depends="compile" description="Convert class files to CAP file">
+        <!-- 使用 ant-javacard 库的 javacard 任务 -->
+        <javacard jckit="${jcdk.home}">
+            <cap output="${cap.dir}/${cap.file.name}" 
+                 aid="${package.aid}"
+                 package="${package.name}" 
+                 version="1.0"
+                 sources="${src.dir}">
+                <applet class="${applet.class}" aid="${applet.aid}"/>
+            </cap>
+        </javacard>
+    </target>
+
+    <target name="all" depends="convert" description="Clean, compile, and convert"/>
+
+</project>
