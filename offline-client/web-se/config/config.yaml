@@ -1,0 +1,8 @@
+# 应用程序配置文件
+debug: true
+port: "8080"
+temp_dir: "./temp"
+bin_dir: "./bin"
+keygen_bin: "gg20_keygen"
+signing_bin: "gg20_signing"
+security_chip: true 
