@@ -14,7 +14,7 @@ type KeyGenResponse struct {
 	Success      bool   `json:"success"`                // 是否成功
 	Message      string `json:"message,omitempty"`      // 消息
 	Address      string `json:"address,omitempty"`      // 地址
-	EncryptedKey []byte `json:"encryptedKey,omitempty"` // 加密后的密钥
+	EncryptedKey string `json:"encryptedKey,omitempty"` // 加密后的密钥 (base64编码)
 }
 
 // SignRequest 签名请求
@@ -22,15 +22,15 @@ type SignRequest struct {
 	Parties      string `json:"parties" binding:"required"`      // p: 参与方
 	Data         string `json:"data" binding:"required"`         // d: 签名数据
 	Filename     string `json:"filename" binding:"required"`     // l: 本地密钥文件
-	EncryptedKey []byte `json:"encryptedKey" binding:"required"` // 加密后的密钥
+	EncryptedKey string `json:"encryptedKey" binding:"required"` // 加密后的密钥 (base64编码)
 	UserName     string `json:"userName" binding:"required"`     // 用户名
-	Address      string `json:"address" binding:"required"`      // 地址
-	Signature    []byte `json:"signature" binding:"required"`    // 签名
+	Address      string `json:"address" binding:"required"`      // 地址 (0x前缀)
+	Signature    string `json:"signature" binding:"required"`    // 签名 (base64编码)
 }
 
 // SignResponse 签名响应
 type SignResponse struct {
 	Success   bool   `json:"success"`             // 是否成功
 	Message   string `json:"message,omitempty"`   // 消息
-	Signature string `json:"signature,omitempty"` // 签名结果
+	Signature string `json:"signature,omitempty"` // 签名结果 (0x前缀)
 }
