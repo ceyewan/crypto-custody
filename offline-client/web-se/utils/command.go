@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -126,11 +127,23 @@ func ExtractPublicKey(jsonData map[string]interface{}) (string, error) {
 		return "", errors.New("找不到point字段")
 	}
 
-	// 将point转换为字符串
-	publicKey, ok := point.(string)
+	// 将point转换为[]interface{}
+	pointArray, ok := point.([]interface{})
 	if !ok {
-		return "", errors.New("point字段不是字符串")
+		return "", errors.New("point字段不是数组")
 	}
 
+	// 将point数组转换为字符串（例如十六进制格式）
+	var publicKeyParts []string
+	for _, value := range pointArray {
+		intValue, ok := value.(float64) // JSON解析时数字会被解析为float64
+		if !ok {
+			return "", errors.New("point数组包含非数字元素")
+		}
+		publicKeyParts = append(publicKeyParts, fmt.Sprintf("%02x", int(intValue)))
+	}
+
+	// 拼接为最终的公钥字符串
+	publicKey := strings.Join(publicKeyParts, "")
 	return publicKey, nil
 }

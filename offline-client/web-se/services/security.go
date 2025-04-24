@@ -22,28 +22,25 @@ func NewSecurityService(cfg *config.Config) (*SecurityService, error) {
 		cfg: cfg,
 	}
 
-	// 如果配置了使用安全芯片
-	if cfg.SecurityChip {
-		// 创建卡片读取器
-		reader, err := seclient.NewCardReader(seclient.WithDebug(cfg.Debug))
-		if err != nil {
-			return nil, err
-		}
-
-		// 连接读卡器
-		if err := reader.Connect(""); err != nil {
-			reader.Close()
-			return nil, err
-		}
-
-		// 选择Applet
-		if err := reader.SelectApplet(); err != nil {
-			reader.Close()
-			return nil, err
-		}
-
-		service.cardReader = reader
+	// 创建卡片读取器
+	reader, err := seclient.NewCardReader(seclient.WithDebug(cfg.Debug))
+	if err != nil {
+		return nil, err
 	}
+
+	// 连接读卡器
+	if err := reader.Connect(""); err != nil {
+		reader.Close()
+		return nil, err
+	}
+
+	// 选择Applet
+	if err := reader.SelectApplet(); err != nil {
+		reader.Close()
+		return nil, err
+	}
+
+	service.cardReader = reader
 
 	return service, nil
 }
@@ -58,7 +55,7 @@ func (s *SecurityService) Close() {
 
 // StoreData 在安全芯片中存储数据
 func (s *SecurityService) StoreData(username, addr string, key []byte) error {
-	if !s.cfg.SecurityChip || s.cardReader == nil {
+	if s.cardReader == nil {
 		return errors.New("安全芯片服务未启用")
 	}
 
@@ -86,7 +83,7 @@ func (s *SecurityService) StoreData(username, addr string, key []byte) error {
 
 // ReadData 从安全芯片中读取数据
 func (s *SecurityService) ReadData(username, addr string, signature []byte) ([]byte, error) {
-	if !s.cfg.SecurityChip || s.cardReader == nil {
+	if s.cardReader == nil {
 		return nil, errors.New("安全芯片服务未启用")
 	}
 
@@ -108,7 +105,7 @@ func (s *SecurityService) ReadData(username, addr string, signature []byte) ([]b
 
 // DeleteData 从安全芯片中删除数据
 func (s *SecurityService) DeleteData(username, addr string, signature []byte) error {
-	if !s.cfg.SecurityChip || s.cardReader == nil {
+	if s.cardReader == nil {
 		return errors.New("安全芯片服务未启用")
 	}
 
