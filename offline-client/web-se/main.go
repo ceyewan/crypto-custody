@@ -6,6 +6,7 @@ import (
 	"web-se/config"
 	"web-se/controllers"
 	"web-se/middleware"
+	"web-se/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -17,11 +18,26 @@ func main() {
 		log.Fatalf("加载配置失败: %v", err)
 	}
 
+	// 初始化日志系统
+	logger, err := utils.InitLogger(cfg)
+	if err != nil {
+		log.Fatalf("初始化日志系统失败: %v", err)
+	}
+	defer logger.Sync() // 刷新缓冲区
+
+	utils.LogInfo("系统启动")
+	utils.LogInfo("配置加载成功",
+		utils.String("port", cfg.Port),
+		utils.Bool("debug", cfg.Debug),
+		utils.String("log_file", cfg.LogFile))
+
 	// 设置Gin模式
 	if cfg.Debug {
 		gin.SetMode(gin.DebugMode)
+		utils.LogDebug("Gin设置为调试模式")
 	} else {
 		gin.SetMode(gin.ReleaseMode)
+		utils.LogInfo("Gin设置为生产模式")
 	}
 
 	// 创建Gin引擎
@@ -29,6 +45,7 @@ func main() {
 
 	// 注册中间件
 	r.Use(middleware.ErrorHandler())
+	r.Use(middleware.LoggerMiddleware())
 
 	// 注册API路由
 	api := r.Group("/api")
@@ -45,8 +62,8 @@ func main() {
 	}
 
 	// 启动服务器
-	log.Printf("服务器启动在 %s 端口", cfg.Port)
+	utils.LogInfo("服务器启动", utils.String("port", cfg.Port))
 	if err := r.Run(":" + cfg.Port); err != nil {
-		log.Fatalf("启动服务器失败: %v", err)
+		utils.LogFatal("启动服务器失败", utils.Error(err))
 	}
 }

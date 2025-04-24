@@ -5,4 +5,14 @@ temp_dir: "./temp"
 bin_dir: "./bin"
 keygen_bin: "gg20_keygen"
 signing_bin: "gg20_signing"
-security_chip: true 
+security_chip: true
+manager_addr: "http://127.0.0.1:8081"
+manager_port: "8081"
+
+# 日志配置
+log_dir: "./logs"
+log_file: "web-se.log"
+log_max_size: 10       # 单个日志文件最大大小(MB)
+log_max_backups: 10    # 保留的旧日志文件数量
+log_max_age: 30        # 日志文件保留天数
+log_compress: true     # 是否压缩旧日志 
