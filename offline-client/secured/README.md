@@ -2,11 +2,81 @@
 
 ## 概述
 
-该 Applet 实现了一个简单的数据存储和检索系统，运行在 JavaCard 智能卡平台上。主要功能包括:
+该项目包含两个主要部分：
+1. **安全芯片存储 Applet**：运行在 JavaCard 智能卡平台上的程序，提供数据存储和检索功能。
+2. **seclient 客户端**：基于 Go 语言开发的客户端程序，用于与安全芯片进行交互，发送 APDU 指令并处理响应。
+
+主要功能包括：
 - 存储固定长度的用户名(32字节)、地址(64字节)和消息数据(32字节)
 - 通过用户名和地址检索存储的消息数据
 - 支持覆盖已存在的(userName, Addr)对的数据
 - 支持删除已存在的(userName, Addr)对的数据
+
+## 项目结构
+
+```
+crypto-custody/offline-client/secured
+├── build.xml                # Ant 构建脚本
+├── README.md                # 项目说明文档
+├── build/                   # 编译生成的文件
+│   ├── cap/                 # CAP 文件目录
+│   │   └── securitychip.cap # 安全芯片 Applet 的 CAP 文件
+│   └── classes/             # 编译生成的类文件
+│       └── securitychip/
+│           └── SecurityChipApplet.class
+├── genkey/                  # 密钥生成工具
+│   ├── ec_private_key.pem   # ECDSA 私钥
+│   ├── ec_public_key.bin    # ECDSA 公钥
+│   └── generate_keys.py     # 密钥生成脚本
+├── src/                     # 源代码目录
+│   └── securitychip/
+│       └── SecurityChipApplet.java # 安全芯片 Applet 源代码
+└── test/                    # 测试目录
+    ├── go/                  # Go 客户端代码
+    │   ├── go.mod           # Go 模块配置文件
+    │   ├── go.sum           # Go 依赖锁定文件
+    │   ├── main.go          # 客户端主程序
+    │   └── seclient/        # 客户端核心逻辑
+    │       ├── cardreader.go
+    │       ├── commands.go
+    │       ├── constants.go
+    │       └── utils.go
+```
+
+## 编译与运行
+
+### 1. 编译安全芯片 Applet
+
+使用 Ant 工具编译和安装 Applet：
+
+```bash
+ant
+```
+
+- 任务会编译 Java 源代码并生成 CAP 文件。
+
+### 2. 运行密钥生成脚本
+
+在客户端与安全芯片交互前，需要生成 ECDSA 密钥对：
+
+```bash
+cd genkey
+python generate_keys.py
+```
+
+- 生成的 `ec_private_key.pem` 用于客户端签名。
+- 生成的 `ec_public_key.bin` 需要嵌入到 Applet 中。
+
+### 3. 运行 Go 客户端
+
+进入 `test/go` 目录，运行客户端程序：
+
+```bash
+cd test/go
+go run main.go
+```
+
+客户端会通过 APDU 指令与安全芯片交互，支持存储、读取和删除数据操作。
 
 ## APDU 通信基础
 
@@ -324,5 +394,35 @@ signature = private_key.sign(
 
 其他语言请参考相应的密码学库文档。
 
----
+## 测试情况
+
+### 测试环境
+
+- **操作系统**: macOS
+- **JavaCard 平台**: JCOP 3.0.4
+- **Go 版本**: 1.20+
+
+### 测试步骤
+
+1. **安装 Applet**：确保 CAP 文件已成功安装到智能卡。
+2. **生成密钥**：运行 `generate_keys.py` 生成密钥对。
+3. **运行客户端**：通过 `main.go` 测试存储、读取和删除数据功能。
+4. **验证签名**：确保读取和删除操作提供有效的 ECDSA 签名。
+
+### 测试结果
+
+- **存储数据**: 成功存储 100 条记录，超出限制时返回 `0x6A84`。
+- **读取数据**: 成功读取已存储的记录，未找到记录时返回 `0x6A83`。
+- **删除数据**: 成功删除指定记录，未找到记录时返回 `0x6A83`。
+- **签名验证**: 提供无效签名时返回 `0x6982`。
+
+## 注意事项
+
+1. **错误处理**: 始终检查响应状态码，确保操作成功完成。
+2. **数据填充**: 确保所有字段严格按照指定的字节长度发送。
+3. **密钥管理**: 私钥必须妥善保管，不应与智能卡一起存储。
+4. **签名格式**: 确保签名为 DER 编码格式，长度通常为 70-72 字节。
+
+## 联系方式
+
 如有任何问题或建议，请联系安全芯片团队。

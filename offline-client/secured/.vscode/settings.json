@@ -1,6 +1,0 @@
-{
-    "java.project.referencedLibraries": [
-        "lib/**/*.jar",
-        "/Users/harrick/CodeField/crypto-custody/offline-client/lib/jc305u4_kit/lib/api_classic.jar"
-    ]
-}
