@@ -3,7 +3,7 @@
  * 
  * 该Applet实现了一个简单的数据存储和检索系统。
  * 主要功能包括:
- * 1. 存储固定长度的用户名(32字节)、地址(64字节)和消息数据(32字节)
+ * 1. 存储固定长度的用户名(32字节)、以太坊地址(20字节)和消息数据(32字节)
  * 2. 通过用户名和地址检索数据
  * 3. 支持覆盖已存在的(userName, Addr)对的数据
  * 4. 支持删除已存在的数据
@@ -14,10 +14,6 @@
  */
 
 package securitychip;
-
-import java.applet.Applet;
-import java.security.Signature;
-import java.security.interfaces.ECPublicKey;
 
 import javacard.framework.*;
 import javacard.security.*;
@@ -37,7 +33,7 @@ public class SecurityChipApplet extends Applet {
     // 存储限制常量
     private static final byte MAX_RECORDS = 100; // 最大记录数量
     private static final byte USERNAME_LENGTH = 32; // 用户名固定长度
-    private static final byte ADDR_LENGTH = 64; // 地址固定长度
+    private static final byte ADDR_LENGTH = 20; // 地址固定长度
     private static final byte MESSAGE_LENGTH = 32; // 消息固定长度
     private static final byte MAX_SIGNATURE_LENGTH = 72; // ECDSA DER格式签名最大长度
 
@@ -191,7 +187,7 @@ public class SecurityChipApplet extends Applet {
     /**
      * 处理存储数据 - 一次性存储完整记录
      * 
-     * APDU格式: [CLA][INS][P1][P2][Lc][userName(32)][addr(64)][message(32)]
+     * APDU格式: [CLA][INS][P1][P2][Lc][userName(32)][addr(20)][message(32)]
      */
     private void processStoreData(APDU apdu) {
         byte[] apduBuffer = apdu.getBuffer();
@@ -256,7 +252,7 @@ public class SecurityChipApplet extends Applet {
     /**
      * 处理读取数据 - 一次性读取完整记录
      * 
-     * APDU格式: [CLA][INS][P1][P2][Lc][userName(32)][addr(64)][sign_DER(变长)]
+     * APDU格式: [CLA][INS][P1][P2][Lc][userName(32)][addr(20)][sign_DER(变长)]
      * 注意: sign_DER是DER编码格式的ECDSA签名，最大长度为72字节
      */
     private void processReadData(APDU apdu) {
@@ -305,7 +301,7 @@ public class SecurityChipApplet extends Applet {
     /**
      * 处理删除数据 - 根据用户名和地址删除记录
      * 
-     * APDU格式: [CLA][INS][P1][P2][Lc][userName(32)][addr(64)][sign_DER(变长)]
+     * APDU格式: [CLA][INS][P1][P2][Lc][userName(32)][addr(20)][sign_DER(变长)]
      * 注意: sign_DER是DER编码格式的ECDSA签名，最大长度为72字节
      */
     private void processDeleteData(APDU apdu) {

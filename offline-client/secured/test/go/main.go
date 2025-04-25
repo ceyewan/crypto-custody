@@ -35,9 +35,10 @@ func generateTestData(count int) ([][]byte, [][]byte, [][]byte) {
 		username := fmt.Sprintf("user%d@example.com", i)
 		usernames[i] = padData([]byte(username), seclient.USERNAME_LENGTH)
 
-		// 生成地址：以 0x 开头的十六进制字符串 + 填充
-		addr := fmt.Sprintf("0x%s%d", strings.Repeat("abcdef", 10), i)
-		addresses[i] = padData([]byte(addr), seclient.ADDR_LENGTH)
+		// 生成以太坊地址：20字节的随机数据
+		addr := make([]byte, seclient.ADDR_LENGTH)
+		rand.Read(addr)
+		addresses[i] = addr
 
 		// 生成消息：这是第{i}条测试消息 + 填充
 		message := fmt.Sprintf("这是第%d条测试消息", i)
@@ -145,7 +146,7 @@ func main() {
 	fmt.Println("开始安全芯片功能测试...")
 
 	// 加载私钥
-	privateKeyFile := "./test_keys/ec_private_key.pem"
+	privateKeyFile := "../../genkey/ec_private_key.pem"
 	privateKey, err := loadPrivateKey(privateKeyFile)
 	if err != nil {
 		fmt.Printf("加载私钥失败: %v\n", err)
