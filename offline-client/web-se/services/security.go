@@ -1,6 +1,8 @@
 package services
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 
@@ -74,12 +76,23 @@ func (s *SecurityService) StoreData(username, addr string, key []byte) error {
 		utils.String("username", username),
 		utils.String("address", addr))
 
-	// 将用户名和地址转为固定长度的字节数组
-	userBytes := make([]byte, seclient.USERNAME_LENGTH)
-	copy(userBytes, []byte(username))
+	// 将用户名哈希为 32 字节
+	userHash := sha256.Sum256([]byte(username))
+	userBytes := userHash[:] // 32 字节
 
-	addrBytes := make([]byte, seclient.ADDR_LENGTH)
-	copy(addrBytes, []byte(addr))
+	// 处理以太坊地址，去掉 0x 前缀并转为 20 字节
+	cleanAddr := addr
+	if len(addr) >= 2 && addr[:2] == "0x" {
+		cleanAddr = addr[2:]
+	}
+	addrBytes, err := hex.DecodeString(cleanAddr)
+	if err != nil || len(addrBytes) != 20 {
+		utils.LogError("地址格式错误", utils.String("address", addr))
+		return errors.New("地址格式错误")
+	}
+
+	utils.LogDebug("用户名字节", utils.String("userBytes", fmt.Sprintf("%X", userBytes)))
+	utils.LogDebug("地址字节", utils.String("addrBytes", fmt.Sprintf("%X", addrBytes)))
 
 	// 确保密钥长度正确
 	if len(key) != seclient.MESSAGE_LENGTH {
@@ -113,12 +126,23 @@ func (s *SecurityService) ReadData(username, addr string, signature []byte) ([]b
 		utils.String("username", username),
 		utils.String("address", addr))
 
-	// 将用户名和地址转为固定长度的字节数组
-	userBytes := make([]byte, seclient.USERNAME_LENGTH)
-	copy(userBytes, []byte(username))
+	// 将用户名哈希为 32 字节
+	userHash := sha256.Sum256([]byte(username))
+	userBytes := userHash[:] // 32 字节
 
-	addrBytes := make([]byte, seclient.ADDR_LENGTH)
-	copy(addrBytes, []byte(addr))
+	// 处理以太坊地址，去掉 0x 前缀并转为 20 字节
+	cleanAddr := addr
+	if len(addr) >= 2 && addr[:2] == "0x" {
+		cleanAddr = addr[2:]
+	}
+	addrBytes, err := hex.DecodeString(cleanAddr)
+	if err != nil || len(addrBytes) != 20 {
+		utils.LogError("地址格式错误", utils.String("address", addr))
+		return nil, errors.New("地址格式错误")
+	}
+
+	utils.LogDebug("用户名字节", utils.String("userBytes", fmt.Sprintf("%X", userBytes)))
+	utils.LogDebug("地址字节", utils.String("addrBytes", fmt.Sprintf("%X", addrBytes)))
 
 	// 调用安全芯片读取数据
 	utils.LogDebug("调用安全芯片读取数据",
@@ -145,12 +169,23 @@ func (s *SecurityService) DeleteData(username, addr string, signature []byte) er
 		utils.String("username", username),
 		utils.String("address", addr))
 
-	// 将用户名和地址转为固定长度的字节数组
-	userBytes := make([]byte, seclient.USERNAME_LENGTH)
-	copy(userBytes, []byte(username))
+	// 将用户名哈希为 32 字节
+	userHash := sha256.Sum256([]byte(username))
+	userBytes := userHash[:] // 32 字节
 
-	addrBytes := make([]byte, seclient.ADDR_LENGTH)
-	copy(addrBytes, []byte(addr))
+	// 处理以太坊地址，去掉 0x 前缀并转为 20 字节
+	cleanAddr := addr
+	if len(addr) >= 2 && addr[:2] == "0x" {
+		cleanAddr = addr[2:]
+	}
+	addrBytes, err := hex.DecodeString(cleanAddr)
+	if err != nil || len(addrBytes) != 20 {
+		utils.LogError("地址格式错误", utils.String("address", addr))
+		return errors.New("地址格式错误")
+	}
+
+	utils.LogDebug("用户名字节", utils.String("userBytes", fmt.Sprintf("%X", userBytes)))
+	utils.LogDebug("地址字节", utils.String("addrBytes", fmt.Sprintf("%X", addrBytes)))
 
 	// 调用安全芯片删除数据
 	utils.LogDebug("调用安全芯片删除数据")
