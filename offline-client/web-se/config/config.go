@@ -37,7 +37,7 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault("bin_dir", "./bin")
 	viper.SetDefault("keygen_bin", "gg20_keygen")
 	viper.SetDefault("signing_bin", "gg20_signing")
-	viper.SetDefault("manager_addr", "http://127.0.0.1:8081")
+	viper.SetDefault("manager_addr", "http://127.0.0.1:8000")
 	// 日志默认值
 	viper.SetDefault("log_dir", "./logs")
 	viper.SetDefault("log_file", "web-se.log")

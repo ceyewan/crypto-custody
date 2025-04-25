@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -28,12 +29,31 @@ func ExecCommand(ctx context.Context, cfg *config.Config, name string, args ...s
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 
+	// 记录命令执行信息
+	LogInfo("开始执行命令",
+		String("command", name),
+		String("args", strings.Join(args, " ")),
+		String("timeout", "60s"))
+
 	// 执行命令
+	startTime := time.Now()
 	err := cmd.Run()
+	executionTime := time.Since(startTime)
+
 	if err != nil {
-		// 返回stderr输出和错误
+		// 记录错误信息
+		LogError("命令执行失败",
+			Error(err),
+			String("stdout", stdout.String()),
+			String("stderr", stderr.String()),
+			String("execution_time", executionTime.String()))
 		return stderr.String(), err
 	}
+
+	// 记录成功信息
+	LogInfo("命令执行成功",
+		String("stdout", stdout.String()),
+		String("execution_time", executionTime.String()))
 
 	return stdout.String(), nil
 }
@@ -46,15 +66,30 @@ func RunKeyGen(ctx context.Context, cfg *config.Config, t, n, i int, output stri
 	// 构建命令参数
 	args := []string{
 		"--address", cfg.ManagerAddr,
-		"-t", toString(t),
-		"-n", toString(n),
-		"-i", toString(i),
+		"--index", toString(i),
+		"--number-of-parties", toString(n),
 		"--output", output,
+		"--threshold", toString(t),
+		"--room", "default",
 	}
+
+	// 记录密钥生成信息
+	LogInfo("开始密钥生成",
+		String("command", cmdPath),
+		Int("threshold", t),
+		Int("parties", n),
+		Int("index", i),
+		String("output", output))
 
 	// 执行命令
 	_, err := ExecCommand(ctx, cfg, cmdPath, args...)
-	return err
+	if err != nil {
+		LogError("密钥生成失败", Error(err))
+		return err
+	}
+
+	LogInfo("密钥生成成功")
+	return nil
 }
 
 // RunSigning 运行签名命令
@@ -69,12 +104,21 @@ func RunSigning(ctx context.Context, cfg *config.Config, parties, data, localSha
 		"-l", localShare,
 	}
 
+	// 记录签名信息
+	LogInfo("开始签名操作",
+		String("command", cmdPath),
+		String("parties", parties),
+		String("data", data),
+		String("local_share", localShare))
+
 	// 执行命令
 	output, err := ExecCommand(ctx, cfg, cmdPath, args...)
 	if err != nil {
+		LogError("签名操作失败", Error(err))
 		return "", err
 	}
 
+	LogInfo("签名操作成功")
 	return output, nil
 }
 
@@ -82,7 +126,7 @@ func RunSigning(ctx context.Context, cfg *config.Config, parties, data, localSha
 func toString(value interface{}) string {
 	switch v := value.(type) {
 	case int:
-		return strings.TrimSpace(strings.Replace(string(append([]byte{}, byte(v))), "\x00", "", -1))
+		return strconv.Itoa(v)
 	case string:
 		return v
 	default:

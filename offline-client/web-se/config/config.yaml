@@ -6,7 +6,7 @@ bin_dir: "./bin"
 keygen_bin: "gg20_keygen"
 signing_bin: "gg20_signing"
 security_chip: true
-manager_addr: "http://127.0.0.1:8081"
+manager_addr: "http://127.0.0.1:8000"
 manager_port: "8081"
 
 # 日志配置
