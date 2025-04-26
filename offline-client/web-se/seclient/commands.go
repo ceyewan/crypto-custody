@@ -1,6 +1,7 @@
 package seclient
 
 import (
+	"encoding/hex"
 	"fmt"
 )
 
@@ -22,6 +23,11 @@ func (r *CardReader) StoreData(username []byte, addr []byte, message []byte) (by
 	fullData = append(fullData, username...)
 	fullData = append(fullData, addr...)
 	fullData = append(fullData, message...)
+
+	fmt.Println("❕存储数据到安全芯片❕")
+	fmt.Println("username:", hex.EncodeToString(username))
+	fmt.Println("addr:", hex.EncodeToString(addr))
+	fmt.Println("message:", hex.EncodeToString(message))
 
 	// 构建APDU命令
 	command := []byte{CLA, INS_STORE_DATA, 0x00, 0x00, byte(len(fullData))}
@@ -73,6 +79,11 @@ func (r *CardReader) ReadData(username []byte, addr []byte, signature []byte) ([
 	fullData = append(fullData, addr...)
 	fullData = append(fullData, signature...)
 
+	fmt.Println("❕读取数据从安全芯片❕")
+	fmt.Println("username:", hex.EncodeToString(username))
+	fmt.Println("addr:", hex.EncodeToString(addr))
+	fmt.Println("signature:", hex.EncodeToString(signature))
+
 	// 构建APDU命令
 	command := []byte{CLA, INS_READ_DATA, 0x00, 0x00, byte(len(fullData))}
 	command = append(command, fullData...)
@@ -91,6 +102,9 @@ func (r *CardReader) ReadData(username []byte, addr []byte, signature []byte) ([
 	} else if sw != SW_SUCCESS {
 		return nil, fmt.Errorf("读取数据返回错误状态码: 0x%04X", sw)
 	}
+
+	fmt.Println("❕读取数据成功❕")
+	fmt.Println("数据:", hex.EncodeToString(data))
 
 	return data, nil
 }
