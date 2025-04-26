@@ -1,4 +1,5 @@
 .DS_Store
 */.DS_Store
 offline-client/.DS_Store
-./offline-client/secured/test/test_keys/ec_private_key.pem
+offline-client/secured/genkey/ec_private_key.pem
+offline-client/web-se/private_keys/ec_private_key.pem

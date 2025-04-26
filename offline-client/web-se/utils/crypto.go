@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"regexp"
 
@@ -25,6 +26,7 @@ func GenerateRandomBytes(size int) ([]byte, error) {
 
 // EncryptAES 使用AES-GCM加密数据
 func EncryptAES(plaintext []byte, key []byte) ([]byte, error) {
+	fmt.Println("加密密钥", hex.EncodeToString(key))
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
@@ -43,11 +45,14 @@ func EncryptAES(plaintext []byte, key []byte) ([]byte, error) {
 
 	// 使用AES-GCM模式进行加密，nonce会被添加到密文前面
 	ciphertext := aesgcm.Seal(nonce, nonce, plaintext, nil)
+	fmt.Println("加密结果", hex.EncodeToString(ciphertext)[:20])
 	return ciphertext, nil
 }
 
 // DecryptAES 使用AES-GCM解密数据
 func DecryptAES(ciphertext []byte, key []byte) ([]byte, error) {
+	fmt.Println("解密密钥", hex.EncodeToString(key))
+	fmt.Println("解密数据", hex.EncodeToString(ciphertext)[:20])
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err

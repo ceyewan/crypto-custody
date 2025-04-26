@@ -3,10 +3,9 @@ package middleware
 import (
 	"time"
 
-	"web-se/utils"
+	"web-se/clog"
 
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
 // LoggerMiddleware 返回一个Gin中间件，记录API请求日志
@@ -33,22 +32,22 @@ func LoggerMiddleware() gin.HandlerFunc {
 		clientIP := c.ClientIP()
 
 		// 构建日志字段
-		fields := []zap.Field{
-			utils.String("method", reqMethod),
-			utils.String("uri", reqUri),
-			utils.String("ip", clientIP),
-			utils.Int("status", statusCode),
-			utils.String("latency", latencyTime.String()),
+		fields := []clog.Field{
+			clog.String("method", reqMethod),
+			clog.String("uri", reqUri),
+			clog.String("ip", clientIP),
+			clog.Int("status", statusCode),
+			clog.String("latency", latencyTime.String()),
 		}
 
 		// 根据状态码记录不同级别的日志
 		switch {
 		case statusCode >= 500:
-			utils.LogError("API请求", fields...)
+			clog.Error("API请求", fields...)
 		case statusCode >= 400:
-			utils.LogWarn("API请求", fields...)
+			clog.Warn("API请求", fields...)
 		default:
-			utils.LogInfo("API请求", fields...)
+			clog.Info("API请求", fields...)
 		}
 	}
 }

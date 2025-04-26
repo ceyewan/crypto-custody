@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"web-se/clog"
+
 	"web-se/config"
 )
 
@@ -30,10 +32,10 @@ func ExecCommand(ctx context.Context, cfg *config.Config, name string, args ...s
 	defer cancel()
 
 	// 记录命令执行信息
-	LogInfo("开始执行命令",
-		String("command", name),
-		String("args", strings.Join(args, " ")),
-		String("timeout", "60s"))
+	clog.Info("开始执行命令",
+		clog.String("command", name),
+		clog.String("args", strings.Join(args, " ")),
+		clog.String("timeout", "60s"))
 
 	// 执行命令
 	startTime := time.Now()
@@ -42,18 +44,18 @@ func ExecCommand(ctx context.Context, cfg *config.Config, name string, args ...s
 
 	if err != nil {
 		// 记录错误信息
-		LogError("命令执行失败",
-			Error(err),
-			String("stdout", stdout.String()),
-			String("stderr", stderr.String()),
-			String("execution_time", executionTime.String()))
+		clog.Error("命令执行失败",
+			clog.Err(err),
+			clog.String("stdout", stdout.String()),
+			clog.String("stderr", stderr.String()),
+			clog.String("execution_time", executionTime.String()))
 		return stderr.String(), err
 	}
 
 	// 记录成功信息
-	LogInfo("命令执行成功",
-		String("stdout", stdout.String()),
-		String("execution_time", executionTime.String()))
+	clog.Info("命令执行成功",
+		clog.String("stdout", stdout.String()),
+		clog.String("execution_time", executionTime.String()))
 
 	return stdout.String(), nil
 }
@@ -74,21 +76,21 @@ func RunKeyGen(ctx context.Context, cfg *config.Config, t, n, i int, output stri
 	}
 
 	// 记录密钥生成信息
-	LogInfo("开始密钥生成",
-		String("command", cmdPath),
-		Int("threshold", t),
-		Int("parties", n),
-		Int("index", i),
-		String("output", output))
+	clog.Info("开始密钥生成",
+		clog.String("command", cmdPath),
+		clog.Int("threshold", t),
+		clog.Int("parties", n),
+		clog.Int("index", i),
+		clog.String("output", output))
 
 	// 执行命令
 	_, err := ExecCommand(ctx, cfg, cmdPath, args...)
 	if err != nil {
-		LogError("密钥生成失败", Error(err))
+		clog.Error("密钥生成失败", clog.Err(err))
 		return err
 	}
 
-	LogInfo("密钥生成成功")
+	clog.Info("密钥生成成功")
 	return nil
 }
 
@@ -100,25 +102,25 @@ func RunSigning(ctx context.Context, cfg *config.Config, parties, data, localSha
 	// 构建命令参数
 	args := []string{
 		"-p", parties,
-		"-d", data,
+		"-d", "\"" + data + "\"",
 		"-l", localShare,
 	}
 
 	// 记录签名信息
-	LogInfo("开始签名操作",
-		String("command", cmdPath),
-		String("parties", parties),
-		String("data", data),
-		String("local_share", localShare))
+	clog.Info("开始签名操作",
+		clog.String("command", cmdPath),
+		clog.String("parties", parties),
+		clog.String("data", data),
+		clog.String("local_share", localShare))
 
 	// 执行命令
 	output, err := ExecCommand(ctx, cfg, cmdPath, args...)
 	if err != nil {
-		LogError("签名操作失败", Error(err))
+		clog.Error("签名操作失败", clog.Err(err))
 		return "", err
 	}
 
-	LogInfo("签名操作成功")
+	clog.Info("签名操作成功")
 	return output, nil
 }
 
