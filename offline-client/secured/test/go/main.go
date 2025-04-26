@@ -6,8 +6,8 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"fmt"
-	"io/ioutil"
 	"math/big"
+	"os"
 	"strings"
 	"time"
 
@@ -31,9 +31,10 @@ func generateTestData(count int) ([][]byte, [][]byte, [][]byte) {
 	messages := make([][]byte, count)
 
 	for i := 0; i < count; i++ {
-		// 生成用户名：user{i}@example.com + 填充
+		// 生成用户名：user{i}@example.com 并计算哈希值
 		username := fmt.Sprintf("user%d@example.com", i)
-		usernames[i] = padData([]byte(username), seclient.USERNAME_LENGTH)
+		hash := sha256.Sum256([]byte(username))
+		usernames[i] = hash[:]
 
 		// 生成以太坊地址：20字节的随机数据
 		addr := make([]byte, seclient.ADDR_LENGTH)
@@ -60,7 +61,7 @@ func padData(data []byte, length int) []byte {
 
 // 从PEM文件加载私钥
 func loadPrivateKey(filename string) (*ecdsa.PrivateKey, error) {
-	pemData, err := ioutil.ReadFile(filename)
+	pemData, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, fmt.Errorf("读取私钥文件失败: %v", err)
 	}
