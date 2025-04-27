@@ -41,7 +41,7 @@ func NewSecurityService(cfg *config.Config) (*SecurityService, error) {
 
 	// 连接读卡器
 	clog.Info("连接读卡器")
-	if err := reader.Connect(""); err != nil {
+	if err := reader.Connect(cfg.CardReaderName); err != nil {
 		clog.Error("连接读卡器失败", clog.String("err", err.Error()))
 		reader.Close()
 		return nil, err

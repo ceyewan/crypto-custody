@@ -19,6 +19,8 @@ const (
 	serverBaseURL      = "http://localhost:8080"
 	keygenAPIEndpoint  = serverBaseURL + "/api/v1/mpc/keygen"
 	signAPIEndpoint    = serverBaseURL + "/api/v1/mpc/sign"
+	cplcAPIEndpoint    = serverBaseURL + "/api/v1/mpc/cplc"
+	deleteAPIEndpoint  = serverBaseURL + "/api/v1/mpc/delete"
 	privateKeyFilePath = "ec_private_key.pem"
 	keygenThreshold    = 2
 	totalParticipants  = 3
@@ -163,12 +165,109 @@ func testSign(parties, data, filename, username, address, signature, encryptedKe
 	return nil
 }
 
+// 测试获取CPLC信息
+func testGetCPLC() error {
+	fmt.Println("\n=== 发起获取CPLC信息请求 ===")
+
+	// 发送GET请求
+	resp, err := http.Get(cplcAPIEndpoint)
+	if err != nil {
+		fmt.Printf("❌ 请求失败: %v\n", err)
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		errMsg := fmt.Sprintf("HTTP请求失败, 状态码: %d, 响应: %s", resp.StatusCode, string(body))
+		fmt.Printf("❌ %s\n", errMsg)
+		return fmt.Errorf("%s", errMsg)
+	}
+
+	var result utils.GetCPLCResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		fmt.Printf("❌ 解析响应JSON失败: %v\n", err)
+		return err
+	}
+
+	if result.Success {
+		fmt.Println("✅ 获取CPLC信息成功!")
+		fmt.Printf("CPLC信息: %s\n", result.CPIC)
+	} else {
+		fmt.Printf("❌ 获取CPLC信息失败: %s\n", result.Message)
+	}
+	return nil
+}
+
+// 测试删除用户数据
+func testDeleteMessage(username, address, signature string) error {
+	payload := utils.DeleteRequest{
+		UserName:  username,
+		Address:   address,
+		Signature: signature,
+	}
+
+	fmt.Printf("\n=== 发起删除用户数据请求 ===\n")
+	fmt.Printf("用户名: %s\n", username)
+	fmt.Printf("地址: %s\n", address)
+	fmt.Printf("签名长度: %d 字节\n", len(signature))
+
+	// 转换为JSON
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		fmt.Printf("❌ JSON序列化失败: %v\n", err)
+		return err
+	}
+
+	// 创建HTTP请求
+	resp, err := http.Post(deleteAPIEndpoint, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		fmt.Printf("❌ 创建HTTP请求失败: %v\n", err)
+		return err
+	}
+	defer resp.Body.Close()
+
+	// 读取响应
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Printf("❌ 读取响应失败: %v\n", err)
+		return err
+	}
+
+	// 检查响应状态码
+	if resp.StatusCode != http.StatusOK {
+		errMsg := fmt.Sprintf("HTTP请求失败, 状态码: %d, 响应: %s", resp.StatusCode, string(body))
+		fmt.Printf("❌ %s\n", errMsg)
+		return fmt.Errorf("%s", errMsg)
+	}
+
+	// 解析响应
+	var deleteResponse utils.DeleteResponse
+	if err := json.Unmarshal(body, &deleteResponse); err != nil {
+		fmt.Printf("❌ 解析响应JSON失败: %v\n", err)
+		return err
+	}
+
+	// 打印删除结果
+	if deleteResponse.Success {
+		fmt.Println("✅ 删除用户数据成功")
+		fmt.Printf("删除的地址: %s\n", deleteResponse.Address)
+	}
+	return nil
+}
+
 func main() {
+	// 测试获取CPLC信息
+	runGetCPLCTest()
+
 	// 测试密钥生成
 	runKeygenTest()
 
 	// 测试签名
 	runSignTest()
+
+	// 测试删除用户数据
+	runDeleteMessageTest()
 }
 
 // 运行密钥生成测试
@@ -193,6 +292,18 @@ func runKeygenTest() {
 	wg.Wait()
 
 	fmt.Println("\n===== 密钥生成测试完成 =====")
+}
+
+// 运行获取CPLC信息测试
+func runGetCPLCTest() {
+	fmt.Println("\n===== 开始获取CPLC信息测试 =====")
+	fmt.Printf("服务器地址: %s\n", serverBaseURL)
+
+	if err := testGetCPLC(); err != nil {
+		fmt.Printf("❌ 获取CPLC信息测试失败: %v\n", err)
+	}
+
+	fmt.Println("\n===== 获取CPLC信息测试完成 =====")
 }
 
 // 运行签名测试
@@ -277,4 +388,64 @@ func runSignTest() {
 	signWg.Wait()
 
 	fmt.Println("\n===== 签名测试完成 =====")
+}
+
+// 运行删除用户数据测试
+func runDeleteMessageTest() {
+	fmt.Println("\n===== 开始删除用户数据测试 =====")
+	fmt.Printf("服务器地址: %s\n", serverBaseURL)
+
+	// 加载私钥
+	privateKey, err := utils.LoadPrivateKey(privateKeyFilePath)
+	if err != nil {
+		fmt.Printf("❌ 加载私钥失败: %v\n", err)
+		return
+	}
+	fmt.Println("✅ 私钥加载成功")
+
+	// 删除所有参与方的数据
+	for i := 1; i <= totalParticipants; i++ {
+		keygenFile := fmt.Sprintf("data/keygen_result_%d.json", i)
+		if _, err := os.Stat(keygenFile); err != nil {
+			fmt.Printf("❌ 找不到密钥生成结果文件: %s\n", keygenFile)
+			continue
+		}
+
+		// 加载密钥生成结果
+		keygenResult, err := utils.LoadKeyGenResult(keygenFile)
+		if err != nil {
+			fmt.Printf("❌ 加载密钥生成结果失败 (参与方 %d): %v\n", i, err)
+			continue
+		}
+
+		username := keygenResult.UserName
+		address := keygenResult.Address
+
+		fmt.Printf("\n测试删除参与方 %d 数据\n", i)
+		fmt.Printf("用户名: %s\n", username)
+		fmt.Printf("地址: %s\n", address)
+
+		// 对地址和用户名进行签名
+		hash := sha256.Sum256([]byte(username))
+		userBytes := hash[:]
+		addrBytes, _ := hex.DecodeString(address[2:]) // 去掉0x前缀
+		signatureData := append(userBytes, addrBytes...)
+		signature, err := utils.SignData(privateKey, signatureData)
+		if err != nil {
+			fmt.Printf("❌ 生成签名失败 (参与方 %d): %v\n", i, err)
+			continue
+		}
+
+		// 发送删除请求
+		if err := testDeleteMessage(username, address, signature); err != nil {
+			fmt.Printf("❌ 删除参与方 %d 数据失败: %v\n", i, err)
+		} else {
+			fmt.Printf("✅ 删除参与方 %d 数据成功\n", i)
+		}
+
+		// 等待一秒，防止请求过快
+		time.Sleep(1 * time.Second)
+	}
+
+	fmt.Println("\n===== 删除用户数据测试完成 =====")
 }

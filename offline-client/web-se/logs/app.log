@@ -159,3 +159,402 @@
 2025-04-27 09:30:06.408	[34mINFO[0m	web-se/main.go:31	配置加载成功	{"port": "8080", "debug": true, "log_file": "web-se.log", "log_dir": "./logs"}
 2025-04-27 09:30:06.408	[35mDEBUG[0m	web-se/main.go:41	Gin设置为调试模式
 2025-04-27 09:30:06.408	[34mINFO[0m	web-se/main.go:69	服务器启动	{"port": "8080"}
+2025-04-27 12:51:32.722	[34mINFO[0m	web-se/main.go:30	系统启动
+2025-04-27 12:51:32.723	[34mINFO[0m	web-se/main.go:31	配置加载成功	{"port": "8080", "debug": true, "log_file": "web-se.log", "log_dir": "./logs"}
+2025-04-27 12:51:32.723	[35mDEBUG[0m	web-se/main.go:41	Gin设置为调试模式
+2025-04-27 12:51:32.723	[34mINFO[0m	web-se/main.go:71	服务器启动	{"port": "8080"}
+2025-04-27 12:51:43.438	[34mINFO[0m	controllers/mpc.go:243	服务未初始化，尝试初始化
+2025-04-27 12:51:43.440	[35mDEBUG[0m	services/security.go:30	初始化安全芯片服务	{"debug": true}
+2025-04-27 12:51:43.440	[34mINFO[0m	services/security.go:35	创建卡片读取器
+2025-04-27 12:51:43.467	[34mINFO[0m	services/security.go:43	连接读卡器
+2025-04-27 12:51:43.467	[34mINFO[0m	seclient/cardreader.go:105	可用读卡器列表:
+2025-04-27 12:51:43.467	[34mINFO[0m	seclient/cardreader.go:107	  0: GOODIX GSE SmartCard Reader 01
+2025-04-27 12:51:43.467	[34mINFO[0m	seclient/cardreader.go:109	  >>> 自动选择了第一个读卡器
+2025-04-27 12:51:43.467	[34mINFO[0m	seclient/cardreader.go:107	  1: GOODIX GSE SmartCard Reader
+2025-04-27 12:51:43.467	[34mINFO[0m	seclient/cardreader.go:116	使用读卡器: GOODIX GSE SmartCard Reader 01
+2025-04-27 12:51:43.531	[34mINFO[0m	seclient/cardreader.go:128	成功连接到读卡器，使用协议: 2
+2025-04-27 12:51:43.531	[34mINFO[0m	services/security.go:51	选择安全芯片Applet
+2025-04-27 12:51:43.531	[35mDEBUG[0m	seclient/commands.go:199	CPLC数据未缓存，尝试获取
+2025-04-27 12:51:43.531	[34mINFO[0m	seclient/cardreader.go:178	=== 发送APDU命令 ===
+2025-04-27 12:51:43.531	[34mINFO[0m	seclient/cardreader.go:179	命令: 80CA9F7F00
+2025-04-27 12:51:43.533	[34mINFO[0m	seclient/cardreader.go:190	响应状态码: 0x9000
+2025-04-27 12:51:43.534	[34mINFO[0m	seclient/cardreader.go:191	响应数据: 9F7F2A007F0002867F31140001408001326843A01600090000000900007F43A016013268000000406710037E82
+2025-04-27 12:51:43.534	[35mDEBUG[0m	seclient/commands.go:234	获取CPLC数据成功	{"CPLC标签": "9F7F", "CPLC长度": 42, "CPLC数据": "007f0002867f31140001408001326843a01600090000000900007f43a016013268000000406710037e82"}
+2025-04-27 12:51:43.534	[34mINFO[0m	seclient/cardreader.go:144	=== 选择Applet命令 ===
+2025-04-27 12:51:43.534	[34mINFO[0m	seclient/cardreader.go:145	APDU: 00A4040008A000000062CF0101
+2025-04-27 12:51:43.534	[34mINFO[0m	seclient/cardreader.go:146	命令解析:
+2025-04-27 12:51:43.534	[34mINFO[0m	seclient/cardreader.go:147	  CLA: 0x00 (ISO标准命令)
+2025-04-27 12:51:43.534	[34mINFO[0m	seclient/cardreader.go:148	  INS: 0xA4 (选择指令)
+2025-04-27 12:51:43.534	[34mINFO[0m	seclient/cardreader.go:149	  P1: 0x04 (按名称选择)
+2025-04-27 12:51:43.534	[34mINFO[0m	seclient/cardreader.go:150	  P2: 0x00 (首次选择)
+2025-04-27 12:51:43.534	[34mINFO[0m	seclient/cardreader.go:151	  Lc: 0x08 (AID长度)
+2025-04-27 12:51:43.534	[34mINFO[0m	seclient/cardreader.go:152	  Data: A000000062CF0101 (AID)
+2025-04-27 12:51:43.536	[34mINFO[0m	seclient/cardreader.go:166	=== 选择Applet响应 ===
+2025-04-27 12:51:43.536	[34mINFO[0m	seclient/cardreader.go:167	响应数据: 9000
+2025-04-27 12:51:43.536	[34mINFO[0m	seclient/cardreader.go:168	状态码: 0x9000 (成功)
+2025-04-27 12:51:43.536	[34mINFO[0m	seclient/cardreader.go:169	数据: 
+2025-04-27 12:51:43.536	[34mINFO[0m	seclient/cardreader.go:170	成功选择Applet, AID: A000000062CF0101
+2025-04-27 12:51:43.536	[35mDEBUG[0m	services/security.go:59	安全芯片服务初始化完成
+2025-04-27 12:51:43.536	[34mINFO[0m	controllers/mpc.go:41	安全芯片服务初始化成功
+2025-04-27 12:51:43.536	[35mDEBUG[0m	services/mpc.go:29	初始化MPC服务
+2025-04-27 12:51:43.536	[34mINFO[0m	controllers/mpc.go:45	MPC控制器初始化成功
+2025-04-27 12:51:43.536	[34mINFO[0m	controllers/mpc.go:254	接收到获取CPLC信息请求	{"client_ip": "::1"}
+2025-04-27 12:51:43.536	[35mDEBUG[0m	services/security.go:225	获取CPLC信息
+2025-04-27 12:51:43.536	[35mDEBUG[0m	services/security.go:237	CPLC信息获取成功	{"长度": 42, "CPLC": "007f0002867f31140001408001326843a01600090000000900007f43a016013268000000406710037e82"}
+2025-04-27 12:51:43.536	[34mINFO[0m	controllers/mpc.go:269	获取CPLC信息成功	{"cplc": "007F0002867F31140001408001326843A01600090000000900007F43A016013268000000406710037E82"}
+2025-04-27 12:51:43.536	[34mINFO[0m	middleware/logger.go:50	API请求	{"method": "GET", "uri": "/api/v1/mpc/cplc", "ip": "::1", "status": 200, "latency": "97.336041ms"}
+2025-04-27 12:51:43.537	[34mINFO[0m	controllers/mpc.go:78	接收到密钥生成请求	{"threshold": 2, "parties": 3, "index": 1, "filename": "keygen_data_1", "username": "test_user_1"}
+2025-04-27 12:51:43.537	[35mDEBUG[0m	services/mpc.go:52	开始密钥生成	{"threshold": 2, "parties": 3, "index": 1, "file": "keygen_data_1"}
+2025-04-27 12:51:43.537	[35mDEBUG[0m	services/mpc.go:66	临时文件路径	{"path": "temp/keygen_data_1"}
+2025-04-27 12:51:43.537	[34mINFO[0m	services/mpc.go:76	执行密钥生成
+2025-04-27 12:51:43.537	[34mINFO[0m	utils/command.go:56	开始密钥生成	{"command": "bin/gg20_keygen", "threshold": 2, "parties": 3, "index": 1, "output": "temp/keygen_data_1"}
+2025-04-27 12:51:43.537	[34mINFO[0m	utils/command.go:132	开始执行命令	{"command": "bin/gg20_keygen", "args": "--address http://127.0.0.1:8000 --index 1 --number-of-parties 3 --output temp/keygen_data_1 --threshold 2", "timeout": "1m0s"}
+2025-04-27 12:51:44.540	[34mINFO[0m	controllers/mpc.go:78	接收到密钥生成请求	{"threshold": 2, "parties": 3, "index": 2, "filename": "keygen_data_2", "username": "test_user_2"}
+2025-04-27 12:51:44.541	[35mDEBUG[0m	services/mpc.go:52	开始密钥生成	{"threshold": 2, "parties": 3, "index": 2, "file": "keygen_data_2"}
+2025-04-27 12:51:44.541	[35mDEBUG[0m	services/mpc.go:66	临时文件路径	{"path": "temp/keygen_data_2"}
+2025-04-27 12:51:44.541	[34mINFO[0m	services/mpc.go:76	执行密钥生成
+2025-04-27 12:51:44.541	[34mINFO[0m	utils/command.go:56	开始密钥生成	{"command": "bin/gg20_keygen", "threshold": 2, "parties": 3, "index": 2, "output": "temp/keygen_data_2"}
+2025-04-27 12:51:44.541	[34mINFO[0m	utils/command.go:132	开始执行命令	{"command": "bin/gg20_keygen", "args": "--address http://127.0.0.1:8000 --index 2 --number-of-parties 3 --output temp/keygen_data_2 --threshold 2", "timeout": "1m0s"}
+2025-04-27 12:51:45.541	[34mINFO[0m	controllers/mpc.go:78	接收到密钥生成请求	{"threshold": 2, "parties": 3, "index": 3, "filename": "keygen_data_3", "username": "test_user_3"}
+2025-04-27 12:51:45.541	[35mDEBUG[0m	services/mpc.go:52	开始密钥生成	{"threshold": 2, "parties": 3, "index": 3, "file": "keygen_data_3"}
+2025-04-27 12:51:45.541	[35mDEBUG[0m	services/mpc.go:66	临时文件路径	{"path": "temp/keygen_data_3"}
+2025-04-27 12:51:45.541	[34mINFO[0m	services/mpc.go:76	执行密钥生成
+2025-04-27 12:51:45.541	[34mINFO[0m	utils/command.go:56	开始密钥生成	{"command": "bin/gg20_keygen", "threshold": 2, "parties": 3, "index": 3, "output": "temp/keygen_data_3"}
+2025-04-27 12:51:45.541	[34mINFO[0m	utils/command.go:132	开始执行命令	{"command": "bin/gg20_keygen", "args": "--address http://127.0.0.1:8000 --index 3 --number-of-parties 3 --output temp/keygen_data_3 --threshold 2", "timeout": "1m0s"}
+2025-04-27 12:51:45.901	[34mINFO[0m	utils/command.go:140	命令执行成功	{"stdout": "", "execution_time": "1.360466041s"}
+2025-04-27 12:51:45.901	[34mINFO[0m	utils/command.go:140	命令执行成功	{"stdout": "", "execution_time": "2.3647075s"}
+2025-04-27 12:51:45.901	[34mINFO[0m	utils/command.go:69	密钥生成成功
+2025-04-27 12:51:45.901	[34mINFO[0m	utils/command.go:69	密钥生成成功
+2025-04-27 12:51:45.901	[34mINFO[0m	services/mpc.go:83	解析生成的密钥文件
+2025-04-27 12:51:45.901	[34mINFO[0m	services/mpc.go:83	解析生成的密钥文件
+2025-04-27 12:51:45.901	[34mINFO[0m	utils/command.go:140	命令执行成功	{"stdout": "", "execution_time": "359.962458ms"}
+2025-04-27 12:51:45.902	[34mINFO[0m	utils/command.go:69	密钥生成成功
+2025-04-27 12:51:45.902	[34mINFO[0m	services/mpc.go:83	解析生成的密钥文件
+2025-04-27 12:51:45.902	[35mDEBUG[0m	services/mpc.go:96	提取公钥	{"pubkey": "0290fd214bcb1f9edd081fc0f4130f9cdebff32f323013319ef621791013a8dd2a"}
+2025-04-27 12:51:45.902	[35mDEBUG[0m	services/mpc.go:96	提取公钥	{"pubkey": "0290fd214bcb1f9edd081fc0f4130f9cdebff32f323013319ef621791013a8dd2a"}
+2025-04-27 12:51:45.902	[35mDEBUG[0m	services/mpc.go:96	提取公钥	{"pubkey": "0290fd214bcb1f9edd081fc0f4130f9cdebff32f323013319ef621791013a8dd2a"}
+2025-04-27 12:51:45.902	[35mDEBUG[0m	utils/crypto.go:146	从公钥提取以太坊地址成功	{"public_key": "0290fd214bcb1f9edd081fc0f4130f9cdebff32f323013319ef621791013a8dd2a", "address": "0xEd56B8613650Fd6A06C6E1e877E40F5A58bDCE09"}
+2025-04-27 12:51:45.902	[34mINFO[0m	services/mpc.go:109	生成以太坊地址	{"addr": "0xEd56B8613650Fd6A06C6E1e877E40F5A58bDCE09"}
+2025-04-27 12:51:45.902	[35mDEBUG[0m	utils/crypto.go:146	从公钥提取以太坊地址成功	{"public_key": "0290fd214bcb1f9edd081fc0f4130f9cdebff32f323013319ef621791013a8dd2a", "address": "0xEd56B8613650Fd6A06C6E1e877E40F5A58bDCE09"}
+2025-04-27 12:51:45.902	[35mDEBUG[0m	services/mpc.go:117	密钥文件大小	{"size": 36566}
+2025-04-27 12:51:45.902	[34mINFO[0m	services/mpc.go:109	生成以太坊地址	{"addr": "0xEd56B8613650Fd6A06C6E1e877E40F5A58bDCE09"}
+2025-04-27 12:51:45.902	[35mDEBUG[0m	utils/crypto.go:146	从公钥提取以太坊地址成功	{"public_key": "0290fd214bcb1f9edd081fc0f4130f9cdebff32f323013319ef621791013a8dd2a", "address": "0xEd56B8613650Fd6A06C6E1e877E40F5A58bDCE09"}
+2025-04-27 12:51:45.902	[34mINFO[0m	services/mpc.go:109	生成以太坊地址	{"addr": "0xEd56B8613650Fd6A06C6E1e877E40F5A58bDCE09"}
+2025-04-27 12:51:45.902	[35mDEBUG[0m	services/mpc.go:117	密钥文件大小	{"size": 36560}
+2025-04-27 12:51:45.902	[35mDEBUG[0m	services/mpc.go:117	密钥文件大小	{"size": 36560}
+2025-04-27 12:51:45.908	[35mDEBUG[0m	services/mpc.go:125	压缩后数据大小	{"size": 6391}
+2025-04-27 12:51:45.908	[35mDEBUG[0m	services/mpc.go:125	压缩后数据大小	{"size": 6398}
+2025-04-27 12:51:45.908	[34mINFO[0m	services/mpc.go:135	加密密钥数据
+2025-04-27 12:51:45.908	[35mDEBUG[0m	utils/crypto.go:30	开始AES加密	{"key_hex": "d019ba1f8efa99b0828edb76ccd14856a58b03e0d3fcd9dc95e2d43669db6f42"}
+2025-04-27 12:51:45.908	[34mINFO[0m	services/mpc.go:135	加密密钥数据
+2025-04-27 12:51:45.908	[35mDEBUG[0m	utils/crypto.go:30	开始AES加密	{"key_hex": "1b0655b7246105393ca7b222a5d9b7375b725a8188158118f4b3e4cecb348971"}
+2025-04-27 12:51:45.908	[35mDEBUG[0m	utils/crypto.go:60	AES加密完成	{"ciphertext_preview": "83110b255357f1a4be94..."}
+2025-04-27 12:51:45.908	[35mDEBUG[0m	services/mpc.go:141	加密后数据大小	{"size": 6419}
+2025-04-27 12:51:45.908	[34mINFO[0m	services/mpc.go:144	存储密钥到安全芯片
+2025-04-27 12:51:45.908	[35mDEBUG[0m	utils/crypto.go:60	AES加密完成	{"ciphertext_preview": "fba13a8959673e68bb53..."}
+2025-04-27 12:51:45.908	[35mDEBUG[0m	services/mpc.go:141	加密后数据大小	{"size": 6426}
+2025-04-27 12:51:45.908	[34mINFO[0m	services/mpc.go:144	存储密钥到安全芯片
+2025-04-27 12:51:45.908	[35mDEBUG[0m	services/security.go:83	存储数据	{"username": "test_user_1", "addr": "0xEd56B8613650Fd6A06C6E1e877E40F5A58bDCE09", "key_len": 32}
+2025-04-27 12:51:45.908	[35mDEBUG[0m	services/security.go:83	存储数据	{"username": "test_user_2", "addr": "0xEd56B8613650Fd6A06C6E1e877E40F5A58bDCE09", "key_len": 32}
+2025-04-27 12:51:45.908	[34mINFO[0m	services/security.go:116	向安全芯片写入数据
+2025-04-27 12:51:45.908	[34mINFO[0m	services/security.go:116	向安全芯片写入数据
+2025-04-27 12:51:45.908	[34mINFO[0m	seclient/commands.go:29	❕存储数据到安全芯片❕	{"username": "c71a9a78e4dabef06705f4530273cab443ce1a44987e36e052345f4fc76ba5a0", "addr": "ed56b8613650fd6a06c6e1e877e40f5a58bdce09", "message": "d019ba1f8efa99b0828edb76ccd14856a58b03e0d3fcd9dc95e2d43669db6f42"}
+2025-04-27 12:51:45.908	[34mINFO[0m	seclient/cardreader.go:178	=== 发送APDU命令 ===
+2025-04-27 12:51:45.908	[34mINFO[0m	seclient/commands.go:29	❕存储数据到安全芯片❕	{"username": "6cc3afa565036c8ec65cef4778501e6e4b516104fa3eba22e7011a82aef6e88e", "addr": "ed56b8613650fd6a06c6e1e877e40f5a58bdce09", "message": "1b0655b7246105393ca7b222a5d9b7375b725a8188158118f4b3e4cecb348971"}
+2025-04-27 12:51:45.908	[34mINFO[0m	seclient/cardreader.go:179	命令: 8010000054C71A9A78E4DABEF06705F4530273CAB443CE1A44987E36E052345F4FC76BA5A0ED56B8613650FD6A06C6E1E877E40F5A58BDCE09D019BA1F8EFA99B0828EDB76CCD14856A58B03E0D3FCD9DC95E2D43669DB6F42
+2025-04-27 12:51:45.908	[34mINFO[0m	seclient/cardreader.go:178	=== 发送APDU命令 ===
+2025-04-27 12:51:45.908	[34mINFO[0m	seclient/cardreader.go:179	命令: 80100000546CC3AFA565036C8EC65CEF4778501E6E4B516104FA3EBA22E7011A82AEF6E88EED56B8613650FD6A06C6E1E877E40F5A58BDCE091B0655B7246105393CA7B222A5D9B7375B725A8188158118F4B3E4CECB348971
+2025-04-27 12:51:45.908	[35mDEBUG[0m	services/mpc.go:125	压缩后数据大小	{"size": 6401}
+2025-04-27 12:51:45.908	[34mINFO[0m	services/mpc.go:135	加密密钥数据
+2025-04-27 12:51:45.908	[35mDEBUG[0m	utils/crypto.go:30	开始AES加密	{"key_hex": "6eaa9a7bb56e0d91f2c619304a8ca6d664dca668461f2e86372ec3e35e7d2e90"}
+2025-04-27 12:51:45.908	[35mDEBUG[0m	utils/crypto.go:60	AES加密完成	{"ciphertext_preview": "ab0bcc900c83ebee604c..."}
+2025-04-27 12:51:45.908	[35mDEBUG[0m	services/mpc.go:141	加密后数据大小	{"size": 6429}
+2025-04-27 12:51:45.909	[34mINFO[0m	services/mpc.go:144	存储密钥到安全芯片
+2025-04-27 12:51:45.909	[35mDEBUG[0m	services/security.go:83	存储数据	{"username": "test_user_3", "addr": "0xEd56B8613650Fd6A06C6E1e877E40F5A58bDCE09", "key_len": 32}
+2025-04-27 12:51:45.909	[34mINFO[0m	services/security.go:116	向安全芯片写入数据
+2025-04-27 12:51:45.909	[34mINFO[0m	seclient/commands.go:29	❕存储数据到安全芯片❕	{"username": "3852e3cce10472fc2dd095d6ed866b45d042757819462fa920ab240b462ff8df", "addr": "ed56b8613650fd6a06c6e1e877e40f5a58bdce09", "message": "6eaa9a7bb56e0d91f2c619304a8ca6d664dca668461f2e86372ec3e35e7d2e90"}
+2025-04-27 12:51:45.909	[34mINFO[0m	seclient/cardreader.go:178	=== 发送APDU命令 ===
+2025-04-27 12:51:45.909	[34mINFO[0m	seclient/cardreader.go:179	命令: 80100000543852E3CCE10472FC2DD095D6ED866B45D042757819462FA920AB240B462FF8DFED56B8613650FD6A06C6E1E877E40F5A58BDCE096EAA9A7BB56E0D91F2C619304A8CA6D664DCA668461F2E86372EC3E35E7D2E90
+2025-04-27 12:51:45.930	[34mINFO[0m	seclient/cardreader.go:190	响应状态码: 0x9000
+2025-04-27 12:51:45.930	[34mINFO[0m	seclient/cardreader.go:191	响应数据: 1415
+2025-04-27 12:51:45.930	[34mINFO[0m	seclient/commands.go:65	❕存储数据成功❕	{"记录索引": 20, "记录总数": 21}
+2025-04-27 12:51:45.930	[35mDEBUG[0m	services/security.go:123	数据存储成功	{"记录索引": 20, "记录总数": 21}
+2025-04-27 12:51:45.930	[35mDEBUG[0m	services/mpc.go:150	密钥生成完成	{"addr": "0xEd56B8613650Fd6A06C6E1e877E40F5A58bDCE09"}
+2025-04-27 12:51:45.930	[34mINFO[0m	controllers/mpc.go:105	密钥生成成功	{"address": "0xEd56B8613650Fd6A06C6E1e877E40F5A58bDCE09", "username": "test_user_1", "encrypted_key_length": 6419}
+2025-04-27 12:51:45.930	[34mINFO[0m	middleware/logger.go:50	API请求	{"method": "POST", "uri": "/api/v1/mpc/keygen", "ip": "::1", "status": 200, "latency": "2.393689959s"}
+2025-04-27 12:51:45.951	[34mINFO[0m	seclient/cardreader.go:190	响应状态码: 0x9000
+2025-04-27 12:51:45.952	[34mINFO[0m	seclient/cardreader.go:191	响应数据: 1516
+2025-04-27 12:51:45.952	[34mINFO[0m	seclient/commands.go:65	❕存储数据成功❕	{"记录索引": 21, "记录总数": 22}
+2025-04-27 12:51:45.952	[35mDEBUG[0m	services/security.go:123	数据存储成功	{"记录索引": 21, "记录总数": 22}
+2025-04-27 12:51:45.952	[35mDEBUG[0m	services/mpc.go:150	密钥生成完成	{"addr": "0xEd56B8613650Fd6A06C6E1e877E40F5A58bDCE09"}
+2025-04-27 12:51:45.952	[34mINFO[0m	controllers/mpc.go:105	密钥生成成功	{"address": "0xEd56B8613650Fd6A06C6E1e877E40F5A58bDCE09", "username": "test_user_2", "encrypted_key_length": 6426}
+2025-04-27 12:51:45.952	[34mINFO[0m	middleware/logger.go:50	API请求	{"method": "POST", "uri": "/api/v1/mpc/keygen", "ip": "::1", "status": 200, "latency": "1.411285667s"}
+2025-04-27 12:51:45.974	[34mINFO[0m	seclient/cardreader.go:190	响应状态码: 0x9000
+2025-04-27 12:51:45.974	[34mINFO[0m	seclient/cardreader.go:191	响应数据: 1617
+2025-04-27 12:51:45.974	[34mINFO[0m	seclient/commands.go:65	❕存储数据成功❕	{"记录索引": 22, "记录总数": 23}
+2025-04-27 12:51:45.974	[35mDEBUG[0m	services/security.go:123	数据存储成功	{"记录索引": 22, "记录总数": 23}
+2025-04-27 12:51:45.974	[35mDEBUG[0m	services/mpc.go:150	密钥生成完成	{"addr": "0xEd56B8613650Fd6A06C6E1e877E40F5A58bDCE09"}
+2025-04-27 12:51:45.974	[34mINFO[0m	controllers/mpc.go:105	密钥生成成功	{"address": "0xEd56B8613650Fd6A06C6E1e877E40F5A58bDCE09", "username": "test_user_3", "encrypted_key_length": 6429}
+2025-04-27 12:51:45.974	[34mINFO[0m	middleware/logger.go:50	API请求	{"method": "POST", "uri": "/api/v1/mpc/keygen", "ip": "::1", "status": 200, "latency": "433.232958ms"}
+2025-04-27 12:51:46.544	[34mINFO[0m	controllers/mpc.go:188	接收到签名请求	{"parties": "1,2", "data": "这是一条测试消息，时间戳: 1745729506", "filename": "sign_data_1.json", "username": "test_user_1", "address": "0xEd56B8613650Fd6A06C6E1e877E40F5A58bDCE09"}
+2025-04-27 12:51:46.544	[35mDEBUG[0m	controllers/mpc.go:194	签名请求详情	{"encrypted_key_length": "6.3 KB", "signature_length": "71 B"}
+2025-04-27 12:51:46.544	[35mDEBUG[0m	services/mpc.go:171	开始消息签名	{"parties": "1,2", "addr": "0xEd56B8613650Fd6A06C6E1e877E40F5A58bDCE09", "file": "sign_data_1.json"}
+2025-04-27 12:51:46.544	[35mDEBUG[0m	services/mpc.go:190	临时文件路径	{"path": "temp/sign_data_1.json"}
+2025-04-27 12:51:46.544	[34mINFO[0m	services/mpc.go:200	从安全芯片读取密钥
+2025-04-27 12:51:46.544	[35mDEBUG[0m	services/security.go:137	读取数据	{"username": "test_user_1", "addr": "0xEd56B8613650Fd6A06C6E1e877E40F5A58bDCE09", "sig_len": 71}
+2025-04-27 12:51:46.544	[34mINFO[0m	services/security.go:163	从安全芯片读取数据
+2025-04-27 12:51:46.544	[34mINFO[0m	seclient/commands.go:94	❕读取数据从安全芯片❕	{"username": "c71a9a78e4dabef06705f4530273cab443ce1a44987e36e052345f4fc76ba5a0", "addr": "ed56b8613650fd6a06c6e1e877e40f5a58bdce09", "signature": "3045022075ad28cf83d19310659dbd30403a852db3a34b4145d4f97d1d99d48269f6a53702210086ae925b9689dea2cd0e70271407e77586e183ddc63538b392aec4e6a5b7eb9e"}
+2025-04-27 12:51:46.544	[34mINFO[0m	seclient/cardreader.go:178	=== 发送APDU命令 ===
+2025-04-27 12:51:46.544	[34mINFO[0m	seclient/cardreader.go:179	命令: 802000007BC71A9A78E4DABEF06705F4530273CAB443CE1A44987E36E052345F4FC76BA5A0ED56B8613650FD6A06C6E1E877E40F5A58BDCE093045022075AD28CF83D19310659DBD30403A852DB3A34B4145D4F97D1D99D48269F6A53702210086AE925B9689DEA2CD0E70271407E77586E183DDC63538B392AEC4E6A5B7EB9E
+2025-04-27 12:51:46.558	[34mINFO[0m	seclient/cardreader.go:190	响应状态码: 0x9000
+2025-04-27 12:51:46.558	[34mINFO[0m	seclient/cardreader.go:191	响应数据: D019BA1F8EFA99B0828EDB76CCD14856A58B03E0D3FCD9DC95E2D43669DB6F42
+2025-04-27 12:51:46.558	[34mINFO[0m	seclient/commands.go:121	❕读取数据成功❕
+2025-04-27 12:51:46.559	[34mINFO[0m	seclient/commands.go:122	数据: d019ba1f8efa99b0828edb76ccd14856a58b03e0d3fcd9dc95e2d43669db6f42
+2025-04-27 12:51:46.559	[35mDEBUG[0m	services/security.go:170	数据读取成功	{"数据长度": 32}
+2025-04-27 12:51:46.559	[34mINFO[0m	services/mpc.go:208	解密密钥数据
+2025-04-27 12:51:46.559	[35mDEBUG[0m	utils/crypto.go:76	开始AES解密	{"key_hex": "d019ba1f8efa99b0828edb76ccd14856a58b03e0d3fcd9dc95e2d43669db6f42", "ciphertext_preview": "83110b255357f1a4be94..."}
+2025-04-27 12:51:46.559	[35mDEBUG[0m	utils/crypto.go:106	AES解密成功
+2025-04-27 12:51:46.559	[35mDEBUG[0m	services/mpc.go:214	解密后数据大小	{"size": 6391}
+2025-04-27 12:51:46.559	[35mDEBUG[0m	services/mpc.go:222	解压后数据大小	{"size": 36566}
+2025-04-27 12:51:46.560	[34mINFO[0m	services/mpc.go:231	执行MPC签名
+2025-04-27 12:51:46.560	[34mINFO[0m	utils/command.go:79	开始签名操作	{"command": "bin/gg20_signing", "parties": "1,2", "data": "这是一条测试消息，时间戳: 1745729506", "local_share": "temp/sign_data_1.json"}
+2025-04-27 12:51:46.560	[34mINFO[0m	utils/command.go:132	开始执行命令	{"command": "bin/gg20_signing", "args": "--address http://127.0.0.1:8000 -p 1,2 --data-to-sign \"这是一条测试消息，时间戳: 1745729506\" --local-share temp/sign_data_1.json", "timeout": "1m0s"}
+2025-04-27 12:51:47.544	[34mINFO[0m	controllers/mpc.go:188	接收到签名请求	{"parties": "1,2", "data": "这是一条测试消息，时间戳: 1745729506", "filename": "sign_data_2.json", "username": "test_user_2", "address": "0xEd56B8613650Fd6A06C6E1e877E40F5A58bDCE09"}
+2025-04-27 12:51:47.544	[35mDEBUG[0m	controllers/mpc.go:194	签名请求详情	{"encrypted_key_length": "6.3 KB", "signature_length": "71 B"}
+2025-04-27 12:51:47.544	[35mDEBUG[0m	services/mpc.go:171	开始消息签名	{"parties": "1,2", "addr": "0xEd56B8613650Fd6A06C6E1e877E40F5A58bDCE09", "file": "sign_data_2.json"}
+2025-04-27 12:51:47.544	[35mDEBUG[0m	services/mpc.go:190	临时文件路径	{"path": "temp/sign_data_2.json"}
+2025-04-27 12:51:47.544	[34mINFO[0m	services/mpc.go:200	从安全芯片读取密钥
+2025-04-27 12:51:47.544	[35mDEBUG[0m	services/security.go:137	读取数据	{"username": "test_user_2", "addr": "0xEd56B8613650Fd6A06C6E1e877E40F5A58bDCE09", "sig_len": 71}
+2025-04-27 12:51:47.544	[34mINFO[0m	services/security.go:163	从安全芯片读取数据
+2025-04-27 12:51:47.544	[34mINFO[0m	seclient/commands.go:94	❕读取数据从安全芯片❕	{"username": "6cc3afa565036c8ec65cef4778501e6e4b516104fa3eba22e7011a82aef6e88e", "addr": "ed56b8613650fd6a06c6e1e877e40f5a58bdce09", "signature": "30450220634e3de18fc65b8b99d729d1f6a403290db51128ad05603dd92b93072c9a2f6a022100824222626f8b045d4f2e1461ae2b54444f7e5a22c75b80fcb08e91ff7bfa9053"}
+2025-04-27 12:51:47.544	[34mINFO[0m	seclient/cardreader.go:178	=== 发送APDU命令 ===
+2025-04-27 12:51:47.544	[34mINFO[0m	seclient/cardreader.go:179	命令: 802000007B6CC3AFA565036C8EC65CEF4778501E6E4B516104FA3EBA22E7011A82AEF6E88EED56B8613650FD6A06C6E1E877E40F5A58BDCE0930450220634E3DE18FC65B8B99D729D1F6A403290DB51128AD05603DD92B93072C9A2F6A022100824222626F8B045D4F2E1461AE2B54444F7E5A22C75B80FCB08E91FF7BFA9053
+2025-04-27 12:51:47.555	[34mINFO[0m	seclient/cardreader.go:190	响应状态码: 0x9000
+2025-04-27 12:51:47.555	[34mINFO[0m	seclient/cardreader.go:191	响应数据: 1B0655B7246105393CA7B222A5D9B7375B725A8188158118F4B3E4CECB348971
+2025-04-27 12:51:47.555	[34mINFO[0m	seclient/commands.go:121	❕读取数据成功❕
+2025-04-27 12:51:47.555	[34mINFO[0m	seclient/commands.go:122	数据: 1b0655b7246105393ca7b222a5d9b7375b725a8188158118f4b3e4cecb348971
+2025-04-27 12:51:47.555	[35mDEBUG[0m	services/security.go:170	数据读取成功	{"数据长度": 32}
+2025-04-27 12:51:47.555	[34mINFO[0m	services/mpc.go:208	解密密钥数据
+2025-04-27 12:51:47.555	[35mDEBUG[0m	utils/crypto.go:76	开始AES解密	{"key_hex": "1b0655b7246105393ca7b222a5d9b7375b725a8188158118f4b3e4cecb348971", "ciphertext_preview": "fba13a8959673e68bb53..."}
+2025-04-27 12:51:47.556	[35mDEBUG[0m	utils/crypto.go:106	AES解密成功
+2025-04-27 12:51:47.556	[35mDEBUG[0m	services/mpc.go:214	解密后数据大小	{"size": 6398}
+2025-04-27 12:51:47.556	[35mDEBUG[0m	services/mpc.go:222	解压后数据大小	{"size": 36560}
+2025-04-27 12:51:47.556	[34mINFO[0m	services/mpc.go:231	执行MPC签名
+2025-04-27 12:51:47.556	[34mINFO[0m	utils/command.go:79	开始签名操作	{"command": "bin/gg20_signing", "parties": "1,2", "data": "这是一条测试消息，时间戳: 1745729506", "local_share": "temp/sign_data_2.json"}
+2025-04-27 12:51:47.556	[34mINFO[0m	utils/command.go:132	开始执行命令	{"command": "bin/gg20_signing", "args": "--address http://127.0.0.1:8000 -p 1,2 --data-to-sign \"这是一条测试消息，时间戳: 1745729506\" --local-share temp/sign_data_2.json", "timeout": "1m0s"}
+2025-04-27 12:51:47.904	[31mERROR[0m	utils/command.go:147	命令执行失败	{"error": "exit status 1", "stdout": "", "stderr": "Error: protocol execution terminated with error: round proceed error: proceeding round: round 6: check sig: Phase6Error\n", "execution_time": "1.343908667s"}
+2025-04-27 12:51:47.904	[31mERROR[0m	utils/command.go:147	命令执行失败	{"error": "exit status 1", "stdout": "", "stderr": "Error: protocol execution terminated with error: round proceed error: proceeding round: round 6: check sig: Phase6Error\n", "execution_time": "348.10225ms"}
+2025-04-27 12:51:47.904	[31mERROR[0m	utils/command.go:87	签名操作失败	{"error": "exit status 1"}
+2025-04-27 12:51:47.904	[31mERROR[0m	utils/command.go:87	签名操作失败	{"error": "exit status 1"}
+2025-04-27 12:51:47.904	[31mERROR[0m	services/mpc.go:234	签名失败	{"error": "exit status 1"}
+2025-04-27 12:51:47.904	[31mERROR[0m	services/mpc.go:234	签名失败	{"error": "exit status 1"}
+2025-04-27 12:51:47.904	[31mERROR[0m	controllers/mpc.go:210	签名失败	{"error": "签名失败: exit status 1", "username": "test_user_2", "address": "0xEd56B8613650Fd6A06C6E1e877E40F5A58bDCE09"}
+2025-04-27 12:51:47.904	[31mERROR[0m	controllers/mpc.go:210	签名失败	{"error": "签名失败: exit status 1", "username": "test_user_1", "address": "0xEd56B8613650Fd6A06C6E1e877E40F5A58bDCE09"}
+2025-04-27 12:51:47.904	[31mERROR[0m	middleware/logger.go:46	API请求	{"method": "POST", "uri": "/api/v1/mpc/sign", "ip": "::1", "status": 500, "latency": "360.330958ms"}
+2025-04-27 12:51:47.904	[31mERROR[0m	middleware/logger.go:46	API请求	{"method": "POST", "uri": "/api/v1/mpc/sign", "ip": "::1", "status": 500, "latency": "1.361131167s"}
+2025-04-27 12:51:48.545	[34mINFO[0m	controllers/mpc.go:325	接收到删除数据请求	{"username": "test_user_1", "address": "0xEd56B8613650Fd6A06C6E1e877E40F5A58bDCE09"}
+2025-04-27 12:51:48.545	[35mDEBUG[0m	controllers/mpc.go:328	删除请求详情	{"signature_length": "70 B"}
+2025-04-27 12:51:48.545	[35mDEBUG[0m	services/security.go:183	删除数据	{"username": "test_user_1", "addr": "0xEd56B8613650Fd6A06C6E1e877E40F5A58bDCE09", "sig_len": 70}
+2025-04-27 12:51:48.545	[34mINFO[0m	services/security.go:209	从安全芯片删除数据
+2025-04-27 12:51:48.545	[34mINFO[0m	seclient/commands.go:148	❕删除数据从安全芯片❕	{"username": "c71a9a78e4dabef06705f4530273cab443ce1a44987e36e052345f4fc76ba5a0", "addr": "ed56b8613650fd6a06c6e1e877e40f5a58bdce09", "signature": "304402202e5c9570795ba793e2e18120a369ae7606bee82705013f4a95160a43715912020220361787df6c4b3b7b9d84a53226373efb18a9b513058dbd005149453ed15a71aa"}
+2025-04-27 12:51:48.545	[34mINFO[0m	seclient/cardreader.go:178	=== 发送APDU命令 ===
+2025-04-27 12:51:48.545	[34mINFO[0m	seclient/cardreader.go:179	命令: 803000007AC71A9A78E4DABEF06705F4530273CAB443CE1A44987E36E052345F4FC76BA5A0ED56B8613650FD6A06C6E1E877E40F5A58BDCE09304402202E5C9570795BA793E2E18120A369AE7606BEE82705013F4A95160A43715912020220361787DF6C4B3B7B9D84A53226373EFB18A9B513058DBD005149453ED15A71AA
+2025-04-27 12:51:48.563	[34mINFO[0m	seclient/cardreader.go:190	响应状态码: 0x9000
+2025-04-27 12:51:48.563	[34mINFO[0m	seclient/cardreader.go:191	响应数据: 1416
+2025-04-27 12:51:48.563	[34mINFO[0m	seclient/commands.go:183	❕删除数据成功❕	{"记录索引": 20, "剩余记录数": 22}
+2025-04-27 12:51:48.563	[35mDEBUG[0m	services/security.go:216	数据删除成功	{"记录索引": 20, "记录总数": 22}
+2025-04-27 12:51:48.563	[34mINFO[0m	controllers/mpc.go:345	删除数据成功	{"username": "test_user_1", "address": "0xEd56B8613650Fd6A06C6E1e877E40F5A58bDCE09"}
+2025-04-27 12:51:48.564	[34mINFO[0m	middleware/logger.go:50	API请求	{"method": "POST", "uri": "/api/v1/mpc/delete", "ip": "::1", "status": 200, "latency": "18.151833ms"}
+2025-04-27 12:56:28.735	[34mINFO[0m	controllers/mpc.go:254	接收到获取CPLC信息请求	{"client_ip": "::1"}
+2025-04-27 12:56:28.735	[35mDEBUG[0m	services/security.go:225	获取CPLC信息
+2025-04-27 12:56:28.735	[35mDEBUG[0m	services/security.go:237	CPLC信息获取成功	{"长度": 42, "CPLC": "007f0002867f31140001408001326843a01600090000000900007f43a016013268000000406710037e82"}
+2025-04-27 12:56:28.735	[34mINFO[0m	controllers/mpc.go:269	获取CPLC信息成功	{"cplc": "007F0002867F31140001408001326843A01600090000000900007F43A016013268000000406710037E82"}
+2025-04-27 12:56:28.735	[34mINFO[0m	middleware/logger.go:50	API请求	{"method": "GET", "uri": "/api/v1/mpc/cplc", "ip": "::1", "status": 200, "latency": "329.166µs"}
+2025-04-27 12:56:28.736	[34mINFO[0m	controllers/mpc.go:78	接收到密钥生成请求	{"threshold": 2, "parties": 3, "index": 1, "filename": "keygen_data_1", "username": "test_user_1"}
+2025-04-27 12:56:28.736	[35mDEBUG[0m	services/mpc.go:52	开始密钥生成	{"threshold": 2, "parties": 3, "index": 1, "file": "keygen_data_1"}
+2025-04-27 12:56:28.736	[35mDEBUG[0m	services/mpc.go:66	临时文件路径	{"path": "temp/keygen_data_1"}
+2025-04-27 12:56:28.736	[34mINFO[0m	services/mpc.go:76	执行密钥生成
+2025-04-27 12:56:28.736	[34mINFO[0m	utils/command.go:56	开始密钥生成	{"command": "bin/gg20_keygen", "threshold": 2, "parties": 3, "index": 1, "output": "temp/keygen_data_1"}
+2025-04-27 12:56:28.736	[34mINFO[0m	utils/command.go:132	开始执行命令	{"command": "bin/gg20_keygen", "args": "--address http://127.0.0.1:8000 --index 1 --number-of-parties 3 --output temp/keygen_data_1 --threshold 2", "timeout": "1m0s"}
+2025-04-27 12:56:29.740	[34mINFO[0m	controllers/mpc.go:78	接收到密钥生成请求	{"threshold": 2, "parties": 3, "index": 2, "filename": "keygen_data_2", "username": "test_user_2"}
+2025-04-27 12:56:29.740	[35mDEBUG[0m	services/mpc.go:52	开始密钥生成	{"threshold": 2, "parties": 3, "index": 2, "file": "keygen_data_2"}
+2025-04-27 12:56:29.740	[35mDEBUG[0m	services/mpc.go:66	临时文件路径	{"path": "temp/keygen_data_2"}
+2025-04-27 12:56:29.740	[34mINFO[0m	services/mpc.go:76	执行密钥生成
+2025-04-27 12:56:29.740	[34mINFO[0m	utils/command.go:56	开始密钥生成	{"command": "bin/gg20_keygen", "threshold": 2, "parties": 3, "index": 2, "output": "temp/keygen_data_2"}
+2025-04-27 12:56:29.740	[34mINFO[0m	utils/command.go:132	开始执行命令	{"command": "bin/gg20_keygen", "args": "--address http://127.0.0.1:8000 --index 2 --number-of-parties 3 --output temp/keygen_data_2 --threshold 2", "timeout": "1m0s"}
+2025-04-27 12:56:30.740	[34mINFO[0m	controllers/mpc.go:78	接收到密钥生成请求	{"threshold": 2, "parties": 3, "index": 3, "filename": "keygen_data_3", "username": "test_user_3"}
+2025-04-27 12:56:30.740	[35mDEBUG[0m	services/mpc.go:52	开始密钥生成	{"threshold": 2, "parties": 3, "index": 3, "file": "keygen_data_3"}
+2025-04-27 12:56:30.741	[35mDEBUG[0m	services/mpc.go:66	临时文件路径	{"path": "temp/keygen_data_3"}
+2025-04-27 12:56:30.741	[34mINFO[0m	services/mpc.go:76	执行密钥生成
+2025-04-27 12:56:30.741	[34mINFO[0m	utils/command.go:56	开始密钥生成	{"command": "bin/gg20_keygen", "threshold": 2, "parties": 3, "index": 3, "output": "temp/keygen_data_3"}
+2025-04-27 12:56:30.741	[34mINFO[0m	utils/command.go:132	开始执行命令	{"command": "bin/gg20_keygen", "args": "--address http://127.0.0.1:8000 --index 3 --number-of-parties 3 --output temp/keygen_data_3 --threshold 2", "timeout": "1m0s"}
+2025-04-27 12:56:30.954	[34mINFO[0m	utils/command.go:140	命令执行成功	{"stdout": "", "execution_time": "212.741041ms"}
+2025-04-27 12:56:30.954	[34mINFO[0m	utils/command.go:69	密钥生成成功
+2025-04-27 12:56:30.954	[34mINFO[0m	services/mpc.go:83	解析生成的密钥文件
+2025-04-27 12:56:30.954	[34mINFO[0m	utils/command.go:140	命令执行成功	{"stdout": "", "execution_time": "2.217111792s"}
+2025-04-27 12:56:30.954	[34mINFO[0m	utils/command.go:69	密钥生成成功
+2025-04-27 12:56:30.954	[34mINFO[0m	services/mpc.go:83	解析生成的密钥文件
+2025-04-27 12:56:30.954	[34mINFO[0m	utils/command.go:140	命令执行成功	{"stdout": "", "execution_time": "1.213499833s"}
+2025-04-27 12:56:30.954	[34mINFO[0m	utils/command.go:69	密钥生成成功
+2025-04-27 12:56:30.954	[34mINFO[0m	services/mpc.go:83	解析生成的密钥文件
+2025-04-27 12:56:30.954	[35mDEBUG[0m	services/mpc.go:96	提取公钥	{"pubkey": "02cf3bf475c1ae874733b6c9fc6560e364ae5c5f47c07e8b37c846ba4eec505fa6"}
+2025-04-27 12:56:30.954	[35mDEBUG[0m	services/mpc.go:96	提取公钥	{"pubkey": "02cf3bf475c1ae874733b6c9fc6560e364ae5c5f47c07e8b37c846ba4eec505fa6"}
+2025-04-27 12:56:30.954	[35mDEBUG[0m	services/mpc.go:96	提取公钥	{"pubkey": "02cf3bf475c1ae874733b6c9fc6560e364ae5c5f47c07e8b37c846ba4eec505fa6"}
+2025-04-27 12:56:30.954	[35mDEBUG[0m	utils/crypto.go:146	从公钥提取以太坊地址成功	{"public_key": "02cf3bf475c1ae874733b6c9fc6560e364ae5c5f47c07e8b37c846ba4eec505fa6", "address": "0xf3A9Fa6d00DBD27D8E609caA7CfD6F9b4EC10fd5"}
+2025-04-27 12:56:30.954	[34mINFO[0m	services/mpc.go:109	生成以太坊地址	{"addr": "0xf3A9Fa6d00DBD27D8E609caA7CfD6F9b4EC10fd5"}
+2025-04-27 12:56:30.954	[35mDEBUG[0m	utils/crypto.go:146	从公钥提取以太坊地址成功	{"public_key": "02cf3bf475c1ae874733b6c9fc6560e364ae5c5f47c07e8b37c846ba4eec505fa6", "address": "0xf3A9Fa6d00DBD27D8E609caA7CfD6F9b4EC10fd5"}
+2025-04-27 12:56:30.954	[34mINFO[0m	services/mpc.go:109	生成以太坊地址	{"addr": "0xf3A9Fa6d00DBD27D8E609caA7CfD6F9b4EC10fd5"}
+2025-04-27 12:56:30.954	[35mDEBUG[0m	utils/crypto.go:146	从公钥提取以太坊地址成功	{"public_key": "02cf3bf475c1ae874733b6c9fc6560e364ae5c5f47c07e8b37c846ba4eec505fa6", "address": "0xf3A9Fa6d00DBD27D8E609caA7CfD6F9b4EC10fd5"}
+2025-04-27 12:56:30.954	[34mINFO[0m	services/mpc.go:109	生成以太坊地址	{"addr": "0xf3A9Fa6d00DBD27D8E609caA7CfD6F9b4EC10fd5"}
+2025-04-27 12:56:30.954	[35mDEBUG[0m	services/mpc.go:117	密钥文件大小	{"size": 36521}
+2025-04-27 12:56:30.954	[35mDEBUG[0m	services/mpc.go:117	密钥文件大小	{"size": 36512}
+2025-04-27 12:56:30.954	[35mDEBUG[0m	services/mpc.go:117	密钥文件大小	{"size": 36501}
+2025-04-27 12:56:30.960	[35mDEBUG[0m	services/mpc.go:125	压缩后数据大小	{"size": 6379}
+2025-04-27 12:56:30.960	[34mINFO[0m	services/mpc.go:135	加密密钥数据
+2025-04-27 12:56:30.960	[35mDEBUG[0m	utils/crypto.go:30	开始AES加密	{"key_hex": "399d527756f13b58354294e142c034f4731c121668de1c3a085496f772c022b4"}
+2025-04-27 12:56:30.960	[35mDEBUG[0m	utils/crypto.go:60	AES加密完成	{"ciphertext_preview": "2fede33e07678e4e3f04..."}
+2025-04-27 12:56:30.960	[35mDEBUG[0m	services/mpc.go:141	加密后数据大小	{"size": 6407}
+2025-04-27 12:56:30.960	[34mINFO[0m	services/mpc.go:144	存储密钥到安全芯片
+2025-04-27 12:56:30.960	[35mDEBUG[0m	services/security.go:83	存储数据	{"username": "test_user_2", "addr": "0xf3A9Fa6d00DBD27D8E609caA7CfD6F9b4EC10fd5", "key_len": 32}
+2025-04-27 12:56:30.960	[34mINFO[0m	services/security.go:116	向安全芯片写入数据
+2025-04-27 12:56:30.960	[34mINFO[0m	seclient/commands.go:29	❕存储数据到安全芯片❕	{"username": "6cc3afa565036c8ec65cef4778501e6e4b516104fa3eba22e7011a82aef6e88e", "addr": "f3a9fa6d00dbd27d8e609caa7cfd6f9b4ec10fd5", "message": "399d527756f13b58354294e142c034f4731c121668de1c3a085496f772c022b4"}
+2025-04-27 12:56:30.960	[34mINFO[0m	seclient/cardreader.go:178	=== 发送APDU命令 ===
+2025-04-27 12:56:30.960	[34mINFO[0m	seclient/cardreader.go:179	命令: 80100000546CC3AFA565036C8EC65CEF4778501E6E4B516104FA3EBA22E7011A82AEF6E88EF3A9FA6D00DBD27D8E609CAA7CFD6F9B4EC10FD5399D527756F13B58354294E142C034F4731C121668DE1C3A085496F772C022B4
+2025-04-27 12:56:30.961	[35mDEBUG[0m	services/mpc.go:125	压缩后数据大小	{"size": 6374}
+2025-04-27 12:56:30.961	[34mINFO[0m	services/mpc.go:135	加密密钥数据
+2025-04-27 12:56:30.961	[35mDEBUG[0m	utils/crypto.go:30	开始AES加密	{"key_hex": "e03df0c77353808219246a07a188bd587c423f210605d57ef0a8848befc55c2c"}
+2025-04-27 12:56:30.961	[35mDEBUG[0m	utils/crypto.go:60	AES加密完成	{"ciphertext_preview": "74bb1238224b9c7af199..."}
+2025-04-27 12:56:30.961	[35mDEBUG[0m	services/mpc.go:141	加密后数据大小	{"size": 6402}
+2025-04-27 12:56:30.961	[34mINFO[0m	services/mpc.go:144	存储密钥到安全芯片
+2025-04-27 12:56:30.961	[35mDEBUG[0m	services/security.go:83	存储数据	{"username": "test_user_1", "addr": "0xf3A9Fa6d00DBD27D8E609caA7CfD6F9b4EC10fd5", "key_len": 32}
+2025-04-27 12:56:30.961	[34mINFO[0m	services/security.go:116	向安全芯片写入数据
+2025-04-27 12:56:30.961	[34mINFO[0m	seclient/commands.go:29	❕存储数据到安全芯片❕	{"username": "c71a9a78e4dabef06705f4530273cab443ce1a44987e36e052345f4fc76ba5a0", "addr": "f3a9fa6d00dbd27d8e609caa7cfd6f9b4ec10fd5", "message": "e03df0c77353808219246a07a188bd587c423f210605d57ef0a8848befc55c2c"}
+2025-04-27 12:56:30.961	[34mINFO[0m	seclient/cardreader.go:178	=== 发送APDU命令 ===
+2025-04-27 12:56:30.961	[34mINFO[0m	seclient/cardreader.go:179	命令: 8010000054C71A9A78E4DABEF06705F4530273CAB443CE1A44987E36E052345F4FC76BA5A0F3A9FA6D00DBD27D8E609CAA7CFD6F9B4EC10FD5E03DF0C77353808219246A07A188BD587C423F210605D57EF0A8848BEFC55C2C
+2025-04-27 12:56:30.961	[35mDEBUG[0m	services/mpc.go:125	压缩后数据大小	{"size": 6372}
+2025-04-27 12:56:30.961	[34mINFO[0m	services/mpc.go:135	加密密钥数据
+2025-04-27 12:56:30.961	[35mDEBUG[0m	utils/crypto.go:30	开始AES加密	{"key_hex": "6fd14cee42bc69dda4f9d997cec1a0ae8f732093d056fe3f1b04766542b8688b"}
+2025-04-27 12:56:30.961	[35mDEBUG[0m	utils/crypto.go:60	AES加密完成	{"ciphertext_preview": "6f5571575da5e1f49adf..."}
+2025-04-27 12:56:30.961	[35mDEBUG[0m	services/mpc.go:141	加密后数据大小	{"size": 6400}
+2025-04-27 12:56:30.961	[34mINFO[0m	services/mpc.go:144	存储密钥到安全芯片
+2025-04-27 12:56:30.961	[35mDEBUG[0m	services/security.go:83	存储数据	{"username": "test_user_3", "addr": "0xf3A9Fa6d00DBD27D8E609caA7CfD6F9b4EC10fd5", "key_len": 32}
+2025-04-27 12:56:30.961	[34mINFO[0m	services/security.go:116	向安全芯片写入数据
+2025-04-27 12:56:30.961	[34mINFO[0m	seclient/commands.go:29	❕存储数据到安全芯片❕	{"username": "3852e3cce10472fc2dd095d6ed866b45d042757819462fa920ab240b462ff8df", "addr": "f3a9fa6d00dbd27d8e609caa7cfd6f9b4ec10fd5", "message": "6fd14cee42bc69dda4f9d997cec1a0ae8f732093d056fe3f1b04766542b8688b"}
+2025-04-27 12:56:30.961	[34mINFO[0m	seclient/cardreader.go:178	=== 发送APDU命令 ===
+2025-04-27 12:56:30.961	[34mINFO[0m	seclient/cardreader.go:179	命令: 80100000543852E3CCE10472FC2DD095D6ED866B45D042757819462FA920AB240B462FF8DFF3A9FA6D00DBD27D8E609CAA7CFD6F9B4EC10FD56FD14CEE42BC69DDA4F9D997CEC1A0AE8F732093D056FE3F1B04766542B8688B
+2025-04-27 12:56:30.983	[34mINFO[0m	seclient/cardreader.go:190	响应状态码: 0x9000
+2025-04-27 12:56:30.983	[34mINFO[0m	seclient/cardreader.go:191	响应数据: 1417
+2025-04-27 12:56:30.983	[34mINFO[0m	seclient/commands.go:65	❕存储数据成功❕	{"记录索引": 20, "记录总数": 23}
+2025-04-27 12:56:30.983	[35mDEBUG[0m	services/security.go:123	数据存储成功	{"记录索引": 20, "记录总数": 23}
+2025-04-27 12:56:30.983	[35mDEBUG[0m	services/mpc.go:150	密钥生成完成	{"addr": "0xf3A9Fa6d00DBD27D8E609caA7CfD6F9b4EC10fd5"}
+2025-04-27 12:56:30.983	[34mINFO[0m	controllers/mpc.go:105	密钥生成成功	{"address": "0xf3A9Fa6d00DBD27D8E609caA7CfD6F9b4EC10fd5", "username": "test_user_2", "encrypted_key_length": 6407}
+2025-04-27 12:56:30.983	[34mINFO[0m	middleware/logger.go:50	API请求	{"method": "POST", "uri": "/api/v1/mpc/keygen", "ip": "::1", "status": 200, "latency": "1.243842625s"}
+2025-04-27 12:56:31.006	[34mINFO[0m	seclient/cardreader.go:190	响应状态码: 0x9000
+2025-04-27 12:56:31.006	[34mINFO[0m	seclient/cardreader.go:191	响应数据: 1718
+2025-04-27 12:56:31.006	[34mINFO[0m	seclient/commands.go:65	❕存储数据成功❕	{"记录索引": 23, "记录总数": 24}
+2025-04-27 12:56:31.006	[35mDEBUG[0m	services/security.go:123	数据存储成功	{"记录索引": 23, "记录总数": 24}
+2025-04-27 12:56:31.006	[35mDEBUG[0m	services/mpc.go:150	密钥生成完成	{"addr": "0xf3A9Fa6d00DBD27D8E609caA7CfD6F9b4EC10fd5"}
+2025-04-27 12:56:31.006	[34mINFO[0m	controllers/mpc.go:105	密钥生成成功	{"address": "0xf3A9Fa6d00DBD27D8E609caA7CfD6F9b4EC10fd5", "username": "test_user_1", "encrypted_key_length": 6402}
+2025-04-27 12:56:31.006	[34mINFO[0m	middleware/logger.go:50	API请求	{"method": "POST", "uri": "/api/v1/mpc/keygen", "ip": "::1", "status": 200, "latency": "2.2697165s"}
+2025-04-27 12:56:31.030	[34mINFO[0m	seclient/cardreader.go:190	响应状态码: 0x9000
+2025-04-27 12:56:31.030	[34mINFO[0m	seclient/cardreader.go:191	响应数据: 1819
+2025-04-27 12:56:31.030	[34mINFO[0m	seclient/commands.go:65	❕存储数据成功❕	{"记录索引": 24, "记录总数": 25}
+2025-04-27 12:56:31.030	[35mDEBUG[0m	services/security.go:123	数据存储成功	{"记录索引": 24, "记录总数": 25}
+2025-04-27 12:56:31.030	[35mDEBUG[0m	services/mpc.go:150	密钥生成完成	{"addr": "0xf3A9Fa6d00DBD27D8E609caA7CfD6F9b4EC10fd5"}
+2025-04-27 12:56:31.030	[34mINFO[0m	controllers/mpc.go:105	密钥生成成功	{"address": "0xf3A9Fa6d00DBD27D8E609caA7CfD6F9b4EC10fd5", "username": "test_user_3", "encrypted_key_length": 6400}
+2025-04-27 12:56:31.030	[34mINFO[0m	middleware/logger.go:50	API请求	{"method": "POST", "uri": "/api/v1/mpc/keygen", "ip": "::1", "status": 200, "latency": "290.038209ms"}
+2025-04-27 12:56:31.743	[34mINFO[0m	controllers/mpc.go:188	接收到签名请求	{"parties": "1,2", "data": "这是一条测试消息，时间戳: 1745729791", "filename": "sign_data_1.json", "username": "test_user_1", "address": "0xf3A9Fa6d00DBD27D8E609caA7CfD6F9b4EC10fd5"}
+2025-04-27 12:56:31.743	[35mDEBUG[0m	controllers/mpc.go:194	签名请求详情	{"encrypted_key_length": "6.3 KB", "signature_length": "70 B"}
+2025-04-27 12:56:31.743	[35mDEBUG[0m	services/mpc.go:171	开始消息签名	{"parties": "1,2", "addr": "0xf3A9Fa6d00DBD27D8E609caA7CfD6F9b4EC10fd5", "file": "sign_data_1.json"}
+2025-04-27 12:56:31.743	[35mDEBUG[0m	services/mpc.go:190	临时文件路径	{"path": "temp/sign_data_1.json"}
+2025-04-27 12:56:31.743	[34mINFO[0m	services/mpc.go:200	从安全芯片读取密钥
+2025-04-27 12:56:31.743	[35mDEBUG[0m	services/security.go:137	读取数据	{"username": "test_user_1", "addr": "0xf3A9Fa6d00DBD27D8E609caA7CfD6F9b4EC10fd5", "sig_len": 70}
+2025-04-27 12:56:31.743	[34mINFO[0m	services/security.go:163	从安全芯片读取数据
+2025-04-27 12:56:31.744	[34mINFO[0m	seclient/commands.go:94	❕读取数据从安全芯片❕	{"username": "c71a9a78e4dabef06705f4530273cab443ce1a44987e36e052345f4fc76ba5a0", "addr": "f3a9fa6d00dbd27d8e609caa7cfd6f9b4ec10fd5", "signature": "304402202364482e4c0916e5a357b83805cff7eef3da1100f4368146616686b4bec6687902202a03d13441a6e57c5c71dbf64dbce13918336c6b0d2ff9806cd572daeacc4a71"}
+2025-04-27 12:56:31.744	[34mINFO[0m	seclient/cardreader.go:178	=== 发送APDU命令 ===
+2025-04-27 12:56:31.744	[34mINFO[0m	seclient/cardreader.go:179	命令: 802000007AC71A9A78E4DABEF06705F4530273CAB443CE1A44987E36E052345F4FC76BA5A0F3A9FA6D00DBD27D8E609CAA7CFD6F9B4EC10FD5304402202364482E4C0916E5A357B83805CFF7EEF3DA1100F4368146616686B4BEC6687902202A03D13441A6E57C5C71DBF64DBCE13918336C6B0D2FF9806CD572DAEACC4A71
+2025-04-27 12:56:31.757	[34mINFO[0m	seclient/cardreader.go:190	响应状态码: 0x9000
+2025-04-27 12:56:31.757	[34mINFO[0m	seclient/cardreader.go:191	响应数据: E03DF0C77353808219246A07A188BD587C423F210605D57EF0A8848BEFC55C2C
+2025-04-27 12:56:31.757	[34mINFO[0m	seclient/commands.go:121	❕读取数据成功❕
+2025-04-27 12:56:31.757	[34mINFO[0m	seclient/commands.go:122	数据: e03df0c77353808219246a07a188bd587c423f210605d57ef0a8848befc55c2c
+2025-04-27 12:56:31.757	[35mDEBUG[0m	services/security.go:170	数据读取成功	{"数据长度": 32}
+2025-04-27 12:56:31.757	[34mINFO[0m	services/mpc.go:208	解密密钥数据
+2025-04-27 12:56:31.757	[35mDEBUG[0m	utils/crypto.go:76	开始AES解密	{"key_hex": "e03df0c77353808219246a07a188bd587c423f210605d57ef0a8848befc55c2c", "ciphertext_preview": "74bb1238224b9c7af199..."}
+2025-04-27 12:56:31.757	[35mDEBUG[0m	utils/crypto.go:106	AES解密成功
+2025-04-27 12:56:31.757	[35mDEBUG[0m	services/mpc.go:214	解密后数据大小	{"size": 6374}
+2025-04-27 12:56:31.757	[35mDEBUG[0m	services/mpc.go:222	解压后数据大小	{"size": 36512}
+2025-04-27 12:56:31.758	[34mINFO[0m	services/mpc.go:231	执行MPC签名
+2025-04-27 12:56:31.758	[34mINFO[0m	utils/command.go:79	开始签名操作	{"command": "bin/gg20_signing", "parties": "1,2", "data": "这是一条测试消息，时间戳: 1745729791", "local_share": "temp/sign_data_1.json"}
+2025-04-27 12:56:31.758	[34mINFO[0m	utils/command.go:132	开始执行命令	{"command": "bin/gg20_signing", "args": "--address http://127.0.0.1:8000 -p 1,2 --data-to-sign \"这是一条测试消息，时间戳: 1745729791\" --local-share temp/sign_data_1.json", "timeout": "1m0s"}
+2025-04-27 12:56:32.745	[34mINFO[0m	controllers/mpc.go:188	接收到签名请求	{"parties": "1,2", "data": "这是一条测试消息，时间戳: 1745729791", "filename": "sign_data_2.json", "username": "test_user_2", "address": "0xf3A9Fa6d00DBD27D8E609caA7CfD6F9b4EC10fd5"}
+2025-04-27 12:56:32.745	[35mDEBUG[0m	controllers/mpc.go:194	签名请求详情	{"encrypted_key_length": "6.3 KB", "signature_length": "72 B"}
+2025-04-27 12:56:32.745	[35mDEBUG[0m	services/mpc.go:171	开始消息签名	{"parties": "1,2", "addr": "0xf3A9Fa6d00DBD27D8E609caA7CfD6F9b4EC10fd5", "file": "sign_data_2.json"}
+2025-04-27 12:56:32.745	[35mDEBUG[0m	services/mpc.go:190	临时文件路径	{"path": "temp/sign_data_2.json"}
+2025-04-27 12:56:32.746	[34mINFO[0m	services/mpc.go:200	从安全芯片读取密钥
+2025-04-27 12:56:32.746	[35mDEBUG[0m	services/security.go:137	读取数据	{"username": "test_user_2", "addr": "0xf3A9Fa6d00DBD27D8E609caA7CfD6F9b4EC10fd5", "sig_len": 72}
+2025-04-27 12:56:32.746	[34mINFO[0m	services/security.go:163	从安全芯片读取数据
+2025-04-27 12:56:32.746	[34mINFO[0m	seclient/commands.go:94	❕读取数据从安全芯片❕	{"username": "6cc3afa565036c8ec65cef4778501e6e4b516104fa3eba22e7011a82aef6e88e", "addr": "f3a9fa6d00dbd27d8e609caa7cfd6f9b4ec10fd5", "signature": "3046022100fbb0a4a2dd8147bddf47d0c06a881b230c31c0c163cba2e40ccf28e56006c78c0221009873b899d795d731b9c494890d83358c601fc1e43500cab6337c7ea70ae1dc98"}
+2025-04-27 12:56:32.746	[34mINFO[0m	seclient/cardreader.go:178	=== 发送APDU命令 ===
+2025-04-27 12:56:32.746	[34mINFO[0m	seclient/cardreader.go:179	命令: 802000007C6CC3AFA565036C8EC65CEF4778501E6E4B516104FA3EBA22E7011A82AEF6E88EF3A9FA6D00DBD27D8E609CAA7CFD6F9B4EC10FD53046022100FBB0A4A2DD8147BDDF47D0C06A881B230C31C0C163CBA2E40CCF28E56006C78C0221009873B899D795D731B9C494890D83358C601FC1E43500CAB6337C7EA70AE1DC98
+2025-04-27 12:56:32.758	[34mINFO[0m	seclient/cardreader.go:190	响应状态码: 0x9000
+2025-04-27 12:56:32.758	[34mINFO[0m	seclient/cardreader.go:191	响应数据: 399D527756F13B58354294E142C034F4731C121668DE1C3A085496F772C022B4
+2025-04-27 12:56:32.758	[34mINFO[0m	seclient/commands.go:121	❕读取数据成功❕
+2025-04-27 12:56:32.759	[34mINFO[0m	seclient/commands.go:122	数据: 399d527756f13b58354294e142c034f4731c121668de1c3a085496f772c022b4
+2025-04-27 12:56:32.759	[35mDEBUG[0m	services/security.go:170	数据读取成功	{"数据长度": 32}
+2025-04-27 12:56:32.759	[34mINFO[0m	services/mpc.go:208	解密密钥数据
+2025-04-27 12:56:32.759	[35mDEBUG[0m	utils/crypto.go:76	开始AES解密	{"key_hex": "399d527756f13b58354294e142c034f4731c121668de1c3a085496f772c022b4", "ciphertext_preview": "2fede33e07678e4e3f04..."}
+2025-04-27 12:56:32.759	[35mDEBUG[0m	utils/crypto.go:106	AES解密成功
+2025-04-27 12:56:32.759	[35mDEBUG[0m	services/mpc.go:214	解密后数据大小	{"size": 6379}
+2025-04-27 12:56:32.759	[35mDEBUG[0m	services/mpc.go:222	解压后数据大小	{"size": 36521}
+2025-04-27 12:56:32.760	[34mINFO[0m	services/mpc.go:231	执行MPC签名
+2025-04-27 12:56:32.760	[34mINFO[0m	utils/command.go:79	开始签名操作	{"command": "bin/gg20_signing", "parties": "1,2", "data": "这是一条测试消息，时间戳: 1745729791", "local_share": "temp/sign_data_2.json"}
+2025-04-27 12:56:32.760	[34mINFO[0m	utils/command.go:132	开始执行命令	{"command": "bin/gg20_signing", "args": "--address http://127.0.0.1:8000 -p 1,2 --data-to-sign \"这是一条测试消息，时间戳: 1745729791\" --local-share temp/sign_data_2.json", "timeout": "1m0s"}
+2025-04-27 12:56:33.093	[31mERROR[0m	utils/command.go:147	命令执行失败	{"error": "exit status 1", "stdout": "", "stderr": "Error: protocol execution terminated with error: round proceed error: proceeding round: round 6: check sig: Phase6Error\n", "execution_time": "1.335052583s"}
+2025-04-27 12:56:33.093	[31mERROR[0m	utils/command.go:147	命令执行失败	{"error": "exit status 1", "stdout": "", "stderr": "Error: protocol execution terminated with error: round proceed error: proceeding round: round 6: check sig: Phase6Error\n", "execution_time": "332.589208ms"}
+2025-04-27 12:56:33.093	[31mERROR[0m	utils/command.go:87	签名操作失败	{"error": "exit status 1"}
+2025-04-27 12:56:33.093	[31mERROR[0m	utils/command.go:87	签名操作失败	{"error": "exit status 1"}
+2025-04-27 12:56:33.093	[31mERROR[0m	services/mpc.go:234	签名失败	{"error": "exit status 1"}
+2025-04-27 12:56:33.093	[31mERROR[0m	services/mpc.go:234	签名失败	{"error": "exit status 1"}
+2025-04-27 12:56:33.093	[31mERROR[0m	controllers/mpc.go:210	签名失败	{"error": "签名失败: exit status 1", "username": "test_user_2", "address": "0xf3A9Fa6d00DBD27D8E609caA7CfD6F9b4EC10fd5"}
+2025-04-27 12:56:33.093	[31mERROR[0m	controllers/mpc.go:210	签名失败	{"error": "签名失败: exit status 1", "username": "test_user_1", "address": "0xf3A9Fa6d00DBD27D8E609caA7CfD6F9b4EC10fd5"}
+2025-04-27 12:56:33.093	[31mERROR[0m	middleware/logger.go:46	API请求	{"method": "POST", "uri": "/api/v1/mpc/sign", "ip": "::1", "status": 500, "latency": "348.407958ms"}
+2025-04-27 12:56:33.093	[31mERROR[0m	middleware/logger.go:46	API请求	{"method": "POST", "uri": "/api/v1/mpc/sign", "ip": "::1", "status": 500, "latency": "1.350376209s"}
+2025-04-27 12:56:33.747	[34mINFO[0m	controllers/mpc.go:325	接收到删除数据请求	{"username": "test_user_1", "address": "0xf3A9Fa6d00DBD27D8E609caA7CfD6F9b4EC10fd5"}
+2025-04-27 12:56:33.747	[35mDEBUG[0m	controllers/mpc.go:328	删除请求详情	{"signature_length": "70 B"}
+2025-04-27 12:56:33.747	[35mDEBUG[0m	services/security.go:183	删除数据	{"username": "test_user_1", "addr": "0xf3A9Fa6d00DBD27D8E609caA7CfD6F9b4EC10fd5", "sig_len": 70}
+2025-04-27 12:56:33.747	[34mINFO[0m	services/security.go:209	从安全芯片删除数据
+2025-04-27 12:56:33.747	[34mINFO[0m	seclient/commands.go:148	❕删除数据从安全芯片❕	{"username": "c71a9a78e4dabef06705f4530273cab443ce1a44987e36e052345f4fc76ba5a0", "addr": "f3a9fa6d00dbd27d8e609caa7cfd6f9b4ec10fd5", "signature": "30440220151f8fac522edaad81df6590a7c430aa724f499d4685b868256de9b4d251d1ca022067d4c0c63956e4b96ea782b60ca95ecb350ba150c75c292bf5f2460daf8d82d3"}
+2025-04-27 12:56:33.747	[34mINFO[0m	seclient/cardreader.go:178	=== 发送APDU命令 ===
+2025-04-27 12:56:33.747	[34mINFO[0m	seclient/cardreader.go:179	命令: 803000007AC71A9A78E4DABEF06705F4530273CAB443CE1A44987E36E052345F4FC76BA5A0F3A9FA6D00DBD27D8E609CAA7CFD6F9B4EC10FD530440220151F8FAC522EDAAD81DF6590A7C430AA724F499D4685B868256DE9B4D251D1CA022067D4C0C63956E4B96EA782B60CA95ECB350BA150C75C292BF5F2460DAF8D82D3
+2025-04-27 12:56:33.767	[34mINFO[0m	seclient/cardreader.go:190	响应状态码: 0x9000
+2025-04-27 12:56:33.767	[34mINFO[0m	seclient/cardreader.go:191	响应数据: 1718
+2025-04-27 12:56:33.767	[34mINFO[0m	seclient/commands.go:183	❕删除数据成功❕	{"记录索引": 23, "剩余记录数": 24}
+2025-04-27 12:56:33.767	[35mDEBUG[0m	services/security.go:216	数据删除成功	{"记录索引": 23, "记录总数": 24}
+2025-04-27 12:56:33.767	[34mINFO[0m	controllers/mpc.go:345	删除数据成功	{"username": "test_user_1", "address": "0xf3A9Fa6d00DBD27D8E609caA7CfD6F9b4EC10fd5"}
+2025-04-27 12:56:33.768	[34mINFO[0m	middleware/logger.go:50	API请求	{"method": "POST", "uri": "/api/v1/mpc/delete", "ip": "::1", "status": 200, "latency": "20.8165ms"}
+2025-04-27 12:56:34.771	[34mINFO[0m	controllers/mpc.go:325	接收到删除数据请求	{"username": "test_user_2", "address": "0xf3A9Fa6d00DBD27D8E609caA7CfD6F9b4EC10fd5"}
+2025-04-27 12:56:34.771	[35mDEBUG[0m	controllers/mpc.go:328	删除请求详情	{"signature_length": "72 B"}
+2025-04-27 12:56:34.771	[35mDEBUG[0m	services/security.go:183	删除数据	{"username": "test_user_2", "addr": "0xf3A9Fa6d00DBD27D8E609caA7CfD6F9b4EC10fd5", "sig_len": 72}
+2025-04-27 12:56:34.771	[34mINFO[0m	services/security.go:209	从安全芯片删除数据
+2025-04-27 12:56:34.771	[34mINFO[0m	seclient/commands.go:148	❕删除数据从安全芯片❕	{"username": "6cc3afa565036c8ec65cef4778501e6e4b516104fa3eba22e7011a82aef6e88e", "addr": "f3a9fa6d00dbd27d8e609caa7cfd6f9b4ec10fd5", "signature": "3046022100879aaa59ed05c771540351ae7b30ab055424dce8d0e8502a33f11ad62e877497022100f1362ac3e92aa77fd3b222040bb47853d752450664d339e03233b283586273ca"}
+2025-04-27 12:56:34.771	[34mINFO[0m	seclient/cardreader.go:178	=== 发送APDU命令 ===
+2025-04-27 12:56:34.771	[34mINFO[0m	seclient/cardreader.go:179	命令: 803000007C6CC3AFA565036C8EC65CEF4778501E6E4B516104FA3EBA22E7011A82AEF6E88EF3A9FA6D00DBD27D8E609CAA7CFD6F9B4EC10FD53046022100879AAA59ED05C771540351AE7B30AB055424DCE8D0E8502A33F11AD62E877497022100F1362AC3E92AA77FD3B222040BB47853D752450664D339E03233B283586273CA
+2025-04-27 12:56:34.789	[34mINFO[0m	seclient/cardreader.go:190	响应状态码: 0x9000
+2025-04-27 12:56:34.789	[34mINFO[0m	seclient/cardreader.go:191	响应数据: 1417
+2025-04-27 12:56:34.789	[34mINFO[0m	seclient/commands.go:183	❕删除数据成功❕	{"记录索引": 20, "剩余记录数": 23}
+2025-04-27 12:56:34.789	[35mDEBUG[0m	services/security.go:216	数据删除成功	{"记录索引": 20, "记录总数": 23}
+2025-04-27 12:56:34.789	[34mINFO[0m	controllers/mpc.go:345	删除数据成功	{"username": "test_user_2", "address": "0xf3A9Fa6d00DBD27D8E609caA7CfD6F9b4EC10fd5"}
+2025-04-27 12:56:34.789	[34mINFO[0m	middleware/logger.go:50	API请求	{"method": "POST", "uri": "/api/v1/mpc/delete", "ip": "::1", "status": 200, "latency": "18.4225ms"}
+2025-04-27 12:56:35.791	[34mINFO[0m	controllers/mpc.go:325	接收到删除数据请求	{"username": "test_user_3", "address": "0xf3A9Fa6d00DBD27D8E609caA7CfD6F9b4EC10fd5"}
+2025-04-27 12:56:35.791	[35mDEBUG[0m	controllers/mpc.go:328	删除请求详情	{"signature_length": "70 B"}
+2025-04-27 12:56:35.791	[35mDEBUG[0m	services/security.go:183	删除数据	{"username": "test_user_3", "addr": "0xf3A9Fa6d00DBD27D8E609caA7CfD6F9b4EC10fd5", "sig_len": 70}
+2025-04-27 12:56:35.792	[34mINFO[0m	services/security.go:209	从安全芯片删除数据
+2025-04-27 12:56:35.792	[34mINFO[0m	seclient/commands.go:148	❕删除数据从安全芯片❕	{"username": "3852e3cce10472fc2dd095d6ed866b45d042757819462fa920ab240b462ff8df", "addr": "f3a9fa6d00dbd27d8e609caa7cfd6f9b4ec10fd5", "signature": "3044022061fc6d80c2e9a59927dee9c7250ca135dec0d6378fc4a0b51211c3691a69d81e022017772f1dfcab9bfdbe7da63a7fc4bfdd799b9363cccb94e56df390e4bba3a288"}
+2025-04-27 12:56:35.792	[34mINFO[0m	seclient/cardreader.go:178	=== 发送APDU命令 ===
+2025-04-27 12:56:35.792	[34mINFO[0m	seclient/cardreader.go:179	命令: 803000007A3852E3CCE10472FC2DD095D6ED866B45D042757819462FA920AB240B462FF8DFF3A9FA6D00DBD27D8E609CAA7CFD6F9B4EC10FD53044022061FC6D80C2E9A59927DEE9C7250CA135DEC0D6378FC4A0B51211C3691A69D81E022017772F1DFCAB9BFDBE7DA63A7FC4BFDD799B9363CCCB94E56DF390E4BBA3A288
+2025-04-27 12:56:35.809	[34mINFO[0m	seclient/cardreader.go:190	响应状态码: 0x9000
+2025-04-27 12:56:35.809	[34mINFO[0m	seclient/cardreader.go:191	响应数据: 1816
+2025-04-27 12:56:35.809	[34mINFO[0m	seclient/commands.go:183	❕删除数据成功❕	{"记录索引": 24, "剩余记录数": 22}
+2025-04-27 12:56:35.809	[35mDEBUG[0m	services/security.go:216	数据删除成功	{"记录索引": 24, "记录总数": 22}
+2025-04-27 12:56:35.809	[34mINFO[0m	controllers/mpc.go:345	删除数据成功	{"username": "test_user_3", "address": "0xf3A9Fa6d00DBD27D8E609caA7CfD6F9b4EC10fd5"}
+2025-04-27 12:56:35.809	[34mINFO[0m	middleware/logger.go:50	API请求	{"method": "POST", "uri": "/api/v1/mpc/delete", "ip": "::1", "status": 200, "latency": "17.659416ms"}

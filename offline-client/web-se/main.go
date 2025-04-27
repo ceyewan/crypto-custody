@@ -61,6 +61,8 @@ func main() {
 			{
 				mpc.POST("/keygen", controllers.KeyGeneration)
 				mpc.POST("/sign", controllers.SignMessage)
+				mpc.GET("/cplc", controllers.GetCPLC)
+				mpc.POST("/delete", controllers.DeleteMessage)
 			}
 		}
 	}

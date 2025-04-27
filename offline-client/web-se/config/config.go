@@ -14,7 +14,6 @@ type Config struct {
 	KeygenBin      string `mapstructure:"keygen_bin"`
 	SigningBin     string `mapstructure:"signing_bin"`
 	ManagerAddr    string `mapstructure:"manager_addr"`
-	ManagerPort    string `mapstructure:"manager_port"`
 	// 日志配置
 	LogDir        string `mapstructure:"log_dir"`         // 日志目录
 	LogFile       string `mapstructure:"log_file"`        // 日志文件名

@@ -236,6 +236,123 @@ func SignMessage(c *gin.Context) {
 	})
 }
 
+// GetCPLC 获取安全芯片的CPLC信息
+func GetCPLC(c *gin.Context) {
+	// 确保服务已初始化
+	if cfg == nil || securityService == nil || mpcService == nil {
+		clog.Info("服务未初始化，尝试初始化")
+		if err := Init(); err != nil {
+			clog.Error("服务初始化失败", clog.String("error", err.Error()))
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"message": "服务初始化失败: " + err.Error(),
+			})
+			return
+		}
+	}
+
+	clog.Info("接收到获取CPLC信息请求", clog.String("client_ip", c.ClientIP()))
+
+	// 调用服务获取CPLC信息
+	cplcData, err := securityService.GetCPLC()
+	if err != nil {
+		clog.Error("获取CPLC信息失败", clog.String("error", err.Error()))
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "获取CPLC信息失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 转换为十六进制字符串
+	cplcHex := fmt.Sprintf("%X", cplcData)
+	clog.Info("获取CPLC信息成功", clog.String("cplc", cplcHex))
+
+	// 返回响应
+	c.JSON(http.StatusOK, models.GetCPLCResponse{
+		Success: true,
+		CPIC:    cplcHex,
+	})
+}
+
+// DeleteMessage 删除用户数据
+func DeleteMessage(c *gin.Context) {
+	// 确保服务已初始化
+	if cfg == nil || securityService == nil || mpcService == nil {
+		clog.Info("服务未初始化，尝试初始化")
+		if err := Init(); err != nil {
+			clog.Error("服务初始化失败", clog.String("error", err.Error()))
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"message": "服务初始化失败: " + err.Error(),
+			})
+			return
+		}
+	}
+
+	// 解析请求
+	var req models.DeleteRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		clog.Warn("请求参数解析失败",
+			clog.String("error", err.Error()),
+			clog.String("client_ip", c.ClientIP()))
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "请求参数错误: " + err.Error(),
+		})
+		return
+	}
+
+	// 验证地址格式并标准化
+	if !strings.HasPrefix(req.Address, "0x") {
+		req.Address = "0x" + req.Address
+		clog.Debug("地址格式规范化", clog.String("address", req.Address))
+	}
+
+	// 解码签名（DER格式）
+	signature, err := base64.StdEncoding.DecodeString(req.Signature)
+	if err != nil {
+		clog.Error("签名解码失败",
+			clog.String("error", err.Error()),
+			clog.String("username", req.UserName))
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "签名格式错误: " + err.Error(),
+		})
+		return
+	}
+
+	clog.Info("接收到删除数据请求",
+		clog.String("username", req.UserName),
+		clog.String("address", req.Address))
+	clog.Debug("删除请求详情",
+		clog.String("signature_length", formatByteSize(int64(len(signature)))))
+
+	// 删除数据
+	err = securityService.DeleteData(req.UserName, req.Address, signature)
+	if err != nil {
+		clog.Error("删除数据失败",
+			clog.String("error", err.Error()),
+			clog.String("username", req.UserName),
+			clog.String("address", req.Address))
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "删除数据失败: " + err.Error(),
+		})
+		return
+	}
+
+	clog.Info("删除数据成功",
+		clog.String("username", req.UserName),
+		clog.String("address", req.Address))
+
+	// 返回响应
+	c.JSON(http.StatusOK, models.DeleteResponse{
+		Success: true,
+		Address: req.Address,
+	})
+}
+
 // formatByteSize 格式化字节大小为人类可读的字符串
 func formatByteSize(bytes int64) string {
 	const unit = 1024
