@@ -6,14 +6,15 @@ import (
 
 // Config 应用程序配置结构
 type Config struct {
-	Debug       bool   `mapstructure:"debug"`
-	Port        string `mapstructure:"port"`
-	TempDir     string `mapstructure:"temp_dir"`
-	BinDir      string `mapstructure:"bin_dir"`
-	KeygenBin   string `mapstructure:"keygen_bin"`
-	SigningBin  string `mapstructure:"signing_bin"`
-	ManagerAddr string `mapstructure:"manager_addr"`
-	ManagerPort string `mapstructure:"manager_port"`
+	Debug          bool   `mapstructure:"debug"`            // SE 是否启用调试模式
+	CardReaderName string `mapstructure:"card_reader_name"` // SE 名称
+	Port           string `mapstructure:"port"`
+	TempDir        string `mapstructure:"temp_dir"`
+	BinDir         string `mapstructure:"bin_dir"`
+	KeygenBin      string `mapstructure:"keygen_bin"`
+	SigningBin     string `mapstructure:"signing_bin"`
+	ManagerAddr    string `mapstructure:"manager_addr"`
+	ManagerPort    string `mapstructure:"manager_port"`
 	// 日志配置
 	LogDir        string `mapstructure:"log_dir"`         // 日志目录
 	LogFile       string `mapstructure:"log_file"`        // 日志文件名
@@ -32,6 +33,7 @@ func LoadConfig() (*Config, error) {
 
 	// 设置默认值
 	viper.SetDefault("debug", false)
+	viper.SetDefault("card_reader_name", "")
 	viper.SetDefault("port", "8080")
 	viper.SetDefault("temp_dir", "./temp")
 	viper.SetDefault("bin_dir", "./bin")
