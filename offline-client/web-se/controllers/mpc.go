@@ -119,6 +119,7 @@ func KeyGeneration(c *gin.Context) {
 	// 返回响应
 	c.JSON(http.StatusOK, models.KeyGenResponse{
 		Success:      true,
+		UserName:     req.UserName,
 		Address:      address,
 		EncryptedKey: encryptedKeyBase64,
 	})
