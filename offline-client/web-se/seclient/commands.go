@@ -7,7 +7,7 @@ import (
 )
 
 // StoreData 存储数据 - 简化接口，直接接收数据
-func (r *CardReader) StoreData(username []byte, addr []byte, message []byte) (byte, byte, error) {
+func (r *CardReader) StoreData(username []byte, addr []byte, message []byte) (int, int, error) {
 	// 验证输入数据长度
 	if len(username) != USERNAME_LENGTH {
 		return 0, 0, fmt.Errorf("用户名长度错误: 应为 %d 字节", USERNAME_LENGTH)
@@ -58,13 +58,13 @@ func (r *CardReader) StoreData(username []byte, addr []byte, message []byte) (by
 		return 0, 0, fmt.Errorf("响应数据不完整")
 	}
 
-	recordIndex := data[0]
-	recordCount := data[1]
+	recordIndex := int(data[0])
+	recordCount := int(data[1])
 
 	if r.debug {
 		clog.Info("❕存储数据成功❕",
-			clog.Int("记录索引", int(recordIndex)),
-			clog.Int("记录总数", int(recordCount)),
+			clog.Int("记录索引", recordIndex),
+			clog.Int("记录总数", recordCount),
 		)
 	}
 
@@ -126,7 +126,7 @@ func (r *CardReader) ReadData(username []byte, addr []byte, signature []byte) ([
 }
 
 // DeleteData 删除数据 - 简化接口，接收外部生成的签名
-func (r *CardReader) DeleteData(username []byte, addr []byte, signature []byte) (byte, byte, error) {
+func (r *CardReader) DeleteData(username []byte, addr []byte, signature []byte) (int, int, error) {
 	// 验证输入数据长度
 	if len(username) != USERNAME_LENGTH {
 		return 0, 0, fmt.Errorf("用户名长度错误: 应为 %d 字节", USERNAME_LENGTH)
@@ -176,13 +176,13 @@ func (r *CardReader) DeleteData(username []byte, addr []byte, signature []byte) 
 		return 0, 0, fmt.Errorf("响应数据不完整")
 	}
 
-	recordIndex := data[0]
-	remainingCount := data[1]
+	recordIndex := int(data[0])
+	remainingCount := int(data[1])
 
 	if r.debug {
 		clog.Info("❕删除数据成功❕",
-			clog.Int("记录索引", int(recordIndex)),
-			clog.Int("剩余记录数", int(remainingCount)))
+			clog.Int("记录索引", recordIndex),
+			clog.Int("剩余记录数", remainingCount))
 	}
 
 	return recordIndex, remainingCount, nil
