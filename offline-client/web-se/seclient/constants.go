@@ -6,6 +6,7 @@ const (
 	INS_STORE_DATA  = 0x10 // 存储数据命令
 	INS_READ_DATA   = 0x20 // 读取数据命令
 	INS_DELETE_DATA = 0x30 // 删除数据命令
+	INS_GET_CPLC    = 0xCA // 获取CPLC命令
 
 	// 状态码
 	SW_SUCCESS           = 0x9000 // 成功
@@ -21,3 +22,6 @@ const (
 	MAX_SIGNATURE_LENGTH = 72 // DER格式签名最大长度
 	MIN_SIGNATURE_LENGTH = 70 // DER格式签名最小长度
 )
+
+// CPLC命令数据
+var GET_CPLC_APDU = []byte{0x80, 0xCA, 0x9F, 0x7F, 0x00}
