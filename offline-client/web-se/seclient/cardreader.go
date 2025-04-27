@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"web-se/clog"
+
 	"github.com/ebfe/scard"
 )
 
@@ -15,7 +17,8 @@ type CardReader struct {
 	context  *scard.Context
 	card     *scard.Card
 	protocol scard.Protocol
-	debug    bool // 调试模式
+	debug    bool   // 调试模式
+	cplcData []byte // 缓存CPLC数据
 }
 
 // CardReaderOption 是配置 CardReader 的选项函数类型
@@ -89,9 +92,9 @@ func (r *CardReader) Connect(readerName string) error {
 		}
 		if selectedReader == "" {
 			if r.debug {
-				fmt.Println("可用读卡器列表:")
+				clog.Info("可用读卡器列表:")
 				for i, reader := range readers {
-					fmt.Printf("  %d: %s\n", i, reader)
+					clog.Infof("  %d: %s", i, reader)
 				}
 			}
 			return fmt.Errorf("未找到包含 '%s' 的读卡器", readerName)
@@ -99,18 +102,18 @@ func (r *CardReader) Connect(readerName string) error {
 	} else {
 		selectedReader = readers[0]
 		if r.debug {
-			fmt.Println("可用读卡器列表:")
+			clog.Info("可用读卡器列表:")
 			for i, reader := range readers {
-				fmt.Printf("  %d: %s\n", i, reader)
+				clog.Infof("  %d: %s", i, reader)
 				if i == 0 {
-					fmt.Printf("  >>> 自动选择了第一个读卡器\n")
+					clog.Info("  >>> 自动选择了第一个读卡器")
 				}
 			}
 		}
 	}
 
 	if r.debug {
-		fmt.Printf("使用读卡器: %s\n", selectedReader)
+		clog.Infof("使用读卡器: %s", selectedReader)
 	}
 
 	// 连接读卡器
@@ -122,7 +125,7 @@ func (r *CardReader) Connect(readerName string) error {
 	r.card = card
 	r.protocol = card.ActiveProtocol()
 	if r.debug {
-		fmt.Printf("成功连接到读卡器，使用协议: %v\n", r.protocol)
+		clog.Infof("成功连接到读卡器，使用协议: %v", r.protocol)
 	}
 
 	return nil
@@ -130,18 +133,23 @@ func (r *CardReader) Connect(readerName string) error {
 
 // SelectApplet 选择Applet
 func (r *CardReader) SelectApplet() error {
+	// 在选择Applet之前，先获取芯片的CPLC数据，缓存下来
+	_, err := r.GetCPLC()
+	if err != nil {
+		return fmt.Errorf("获取CPLC数据失败: %v", err)
+	}
 	selectCmd := append([]byte{0x00, 0xA4, 0x04, 0x00, byte(len(AID))}, AID...)
 
 	if r.debug {
-		fmt.Printf("\n=== 选择Applet命令 ===\n")
-		fmt.Printf("APDU: %X\n", selectCmd)
-		fmt.Printf("命令解析:\n")
-		fmt.Printf("  CLA: 0x00 (ISO标准命令)\n")
-		fmt.Printf("  INS: 0xA4 (选择指令)\n")
-		fmt.Printf("  P1: 0x04 (按名称选择)\n")
-		fmt.Printf("  P2: 0x00 (首次选择)\n")
-		fmt.Printf("  Lc: 0x%02X (AID长度)\n", len(AID))
-		fmt.Printf("  Data: %X (AID)\n", AID)
+		clog.Info("=== 选择Applet命令 ===")
+		clog.Infof("APDU: %X", selectCmd)
+		clog.Info("命令解析:")
+		clog.Info("  CLA: 0x00 (ISO标准命令)")
+		clog.Info("  INS: 0xA4 (选择指令)")
+		clog.Info("  P1: 0x04 (按名称选择)")
+		clog.Info("  P2: 0x00 (首次选择)")
+		clog.Infof("  Lc: 0x%02X (AID长度)", len(AID))
+		clog.Infof("  Data: %X (AID)", AID)
 	}
 
 	resp, err := r.card.Transmit(selectCmd)
@@ -155,11 +163,11 @@ func (r *CardReader) SelectApplet() error {
 	}
 
 	if r.debug {
-		fmt.Printf("\n=== 选择Applet响应 ===\n")
-		fmt.Printf("响应数据: %X\n", resp)
-		fmt.Printf("状态码: 0x%04X (成功)\n", sw)
-		fmt.Printf("数据: %X\n", data)
-		fmt.Printf("成功选择Applet, AID: %X\n", AID)
+		clog.Info("=== 选择Applet响应 ===")
+		clog.Infof("响应数据: %X", resp)
+		clog.Infof("状态码: 0x%04X (成功)", sw)
+		clog.Infof("数据: %X", data)
+		clog.Infof("成功选择Applet, AID: %X", AID)
 	}
 	return nil
 }
@@ -167,8 +175,8 @@ func (r *CardReader) SelectApplet() error {
 // TransmitAPDU 直接发送APDU命令并返回响应
 func (r *CardReader) TransmitAPDU(command []byte) ([]byte, uint16, error) {
 	if r.debug {
-		fmt.Printf("\n=== 发送APDU命令 ===\n")
-		fmt.Printf("命令: %X\n", command)
+		clog.Info("=== 发送APDU命令 ===")
+		clog.Infof("命令: %X", command)
 	}
 
 	resp, err := r.card.Transmit(command)
@@ -179,8 +187,8 @@ func (r *CardReader) TransmitAPDU(command []byte) ([]byte, uint16, error) {
 	sw, data := extractResponseAndSW(resp)
 
 	if r.debug {
-		fmt.Printf("响应状态码: 0x%04X\n", sw)
-		fmt.Printf("响应数据: %X\n", data)
+		clog.Infof("响应状态码: 0x%04X", sw)
+		clog.Infof("响应数据: %X", data)
 	}
 
 	return data, sw, nil

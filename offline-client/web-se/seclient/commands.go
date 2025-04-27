@@ -3,6 +3,7 @@ package seclient
 import (
 	"encoding/hex"
 	"fmt"
+	"web-se/clog"
 )
 
 // StoreData 存储数据 - 简化接口，直接接收数据
@@ -24,10 +25,13 @@ func (r *CardReader) StoreData(username []byte, addr []byte, message []byte) (by
 	fullData = append(fullData, addr...)
 	fullData = append(fullData, message...)
 
-	fmt.Println("❕存储数据到安全芯片❕")
-	fmt.Println("username:", hex.EncodeToString(username))
-	fmt.Println("addr:", hex.EncodeToString(addr))
-	fmt.Println("message:", hex.EncodeToString(message))
+	if r.debug {
+		clog.Info("❕存储数据到安全芯片❕",
+			clog.String("username", hex.EncodeToString(username)),
+			clog.String("addr", hex.EncodeToString(addr)),
+			clog.String("message", hex.EncodeToString(message)),
+		)
+	}
 
 	// 构建APDU命令
 	command := []byte{CLA, INS_STORE_DATA, 0x00, 0x00, byte(len(fullData))}
@@ -57,6 +61,13 @@ func (r *CardReader) StoreData(username []byte, addr []byte, message []byte) (by
 	recordIndex := data[0]
 	recordCount := data[1]
 
+	if r.debug {
+		clog.Info("❕存储数据成功❕",
+			clog.Int("记录索引", int(recordIndex)),
+			clog.Int("记录总数", int(recordCount)),
+		)
+	}
+
 	return recordIndex, recordCount, nil
 }
 
@@ -79,10 +90,13 @@ func (r *CardReader) ReadData(username []byte, addr []byte, signature []byte) ([
 	fullData = append(fullData, addr...)
 	fullData = append(fullData, signature...)
 
-	fmt.Println("❕读取数据从安全芯片❕")
-	fmt.Println("username:", hex.EncodeToString(username))
-	fmt.Println("addr:", hex.EncodeToString(addr))
-	fmt.Println("signature:", hex.EncodeToString(signature))
+	if r.debug {
+		clog.Info("❕读取数据从安全芯片❕",
+			clog.String("username", hex.EncodeToString(username)),
+			clog.String("addr", hex.EncodeToString(addr)),
+			clog.String("signature", hex.EncodeToString(signature)),
+		)
+	}
 
 	// 构建APDU命令
 	command := []byte{CLA, INS_READ_DATA, 0x00, 0x00, byte(len(fullData))}
@@ -103,8 +117,10 @@ func (r *CardReader) ReadData(username []byte, addr []byte, signature []byte) ([
 		return nil, fmt.Errorf("读取数据返回错误状态码: 0x%04X", sw)
 	}
 
-	fmt.Println("❕读取数据成功❕")
-	fmt.Println("数据:", hex.EncodeToString(data))
+	if r.debug {
+		clog.Info("❕读取数据成功❕")
+		clog.Infof("数据: %s", hex.EncodeToString(data))
+	}
 
 	return data, nil
 }
@@ -127,6 +143,14 @@ func (r *CardReader) DeleteData(username []byte, addr []byte, signature []byte) 
 	fullData = append(fullData, username...)
 	fullData = append(fullData, addr...)
 	fullData = append(fullData, signature...)
+
+	if r.debug {
+		clog.Info("❕删除数据从安全芯片❕",
+			clog.String("username", hex.EncodeToString(username)),
+			clog.String("addr", hex.EncodeToString(addr)),
+			clog.String("signature", hex.EncodeToString(signature)),
+		)
+	}
 
 	// 构建APDU命令
 	command := []byte{CLA, INS_DELETE_DATA, 0x00, 0x00, byte(len(fullData))}
@@ -155,5 +179,61 @@ func (r *CardReader) DeleteData(username []byte, addr []byte, signature []byte) 
 	recordIndex := data[0]
 	remainingCount := data[1]
 
+	if r.debug {
+		clog.Info("❕删除数据成功❕",
+			clog.Int("记录索引", int(recordIndex)),
+			clog.Int("剩余记录数", int(remainingCount)))
+	}
+
 	return recordIndex, remainingCount, nil
+}
+
+// GetCPLC 获取CPLC数据
+func (r *CardReader) GetCPLC() ([]byte, error) {
+	if r.cplcData != nil {
+		return r.cplcData, nil
+	}
+
+	// 如果缓存中没有，尝试重新获取
+	if r.debug {
+		clog.Debug("CPLC数据未缓存，尝试获取")
+	}
+
+	data, sw, err := r.TransmitAPDU(GET_CPLC_APDU)
+	if err != nil {
+		return nil, fmt.Errorf("获取CPLC数据失败: %v", err)
+	}
+
+	if sw != SW_SUCCESS {
+		return nil, fmt.Errorf("获取CPLC数据返回错误状态码: 0x%04X", sw)
+	}
+
+	// 验证CPLC数据格式: 期望格式为 [9F7F + 长度字节 + CPLC数据]
+	if len(data) < 3 {
+		return nil, fmt.Errorf("CPLC数据长度不足")
+	}
+
+	// 验证标签是否为 9F7F (两字节)
+	if data[0] != 0x9F || data[1] != 0x7F {
+		return nil, fmt.Errorf("CPLC数据标签错误: 期望 9F7F, 实际 %02X%02X", data[0], data[1])
+	}
+
+	// 读取长度字节
+	length := int(data[2])
+
+	// 验证数据长度是否一致
+	if len(data) != 3+length {
+		return nil, fmt.Errorf("CPLC数据长度不匹配: 标记长度 %d, 实际数据长度 %d", length, len(data)-3)
+	}
+
+	// 提取CPLC数据
+	cplcData := data[3 : 3+length]
+
+	// 更新缓存
+	r.cplcData = cplcData
+	clog.Debug("获取CPLC数据成功",
+		clog.String("CPLC标签", "9F7F"),
+		clog.Int("CPLC长度", length),
+		clog.String("CPLC数据", hex.EncodeToString(cplcData)))
+	return cplcData, nil
 }
