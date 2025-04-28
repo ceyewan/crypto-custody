@@ -109,7 +109,7 @@ func toString(value interface{}) string {
 // 构建密钥生成命令的参数
 func buildKeygenArgs(cfg *config.Config, t, n, i int, output string) []string {
 	return []string{
-		// "--address", cfg.ManagerAddr,
+		"--address", cfg.ManagerAddr,
 		"--threshold", toString(t),
 		"--number-of-parties", toString(n),
 		"--index", toString(i),
@@ -120,7 +120,7 @@ func buildKeygenArgs(cfg *config.Config, t, n, i int, output string) []string {
 // 构建签名命令的参数
 func buildSigningArgs(cfg *config.Config, parties, data, localShare string) []string {
 	return []string{
-		// "--address", cfg.ManagerAddr,
+		"--address", cfg.ManagerAddr,
 		"--parties", parties,
 		"--data-to-sign", data,
 		"--local-share", localShare,
