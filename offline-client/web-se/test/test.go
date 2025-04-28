@@ -22,7 +22,7 @@ const (
 	cplcAPIEndpoint    = serverBaseURL + "/api/v1/mpc/cplc"
 	deleteAPIEndpoint  = serverBaseURL + "/api/v1/mpc/delete"
 	privateKeyFilePath = "ec_private_key.pem"
-	keygenThreshold    = 2
+	keygenThreshold    = 1
 	totalParticipants  = 3
 )
 
@@ -280,7 +280,7 @@ func runKeygenTest() {
 	// 使用不同用户名进行密钥生成
 	for i := 1; i <= totalParticipants; i++ {
 		username := fmt.Sprintf("test_user_%d", i)
-		filename := fmt.Sprintf("keygen_data_%d", i)
+		filename := fmt.Sprintf("keygen_data_%d.json", i)
 		fmt.Printf("\n=== 启动参与方 %d 进程 (用户名: %s) ===\n", i, username)
 		wg.Add(1)
 		go func(idx int, uname, fname string) {
@@ -340,14 +340,14 @@ func runSignTest() {
 	fmt.Println("✅ 私钥加载成功")
 
 	// 准备测试数据
-	testData := fmt.Sprintf("这是一条测试消息，时间戳: %d", time.Now().Unix())
+	testData := "hello"
 	fmt.Printf("测试数据: %s\n", testData)
 
 	// 签名请求处理
 	var signWg sync.WaitGroup
 
 	// 只使用参与方1和2
-	for i := 1; i <= keygenThreshold; i++ {
+	for i := 1; i <= 2; i++ {
 		keygenFile := fmt.Sprintf("data/keygen_result_%d.json", i)
 		if _, err := os.Stat(keygenFile); err != nil {
 			fmt.Printf("❌ 找不到密钥生成结果文件: %s\n", keygenFile)
