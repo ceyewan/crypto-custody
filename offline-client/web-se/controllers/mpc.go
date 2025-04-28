@@ -47,6 +47,25 @@ func Init() error {
 	return nil
 }
 
+// Shutdown 关闭所有控制器相关资源
+// 包括安全芯片服务在内的所有资源都会被正确释放
+func Shutdown() {
+	clog.Info("控制器资源清理开始")
+
+	// 关闭安全芯片服务
+	if securityService != nil {
+		clog.Info("关闭安全芯片服务")
+		securityService.Close()
+		securityService = nil
+	}
+
+	// 清理其他资源
+	mpcService = nil
+	cfg = nil
+
+	clog.Info("控制器资源清理完成")
+}
+
 // KeyGeneration 处理密钥生成请求
 func KeyGeneration(c *gin.Context) {
 	// 确保服务已初始化

@@ -121,7 +121,7 @@ func buildKeygenArgs(cfg *config.Config, t, n, i int, output string) []string {
 func buildSigningArgs(cfg *config.Config, parties, data, localShare string) []string {
 	return []string{
 		// "--address", cfg.ManagerAddr,
-		"-parties", parties,
+		"--parties", parties,
 		"--data-to-sign", data,
 		"--local-share", localShare,
 	}
