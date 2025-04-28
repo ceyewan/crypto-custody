@@ -235,6 +235,9 @@ func (s *MPCService) SignMessage(ctx context.Context, parties, data, filename, u
 		return "", fmt.Errorf("签名失败: %w", err)
 	}
 
+	// 将签名转换为以太坊格式
+	signResult, _ = utils.ConvertToEthSignature(signResult)
+
 	// 格式化签名结果
 	signResult = strings.TrimSpace(signResult)
 	if !strings.HasPrefix(signResult, "0x") {
