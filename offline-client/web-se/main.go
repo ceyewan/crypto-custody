@@ -40,13 +40,6 @@ func main() {
 		clog.String("log_dir", cfg.LogDir),
 	)
 
-	// 初始化控制器
-	if err := controllers.Init(); err != nil {
-		clog.Fatal("控制器初始化失败", clog.String("error", err.Error()))
-	}
-	// 注册退出时清理资源的函数
-	defer controllers.Shutdown()
-
 	// 设置Gin模式
 	if cfg.Debug {
 		gin.SetMode(gin.DebugMode)
@@ -99,6 +92,9 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 	clog.Info("接收到关闭信号，开始优雅退出...")
+
+	controllers.Shutdown() // 关闭所有控制器相关资源
+	clog.Info("所有控制器资源已清理")
 
 	// 设置5秒超时关闭服务器
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
