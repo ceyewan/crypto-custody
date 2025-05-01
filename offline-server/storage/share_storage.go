@@ -11,7 +11,7 @@ import (
 	"offline-server/storage/model"
 )
 
-// ShareStorage 提供对用户密钥分享的存储和访问
+// ShareStorage 提供对用户密钥分片的存储和访问
 type ShareStorage struct {
 	mu sync.RWMutex // 使用读写锁提高并发效率
 }
@@ -22,6 +22,7 @@ var (
 )
 
 // GetShareStorage 返回 ShareStorage 的单例实例
+// 通过单例模式确保整个应用程序中只有一个存储实例
 func GetShareStorage() IShareStorage {
 	shareOnce.Do(func() {
 		shareInstance = &ShareStorage{}
@@ -29,9 +30,18 @@ func GetShareStorage() IShareStorage {
 	return shareInstance
 }
 
-// SaveUserShare 保存用户密钥分享
-func (s *ShareStorage) SaveUserShare(userName, sessionKey, shareJSON string) error {
-	if userName == "" || sessionKey == "" {
+// CreateEthereumKeyShard 创建以太坊私钥分片记录
+// 参数：
+//   - username: 用户名，标识私钥分片的所有者
+//   - address: 以太坊地址，标识私钥对应的账户
+//   - pcic: 安全芯片标识，用于标识存储加密密钥的安全芯片
+//   - privateShard: 加密的私钥分片，Base64编码
+//   - shardIndex: 分片索引，表示这是第几个私钥分片
+//
+// 返回：
+//   - 如果创建失败则返回错误信息
+func (s *ShareStorage) CreateEthereumKeyShard(username, address, pcic, privateShard string, shardIndex int) error {
+	if username == "" || address == "" || pcic == "" || privateShard == "" || shardIndex < 0 {
 		return ErrInvalidParameter
 	}
 
@@ -43,68 +53,47 @@ func (s *ShareStorage) SaveUserShare(userName, sessionKey, shareJSON string) err
 		return ErrDatabaseNotInitialized
 	}
 
-	// 使用 GORM 的 Upsert 操作
-	userShare := model.UserShare{
-		UserName:   userName,
-		SessionKey: sessionKey,
-		ShareJSON:  shareJSON,
-	}
-
-	// 查询是否存在记录
+	// 检查是否已存在相同用户名、地址和索引的分片
 	var count int64
-	if err := database.Model(&model.UserShare{}).Where("user_name = ? AND session_key = ?", userName, sessionKey).Count(&count).Error; err != nil {
-		log.Printf("查询用户分享失败: %v", err)
-		return err
+	if err := database.Model(&model.EthereumKeyShard{}).
+		Where("username = ? AND address = ? AND index = ?", username, address, shardIndex).
+		Count(&count).Error; err != nil {
+		log.Printf("查询以太坊私钥分片失败: %v", err)
+		return ErrOperationFailed
 	}
 
-	// 根据是否存在记录选择创建或更新
 	if count > 0 {
-		// 更新已有记录
-		result := database.Model(&model.UserShare{}).Where("user_name = ? AND session_key = ?", userName, sessionKey).Update("share_json", shareJSON)
-		if result.Error != nil {
-			log.Printf("更新用户分享失败: %v", result.Error)
-			return result.Error
-		}
-	} else {
-		// 创建新记录
-		if err := database.Create(&userShare).Error; err != nil {
-			log.Printf("创建用户分享失败: %v", err)
-			return err
-		}
+		log.Printf("已存在用户 %s 的地址 %s 索引为 %d 的分片", username, address, shardIndex)
+		return ErrRecordNotFound
+	}
+
+	// 创建新记录
+	keyShard := model.EthereumKeyShard{
+		Username:     username,
+		Address:      address,
+		ShardIndex:   shardIndex,
+		PCIC:         pcic,
+		PrivateShard: privateShard,
+	}
+
+	if err := database.Create(&keyShard).Error; err != nil {
+		log.Printf("创建以太坊私钥分片失败: %v", err)
+		return ErrOperationFailed
 	}
 
 	return nil
 }
 
-// GetUserShare 获取指定用户和密钥ID的分享数据
-func (s *ShareStorage) GetUserShare(userName, sessionKey string) (string, error) {
-	if userName == "" || sessionKey == "" {
-		return "", ErrInvalidParameter
-	}
-
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	database := db.GetDB()
-	if database == nil {
-		return "", ErrDatabaseNotInitialized
-	}
-
-	var userShare model.UserShare
-	if err := database.Where("user_name = ? AND session_key = ?", userName, sessionKey).First(&userShare).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return "", ErrSessionNotFound
-		}
-		log.Printf("获取用户分享失败: %v", err)
-		return "", err
-	}
-
-	return userShare.ShareJSON, nil
-}
-
-// GetUserShares 获取指定用户的所有密钥分享数据
-func (s *ShareStorage) GetUserShares(userName string) (map[string]string, error) {
-	if userName == "" {
+// GetEthereumKeyShard 根据用户名和以太坊地址获取密钥分片
+// 参数：
+//   - username: 用户名
+//   - address: 以太坊地址
+//
+// 返回：
+//   - 以太坊私钥分片记录指针
+//   - 如果找不到记录或查询失败则返回错误信息
+func (s *ShareStorage) GetEthereumKeyShard(username, address string) (*model.EthereumKeyShard, error) {
+	if username == "" || address == "" {
 		return nil, ErrInvalidParameter
 	}
 
@@ -116,43 +105,14 @@ func (s *ShareStorage) GetUserShares(userName string) (map[string]string, error)
 		return nil, ErrDatabaseNotInitialized
 	}
 
-	var userShares []model.UserShare
-	if err := database.Where("user_name = ?", userName).Find(&userShares).Error; err != nil {
-		log.Printf("获取用户分享列表失败: %v", err)
-		return nil, err
+	var keyShard model.EthereumKeyShard
+	if err := database.Where("username = ? AND address = ?", username, address).First(&keyShard).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, ErrRecordNotFound
+		}
+		log.Printf("查找以太坊私钥分片失败: %v", err)
+		return nil, ErrOperationFailed
 	}
 
-	shares := make(map[string]string)
-	for _, share := range userShares {
-		shares[share.SessionKey] = share.ShareJSON
-	}
-
-	return shares, nil
-}
-
-// DeleteUserShare 删除指定用户和密钥ID的分享数据
-func (s *ShareStorage) DeleteUserShare(userName, sessionKey string) error {
-	if userName == "" || sessionKey == "" {
-		return ErrInvalidParameter
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	database := db.GetDB()
-	if database == nil {
-		return ErrDatabaseNotInitialized
-	}
-
-	result := database.Where("user_name = ? AND session_key = ?", userName, sessionKey).Delete(&model.UserShare{})
-	if result.Error != nil {
-		log.Printf("删除用户分享失败: %v", result.Error)
-		return result.Error
-	}
-
-	if result.RowsAffected == 0 {
-		return ErrSessionNotFound
-	}
-
-	return nil
+	return &keyShard, nil
 }

@@ -1,3 +1,4 @@
+// Package db 提供数据库连接和操作的核心功能
 package db
 
 import (
@@ -18,7 +19,11 @@ var (
 	instance *gorm.DB
 )
 
-// Init 初始化数据库连接
+// Init 初始化数据库连接并进行配置
+// 创建数据目录、连接数据库、配置连接池参数、迁移数据模型并确保管理员用户存在
+//
+// 返回：
+//   - 如果初始化过程中发生错误，则返回相应的错误信息
 func Init() error {
 	// 确保数据目录存在
 	if err := os.MkdirAll("data", 0755); err != nil {
@@ -71,6 +76,10 @@ func Init() error {
 }
 
 // autoMigrateModels 自动迁移所有数据库模型
+// 确保数据库表结构与定义的模型结构一致
+//
+// 返回：
+//   - 如果迁移过程中发生错误，则返回相应的错误信息
 func autoMigrateModels() error {
 	if instance == nil {
 		return fmt.Errorf("数据库未初始化")
@@ -78,14 +87,23 @@ func autoMigrateModels() error {
 
 	// 迁移所有模型
 	return instance.AutoMigrate(
-		&model.UserShare{},
+		&model.EthereumKeyShard{},
 		&model.KeyGenSession{},
 		&model.SignSession{},
 		&model.User{},
+		&model.Case{},
+		&model.Se{},
 	)
 }
 
-// AutoMigrate 自动迁移数据库模型
+// AutoMigrate 自动迁移指定的数据库模型
+// 用于在需要添加新模型时调用，不需要重新迁移所有已有模型
+//
+// 参数：
+//   - models: 需要迁移的模型列表
+//
+// 返回：
+//   - 如果迁移过程中发生错误，则返回相应的错误信息
 func AutoMigrate(models ...interface{}) error {
 	if instance == nil {
 		return fmt.Errorf("数据库未初始化")
@@ -94,9 +112,13 @@ func AutoMigrate(models ...interface{}) error {
 }
 
 // GetDB 获取数据库连接实例
+// 如果实例不存在，则自动初始化数据库
+//
+// 返回：
+//   - 数据库连接的GORM实例
 func GetDB() *gorm.DB {
 	if instance == nil {
-		log.Fatal("数据库未初始化，现在正在初始化...")
+		log.Println("数据库未初始化，现在正在初始化...")
 		if err := Init(); err != nil {
 			log.Fatalf("数据库初始化失败: %v", err)
 			return nil
@@ -107,6 +129,10 @@ func GetDB() *gorm.DB {
 }
 
 // ensureAdminUser 确保管理员用户存在
+// 如果不存在则创建默认的管理员用户
+//
+// 返回：
+//   - 如果创建过程中发生错误，则返回相应的错误信息
 func ensureAdminUser() error {
 	if instance == nil {
 		return fmt.Errorf("数据库未初始化")
@@ -134,7 +160,7 @@ func ensureAdminUser() error {
 			Username: "admin",
 			Password: string(hashedPassword),
 			Email:    "admin@example.com",
-			Role:     string(model.Admin),
+			Role:     model.RoleAdmin,
 		}
 
 		if err := instance.Create(&admin).Error; err != nil {
