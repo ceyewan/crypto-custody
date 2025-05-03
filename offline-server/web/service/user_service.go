@@ -52,9 +52,20 @@ func RegisterUser(username, password, email string) (*model.User, error) {
 	return user, nil
 }
 
-// GetUserByID 通过ID获取用户信息
-func GetUserByID(id uint) (*model.User, error) {
-	return userStorage.GetUserByID(id)
+// GetUserByUserName 根据用户名获取用户信息
+func GetUserByUserName(username string) (*model.User, error) {
+	// 输入验证
+	if strings.TrimSpace(username) == "" {
+		return nil, errors.New("用户名不能为空")
+	}
+
+	// 调用存储接口获取用户信息
+	user, err := userStorage.GetUserByUsername(username)
+	if err != nil {
+		return nil, errors.New("用户不存在")
+	}
+
+	return user, nil
 }
 
 // GetAllUsers 获取所有用户列表
@@ -72,7 +83,7 @@ func UpdateUserRole(userName, role string) error {
 
 	// 验证角色是否有效（使用 model.Role 类型）
 	isValid := false
-	validRoles := []model.Role{model.Admin, model.Coordinator, model.Participant, model.Guest}
+	validRoles := []model.Role{model.RoleAdmin, model.RoleCoordinator, model.RoleParticipant, model.RoleGuest}
 	for _, validRole := range validRoles {
 		if role == string(validRole) {
 			isValid = true
@@ -85,7 +96,7 @@ func UpdateUserRole(userName, role string) error {
 	}
 
 	// 防止用户降级自己的admin权限
-	if user.Role == string(model.Admin) && role != string(model.Admin) {
+	if user.Role == model.RoleAdmin && role != string(model.RoleAdmin) {
 		// 检查是否至少还有一个管理员
 		users, err := userStorage.GetAllUsers()
 		if err != nil {
@@ -94,7 +105,7 @@ func UpdateUserRole(userName, role string) error {
 
 		adminCount := 0
 		for _, u := range users {
-			if u.Role == string(model.Admin) && u.Username != userName {
+			if u.Role == model.RoleAdmin && u.Username != userName {
 				adminCount++
 			}
 		}
@@ -105,5 +116,5 @@ func UpdateUserRole(userName, role string) error {
 	}
 
 	// 调用存储接口更新用户角色
-	return userStorage.UpdateUserRole(user.ID, role)
+	return userStorage.UpdateUserRole(userName, role)
 }

@@ -161,3 +161,43 @@ func (s *SeStorage) GetAllSe() ([]model.Se, error) {
 
 	return ses, nil
 }
+
+// GetRandomSeIds 随机选取指定数量的安全芯片ID
+// 参数：
+//   - count: 需要随机获取的安全芯片ID数量
+//
+// 返回：
+//   - 随机选取的安全芯片SeID数组
+//   - 如果获取失败则返回错误信息
+func (s *SeStorage) GetRandomSeIds(count int) ([]string, error) {
+	if count <= 0 {
+		return nil, ErrInvalidParameter
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	database := db.GetDB()
+	if database == nil {
+		return nil, ErrDatabaseNotInitialized
+	}
+
+	var ses []model.Se
+	// 使用随机排序来确保获取随机的安全芯片记录
+	if err := database.Order("RANDOM()").Limit(count).Find(&ses).Error; err != nil {
+		log.Printf("随机获取安全芯片记录失败: %v", err)
+		return nil, ErrOperationFailed
+	}
+
+	// 如果获取到的记录数少于请求数，记录警告日志
+	if len(ses) < count {
+		log.Printf("警告: 请求%d个安全芯片ID, 但仅找到%d个", count, len(ses))
+	}
+
+	seIds := make([]string, len(ses))
+	for i, se := range ses {
+		seIds[i] = se.SeId
+	}
+
+	return seIds, nil
+}

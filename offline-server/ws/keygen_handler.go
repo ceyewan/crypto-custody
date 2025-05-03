@@ -33,7 +33,7 @@ func NewKeyGenHandler(shareStorage storage.IShareStorage, seStorage storage.ISeS
 func (h *KeyGenHandler) ProcessMessage(msgType MessageType, rawMessage []byte, sender *Client) error {
 	clog.Debug("处理密钥生成消息",
 		clog.String("msg_type", string(msgType)),
-		clog.String("username", sender.Username()),
+		clog.String("username", sender.GetUserName()),
 		clog.Int("msg_size", len(rawMessage)))
 
 	// 根据消息类型分发处理
@@ -43,7 +43,7 @@ func (h *KeyGenHandler) ProcessMessage(msgType MessageType, rawMessage []byte, s
 		if err := json.Unmarshal(rawMessage, &msg); err != nil {
 			clog.Error("解析密钥生成请求消息失败",
 				clog.Err(err),
-				clog.String("username", sender.Username()))
+				clog.String("username", sender.GetUserName()))
 			return fmt.Errorf("解析密钥生成请求消息失败: %w", err)
 		}
 		return h.handleKeyGenRequest(msg, sender)
@@ -53,7 +53,7 @@ func (h *KeyGenHandler) ProcessMessage(msgType MessageType, rawMessage []byte, s
 		if err := json.Unmarshal(rawMessage, &msg); err != nil {
 			clog.Error("解析密钥生成响应消息失败",
 				clog.Err(err),
-				clog.String("username", sender.Username()))
+				clog.String("username", sender.GetUserName()))
 			return fmt.Errorf("解析密钥生成响应消息失败: %w", err)
 		}
 		return h.handleKeyGenResponse(msg, sender)
@@ -63,7 +63,7 @@ func (h *KeyGenHandler) ProcessMessage(msgType MessageType, rawMessage []byte, s
 		if err := json.Unmarshal(rawMessage, &msg); err != nil {
 			clog.Error("解析密钥生成结果消息失败",
 				clog.Err(err),
-				clog.String("username", sender.Username()))
+				clog.String("username", sender.GetUserName()))
 			return fmt.Errorf("解析密钥生成结果消息失败: %w", err)
 		}
 		return h.handleKeyGenResult(msg, sender)
@@ -71,7 +71,7 @@ func (h *KeyGenHandler) ProcessMessage(msgType MessageType, rawMessage []byte, s
 	default:
 		clog.Error("不支持的密钥生成消息类型",
 			clog.String("msg_type", string(msgType)),
-			clog.String("username", sender.Username()))
+			clog.String("username", sender.GetUserName()))
 		return fmt.Errorf("不支持的密钥生成消息类型: %s", msgType)
 	}
 }
@@ -86,7 +86,7 @@ func (h *KeyGenHandler) handleKeyGenRequest(msg KeyGenRequestMessage, sender *Cl
 
 	clog.Info("收到密钥生成请求",
 		clog.String("session_key", sessionKey),
-		clog.String("initiator", sender.Username()),
+		clog.String("initiator", sender.GetUserName()),
 		clog.Int("participants_count", len(participants)))
 
 	clog.Debug("密钥生成请求详情",
@@ -96,7 +96,7 @@ func (h *KeyGenHandler) handleKeyGenRequest(msg KeyGenRequestMessage, sender *Cl
 		clog.Any("participants", participants))
 
 	// 创建密钥生成会话
-	if err := h.sessionManager.CreateKeyGenSession(sessionKey, sender.Username(), threshold, totalParts, participants); err != nil {
+	if err := h.sessionManager.CreateKeyGenSession(sessionKey, sender.GetUserName(), threshold, totalParts, participants); err != nil {
 		clog.Error("创建密钥生成会话失败",
 			clog.Err(err),
 			clog.String("session_key", sessionKey))
@@ -125,7 +125,7 @@ func (h *KeyGenHandler) handleKeyGenRequest(msg KeyGenRequestMessage, sender *Cl
 		inviteMsg := KeyGenInviteMessage{
 			BaseMessage:  BaseMessage{Type: MsgKeyGenInvite},
 			SessionKey:   sessionKey,
-			Coordinator:  sender.Username(),
+			Coordinator:  sender.GetUserName(),
 			Threshold:    threshold,
 			TotalParts:   totalParts,
 			PartIndex:    i + 1,    // 索引从1开始
@@ -169,14 +169,14 @@ func (h *KeyGenHandler) handleKeyGenResponse(msg KeyGenResponseMessage, sender *
 
 	clog.Info("收到密钥生成响应",
 		clog.String("session_key", sessionKey),
-		clog.String("participant", sender.Username()),
+		clog.String("participant", sender.GetUserName()),
 		clog.Int("part_index", partIndex),
 		clog.Bool("accept", accept))
 
 	if !accept {
 		clog.Debug("参与方拒绝原因",
 			clog.String("session_key", sessionKey),
-			clog.String("participant", sender.Username()),
+			clog.String("participant", sender.GetUserName()),
 			clog.String("reason", reason))
 	}
 
@@ -206,7 +206,7 @@ func (h *KeyGenHandler) handleKeyGenResponse(msg KeyGenResponseMessage, sender *
 		session.Responses[partIndex-1] = string(model.ParticipantAccepted)
 		clog.Debug("参与方接受密钥生成邀请",
 			clog.String("session_key", sessionKey),
-			clog.String("participant", sender.Username()),
+			clog.String("participant", sender.GetUserName()),
 			clog.Int("part_index", partIndex))
 
 		// 检查是否所有参与方都已接受，统计 session.Responses 是否全为 Accepted
@@ -271,7 +271,7 @@ func (h *KeyGenHandler) handleKeyGenResponse(msg KeyGenResponseMessage, sender *
 		session.Responses[partIndex-1] = string(model.ParticipantRejected)
 		clog.Info("参与方拒绝密钥生成邀请",
 			clog.String("session_key", sessionKey),
-			clog.String("participant", sender.Username()),
+			clog.String("participant", sender.GetUserName()),
 			clog.Int("part_index", partIndex),
 			clog.String("reason", reason))
 
@@ -279,7 +279,7 @@ func (h *KeyGenHandler) handleKeyGenResponse(msg KeyGenResponseMessage, sender *
 		initiator := session.Initiator
 		rejectMsg := ErrorMessage{
 			BaseMessage: BaseMessage{Type: MsgError},
-			Message:     fmt.Sprintf("参与方 %s 拒绝了密钥生成邀请", sender.Username()),
+			Message:     fmt.Sprintf("参与方 %s 拒绝了密钥生成邀请", sender.GetUserName()),
 			Details:     reason,
 		}
 
@@ -309,7 +309,7 @@ func (h *KeyGenHandler) handleKeyGenResult(msg KeyGenResultMessage, sender *Clie
 	if !success {
 		clog.Error("密钥生成失败",
 			clog.String("session_key", msg.SessionKey),
-			clog.String("participant", sender.Username()),
+			clog.String("participant", sender.GetUserName()),
 			clog.String("message", msg.Message))
 		return fmt.Errorf("密钥生成失败: %s", msg.Message)
 	}
@@ -322,23 +322,23 @@ func (h *KeyGenHandler) handleKeyGenResult(msg KeyGenResultMessage, sender *Clie
 
 	clog.Info("收到密钥生成结果",
 		clog.String("session_key", sessionKey),
-		clog.String("participant", sender.Username()),
+		clog.String("participant", sender.GetUserName()),
 		clog.Int("part_index", partIndex),
 		clog.String("address", address))
 
 	clog.Debug("密钥生成结果详情",
 		clog.String("session_key", sessionKey),
-		clog.String("participant", sender.Username()),
+		clog.String("participant", sender.GetUserName()),
 		clog.Int("part_index", partIndex),
 		clog.String("cpic", cpic),
 		clog.Int("encrypted_shard_length", len(encryptedShard)))
 
 	// 保存私钥分片
-	if err := h.shareStorage.CreateEthereumKeyShard(sender.Username(), address, cpic, encryptedShard, partIndex); err != nil {
+	if err := h.shareStorage.CreateEthereumKeyShard(sender.GetUserName(), address, cpic, encryptedShard, partIndex); err != nil {
 		clog.Error("保存密钥分片失败",
 			clog.Err(err),
 			clog.String("session_key", sessionKey),
-			clog.String("participant", sender.Username()),
+			clog.String("participant", sender.GetUserName()),
 			clog.String("address", address))
 		return fmt.Errorf("保存密钥分片失败: %w", err)
 	}
@@ -350,7 +350,7 @@ func (h *KeyGenHandler) handleKeyGenResult(msg KeyGenResultMessage, sender *Clie
 	session.Responses[partIndex-1] = string(model.ParticipantCompleted)
 	clog.Debug("更新参与方完成状态",
 		clog.String("session_key", sessionKey),
-		clog.String("participant", sender.Username()),
+		clog.String("participant", sender.GetUserName()),
 		clog.Int("part_index", partIndex))
 
 	// 检查是否所有参与方都已完成

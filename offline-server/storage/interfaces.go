@@ -20,7 +20,7 @@ type IUserStorage interface {
 	GetAllUsers() ([]model.User, error)
 
 	// UpdateUserRole 更新用户角色
-	UpdateUserRole(userID string, role string) error
+	UpdateUserRole(username string, role string) error
 }
 
 // IShareStorage 定义以太坊私钥分片存储接口
@@ -46,17 +46,23 @@ type IKeyGenStorage interface {
 	// UpdateStatus 更新密钥生成会话状态
 	UpdateStatus(sessionKey string, status model.SessionStatus) error
 
-	// UpdateResponse 更新参与者对会话的响应状态
-	UpdateResponse(sessionKey, userName string, agreed bool) error
-
-	// UpdateCompleted 更新参与者完成状态
-	UpdateCompleted(sessionKey, userName string, completed bool) error
+	// UpdateParticipantStatus 更新参与者的状态
+	UpdateParticipantStatus(sessionKey string, index int, status model.ParticipantStatus) error
 
 	// UpdateAccountAddr 更新会话关联的账户地址
 	UpdateAccountAddr(sessionKey, accountAddr string) error
 
 	// DeleteSession 删除指定密钥ID的生成会话
 	DeleteSession(sessionKey string) error
+
+	// UpdateChips 更新指定会话的 Chips 字段
+	UpdateChips(sessionKey string, chips []string) error
+
+	// AllKeyGenInvitationsAccepted 检查所有参与者是否接受了邀请
+	AllKeyGenInvitationsAccepted(sessionKey string) bool
+
+	// AllKeyGenPartsCompleted 检查所有参与者是否完成了密钥生成
+	AllKeyGenPartsCompleted(sessionKey string) bool
 }
 
 // ISignStorage 定义签名会话存储接口
@@ -70,17 +76,23 @@ type ISignStorage interface {
 	// UpdateStatus 更新签名会话状态
 	UpdateStatus(sessionKey string, status model.SessionStatus) error
 
-	// UpdateResponse 更新参与者对会话的响应状态
-	UpdateResponse(sessionKey, userName string, agreed bool) error
-
-	// UpdateResult 更新参与者的签名结果
-	UpdateResult(sessionKey, userName, result string) error
+	// UpdateParticipantStatus 更新参与者的状态
+	UpdateParticipantStatus(sessionKey string, index int, status model.ParticipantStatus) error
 
 	// UpdateSignature 更新最终签名结果并将状态标记为已完成
 	UpdateSignature(sessionKey, signature string) error
 
 	// DeleteSession 删除指定密钥ID的签名会话
 	DeleteSession(sessionKey string) error
+
+	// UpdateChips 更新指定会话的 Chips 字段
+	UpdateChips(sessionKey string, chips []string) error
+
+	// AllKeyGenInvitationsAccepted 检查所有参与者是否接受了邀请
+	AllKeyGenInvitationsAccepted(sessionKey string) bool
+
+	// AllKeyGenPartsCompleted 检查所有参与者是否完成了密钥生成
+	AllKeyGenPartsCompleted(sessionKey string) bool
 }
 
 // ICaseStorage 定义案件存储接口
@@ -113,36 +125,6 @@ type ICaseStorage interface {
 	DeleteCase(id uint) error
 }
 
-// IKeyShardStorage 定义以太坊密钥分片存储接口
-type IKeyShardStorage interface {
-	// SaveKeyShard 保存以太坊密钥分片
-	SaveKeyShard(username, address, pcic string, shardIndex int, privateShard string) (*model.EthereumKeyShard, error)
-
-	// GetKeyShardByID 根据ID获取密钥分片
-	GetKeyShardByID(id uint) (*model.EthereumKeyShard, error)
-
-	// GetKeyShardByAddress 根据以太坊地址获取所有相关分片
-	GetKeyShardByAddress(address string) ([]model.EthereumKeyShard, error)
-
-	// GetKeyShardByUsername 根据用户名获取所有相关分片
-	GetKeyShardByUsername(username string) ([]model.EthereumKeyShard, error)
-
-	// GetKeyShardByAddressAndUsername 根据地址和用户名获取特定分片
-	GetKeyShardByAddressAndUsername(address, username string) (*model.EthereumKeyShard, error)
-
-	// GetKeyShardByAddressAndIndex 根据地址和分片索引获取特定分片
-	GetKeyShardByAddressAndIndex(address string, index int) (*model.EthereumKeyShard, error)
-
-	// UpdateKeyShard 更新密钥分片
-	UpdateKeyShard(id uint, updates map[string]interface{}) error
-
-	// DeleteKeyShard 删除密钥分片
-	DeleteKeyShard(id uint) error
-
-	// DeleteKeyShardByAddress 删除特定地址的所有分片
-	DeleteKeyShardByAddress(address string) error
-}
-
 // ISeStorage 定义安全芯片存储接口
 type ISeStorage interface {
 	// CreateSe 创建新的安全芯片记录
@@ -156,4 +138,7 @@ type ISeStorage interface {
 
 	// GetAllSe 获取所有安全芯片记录
 	GetAllSe() ([]model.Se, error)
+
+	// GetRandomSeIds 随机选取指定数量的安全芯片ID
+	GetRandomSeIds(n int) ([]string, error)
 }
