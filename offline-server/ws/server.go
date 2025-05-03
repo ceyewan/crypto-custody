@@ -3,10 +3,11 @@ package ws
 import (
 	"context"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"time"
+
+	"offline-server/clog"
 
 	"github.com/gorilla/websocket"
 )
@@ -48,6 +49,9 @@ func NewServer(addr string) *Server {
 		hub:     hub,
 	}
 
+	clog.Debug("创建WebSocket服务器",
+		clog.String("addr", addr))
+
 	return server
 }
 
@@ -73,12 +77,16 @@ func (s *Server) Start() error {
 	}
 
 	s.started = true
-	log.Printf("WebSocket服务器已启动，监听地址: %s", s.addr)
+	clog.Info("WebSocket服务器已启动",
+		clog.String("addr", s.addr))
+	clog.Debug("WebSocket服务器启动详情",
+		clog.String("addr", s.addr),
+		clog.String("handler_path", "/ws"))
 
 	// 在新协程中启动服务器
 	go func() {
 		if err := s.server.Serve(listener); err != nil && err != http.ErrServerClosed {
-			log.Printf("HTTP服务器错误: %v", err)
+			clog.Error("HTTP服务器错误", clog.Err(err))
 		}
 	}()
 
@@ -101,7 +109,10 @@ func (s *Server) Stop() error {
 	}
 
 	s.started = false
-	log.Printf("WebSocket服务器已停止")
+	clog.Info("WebSocket服务器已停止")
+	clog.Debug("WebSocket服务器关闭详情",
+		clog.String("addr", s.addr),
+		clog.Duration("timeout", 5*time.Second))
 
 	return nil
 }
@@ -111,7 +122,8 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	// 升级HTTP连接为WebSocket连接
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Printf("升级WebSocket连接失败: %v", err)
+		clog.Error("升级WebSocket连接失败", clog.Err(err),
+			clog.String("remote_addr", r.RemoteAddr))
 		return
 	}
 
@@ -121,5 +133,10 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	// 启动客户端
 	client.Start()
 
-	log.Printf("新的WebSocket连接已建立: %s", r.RemoteAddr)
+	clog.Info("新的WebSocket连接已建立",
+		clog.String("remote_addr", r.RemoteAddr))
+	clog.Debug("新的WebSocket连接详情",
+		clog.String("remote_addr", r.RemoteAddr),
+		clog.String("user_agent", r.UserAgent()),
+		clog.String("protocol", r.Proto))
 }

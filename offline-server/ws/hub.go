@@ -2,8 +2,9 @@ package ws
 
 import (
 	"fmt"
-	"log"
 	"sync"
+
+	"offline-server/clog"
 )
 
 // Hub 客户端集线器
@@ -33,14 +34,22 @@ func (h *Hub) RegisterClient(username string, client *Client) {
 	// 检查是否有同名客户端已存在
 	if oldClient, exists := h.clients[username]; exists {
 		// 如果存在，先关闭旧连接
-		log.Printf("用户 %s 的连接已存在，关闭旧连接", username)
+		clog.Info("用户连接已存在，关闭旧连接",
+			clog.String("username", username),
+			clog.String("role", string(oldClient.Role())))
 		oldClient.Close()
 	}
 
 	// 添加客户端
 	h.clients[username] = client
 
-	log.Printf("注册客户端: %s, 角色: %s", username, client.Role())
+	clog.Info("注册客户端",
+		clog.String("username", username),
+		clog.String("role", string(client.Role())))
+	clog.Debug("客户端注册详情",
+		clog.String("username", username),
+		clog.String("role", string(client.Role())),
+		clog.Int("total_clients", len(h.clients)))
 }
 
 // UnregisterClient 注销客户端
@@ -51,7 +60,11 @@ func (h *Hub) UnregisterClient(username string) {
 	// 删除客户端
 	delete(h.clients, username)
 
-	log.Printf("注销客户端: %s", username)
+	clog.Info("注销客户端",
+		clog.String("username", username))
+	clog.Debug("客户端注销详情",
+		clog.String("username", username),
+		clog.Int("remaining_clients", len(h.clients)))
 }
 
 // GetClient 获取客户端
@@ -91,9 +104,15 @@ func (h *Hub) SendMessageToUser(username string, msg Message) error {
 // BroadcastMessage 广播消息给所有客户端
 func (h *Hub) BroadcastMessage(msg Message) {
 	clients := h.GetAllClients()
+	clog.Debug("开始广播消息",
+		clog.String("msg_type", string(msg.GetType())),
+		clog.Int("client_count", len(clients)))
+
 	for username, client := range clients {
 		if err := client.SendMessage(msg); err != nil {
-			log.Printf("向用户 %s 广播消息失败: %v", username, err)
+			clog.Error("向用户广播消息失败",
+				clog.String("username", username),
+				clog.Err(err))
 		}
 	}
 }
@@ -101,11 +120,22 @@ func (h *Hub) BroadcastMessage(msg Message) {
 // BroadcastMessageToRole 广播消息给指定角色的客户端
 func (h *Hub) BroadcastMessageToRole(msg Message, role ClientRole) {
 	clients := h.GetAllClients()
+	targetCount := 0
+
 	for username, client := range clients {
 		if client.Role() == role {
+			targetCount++
 			if err := client.SendMessage(msg); err != nil {
-				log.Printf("向用户 %s 广播消息失败: %v", username, err)
+				clog.Error("向指定角色用户广播消息失败",
+					clog.String("username", username),
+					clog.String("role", string(role)),
+					clog.Err(err))
 			}
 		}
 	}
+
+	clog.Debug("向指定角色广播消息完成",
+		clog.String("role", string(role)),
+		clog.String("msg_type", string(msg.GetType())),
+		clog.Int("target_count", targetCount))
 }

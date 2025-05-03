@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"offline-server/clog"
 	"offline-server/tools"
 	"sync"
 	"time"
@@ -71,6 +71,11 @@ func NewClient(conn *websocket.Conn, hub *Hub, handler *MessageHandler) *Client 
 		writeCancel: writeCancel,
 	}
 
+	clog.Debug("创建了新的客户端",
+		clog.String("remote_addr", conn.RemoteAddr().String()),
+		clog.Int("read_buffer", ReadBufferSize),
+		clog.Int("write_buffer", WriteBufferSize))
+
 	return client
 }
 
@@ -81,7 +86,8 @@ func (c *Client) Start() {
 	go c.readPump()
 	go c.writePump()
 
-	log.Printf("启动客户端处理")
+	clog.Debug("启动客户端处理协程",
+		clog.String("remote_addr", c.conn.RemoteAddr().String()))
 }
 
 // Username 获取客户端用户名
@@ -122,11 +128,19 @@ func (c *Client) readPump() {
 		return nil
 	})
 
+	clog.Debug("启动读取消息循环",
+		clog.String("username", c.username),
+		clog.String("remote_addr", c.conn.RemoteAddr().String()),
+		clog.Int("max_message_size", MaxMessageSize),
+		clog.Duration("pong_wait", PongWait))
+
 	// 持续读取消息
 	for {
 		select {
 		case <-c.readCtx.Done():
 			// 上下文已取消，退出协程
+			clog.Debug("读取消息循环退出 - 上下文取消",
+				clog.String("username", c.username))
 			return
 		default:
 			// 读取消息
@@ -135,17 +149,37 @@ func (c *Client) readPump() {
 				if websocket.IsUnexpectedCloseError(err,
 					websocket.CloseGoingAway,
 					websocket.CloseAbnormalClosure) {
-					log.Printf("读取错误: %v", err)
+					clog.Error("WebSocket读取错误",
+						clog.Err(err),
+						clog.String("username", c.username))
+				} else {
+					clog.Debug("WebSocket连接关闭",
+						clog.String("username", c.username),
+						clog.String("reason", err.Error()))
 				}
 				return
 			}
 
+			// 解析消息类型用于日志记录
+			var baseMsg BaseMessage
+			if err := json.Unmarshal(message, &baseMsg); err == nil {
+				clog.Debug("收到WebSocket消息",
+					clog.String("username", c.username),
+					clog.String("msg_type", string(baseMsg.Type)),
+					clog.Int("msg_size", len(message)))
+			}
+
 			// 处理收到的消息
 			if err := c.handleMessage(message); err != nil {
-				log.Printf("处理客户端消息失败: %v", err)
+				clog.Error("处理客户端消息失败",
+					clog.Err(err),
+					clog.String("username", c.username))
+
 				// 发送错误响应
 				if errMsg := c.SendErrorMessage(err.Error(), ""); errMsg != nil {
-					log.Printf("发送错误消息失败: %v", errMsg)
+					clog.Error("发送错误消息失败",
+						clog.Err(errMsg),
+						clog.String("username", c.username))
 				}
 			}
 		}
@@ -159,39 +193,72 @@ func (c *Client) writePump() {
 	ticker := time.NewTicker(PingPeriod)
 	defer ticker.Stop()
 
+	clog.Debug("启动写入消息循环",
+		clog.String("username", c.username),
+		clog.String("remote_addr", c.conn.RemoteAddr().String()),
+		clog.Duration("ping_period", PingPeriod),
+		clog.Duration("write_wait", WriteWait))
+
 	for {
 		select {
 		case <-c.writeCtx.Done():
 			// 上下文已取消，退出协程
+			clog.Debug("写入消息循环退出 - 上下文取消",
+				clog.String("username", c.username))
 			return
 		case message, ok := <-c.writeChan:
 			// 设置写入截止时间
 			c.conn.SetWriteDeadline(time.Now().Add(WriteWait))
 			if !ok {
 				// 通道已关闭
+				clog.Debug("写入通道已关闭，发送关闭消息",
+					clog.String("username", c.username))
 				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
 
+			// 解析消息类型用于日志记录
+			var baseMsg BaseMessage
+			if err := json.Unmarshal(message, &baseMsg); err == nil {
+				clog.Debug("发送WebSocket消息",
+					clog.String("username", c.username),
+					clog.String("msg_type", string(baseMsg.Type)),
+					clog.Int("msg_size", len(message)))
+			}
+
 			w, err := c.conn.NextWriter(websocket.TextMessage)
 			if err != nil {
+				clog.Error("获取WebSocket消息写入器失败",
+					clog.Err(err),
+					clog.String("username", c.username))
 				return
 			}
 			w.Write(message)
 
 			// 添加队列中的所有消息
 			n := len(c.writeChan)
+			if n > 0 {
+				clog.Debug("写入通道有额外待发送消息",
+					clog.String("username", c.username),
+					clog.Int("additional_messages", n))
+			}
 			for i := 0; i < n; i++ {
 				w.Write(<-c.writeChan)
 			}
 
 			if err := w.Close(); err != nil {
+				clog.Error("关闭WebSocket消息写入器失败",
+					clog.Err(err),
+					clog.String("username", c.username))
 				return
 			}
 		case <-ticker.C:
 			// 发送ping消息
 			c.conn.SetWriteDeadline(time.Now().Add(WriteWait))
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				clog.Debug("发送ping消息失败",
+					clog.Err(err),
+					clog.String("username", c.username))
 				return
 			}
 		}
@@ -214,16 +281,48 @@ func (c *Client) handleMessage(message []byte) error {
 		if err := json.Unmarshal(message, &registerMsg); err != nil {
 			return fmt.Errorf("解析注册消息失败: %w", err)
 		}
+
+		clog.Debug("处理注册消息",
+			clog.String("username", registerMsg.Username),
+			clog.String("role", string(registerMsg.Role)))
+
 		return c.handleRegisterMessage(registerMsg)
 
-	default:
+	// 密钥生成相关消息
+	case MsgKeyGenRequest, MsgKeyGenResponse, MsgKeyGenResult:
 		// 非注册消息 - 检查客户端是否已注册
 		if c.username == "" {
 			return fmt.Errorf("客户端尚未注册，请先发送注册消息")
 		}
 
-		// 交由消息处理器处理其他类型消息
-		return c.handler.ProcessMessage(baseMsg.Type, message, c)
+		clog.Debug("转发密钥生成消息到处理器",
+			clog.String("username", c.username),
+			clog.String("msg_type", string(baseMsg.Type)))
+
+		return c.handler.keygenHandler.ProcessMessage(baseMsg.Type, message, c)
+
+	// 签名相关消息
+	case MsgSignRequest, MsgSignResponse, MsgSignResult:
+		// 非注册消息 - 检查客户端是否已注册
+		if c.username == "" {
+			return fmt.Errorf("客户端尚未注册，请先发送注册消息")
+		}
+
+		clog.Debug("转发签名消息到处理器",
+			clog.String("username", c.username),
+			clog.String("msg_type", string(baseMsg.Type)))
+
+		return c.handler.signHandler.ProcessMessage(baseMsg.Type, message, c)
+
+	default:
+		if c.username == "" {
+			return fmt.Errorf("客户端尚未注册，请先发送注册消息")
+		}
+
+		clog.Error("不支持的消息类型",
+			clog.String("msg_type", string(baseMsg.Type)),
+			clog.String("username", c.username))
+		return fmt.Errorf("不支持的消息类型: %s", baseMsg.Type)
 	}
 }
 
@@ -232,14 +331,23 @@ func (c *Client) handleRegisterMessage(msg RegisterMessage) error {
 	// 验证Token
 	username, role, err := tools.ValidateToken(msg.Token)
 	if err != nil {
+		clog.Error("验证Token失败",
+			clog.Err(err),
+			clog.String("claimed_username", msg.Username))
 		return fmt.Errorf("验证Token失败: %w", err)
 	}
 
 	// 验证Token中的信息与消息中的信息是否一致
 	if username != msg.Username {
+		clog.Error("Token用户名不匹配",
+			clog.String("token_username", username),
+			clog.String("msg_username", msg.Username))
 		return fmt.Errorf("token中的用户名与消息中的用户名不匹配")
 	}
 	if ClientRole(role) != msg.Role {
+		clog.Error("Token角色不匹配",
+			clog.String("token_role", role),
+			clog.String("msg_role", string(msg.Role)))
 		return fmt.Errorf("token中的角色与消息中的角色不匹配")
 	}
 
@@ -249,6 +357,11 @@ func (c *Client) handleRegisterMessage(msg RegisterMessage) error {
 
 	// 注册到Hub
 	c.hub.RegisterClient(msg.Username, c)
+
+	clog.Info("客户端注册成功",
+		clog.String("username", msg.Username),
+		clog.String("role", string(msg.Role)),
+		clog.String("remote_addr", c.conn.RemoteAddr().String()))
 
 	// 发送确认消息
 	confirmMsg := RegisterCompleteMessage{
@@ -276,11 +389,19 @@ func (c *Client) SendMessage(msg Message) error {
 		return fmt.Errorf("连接已关闭")
 	}
 
+	clog.Debug("准备发送消息",
+		clog.String("username", c.username),
+		clog.String("msg_type", string(msg.GetType())),
+		clog.Int("data_size", len(data)))
+
 	// 发送消息
 	select {
 	case c.writeChan <- data:
 		return nil
 	default:
+		clog.Error("发送消息失败，写入通道已满",
+			clog.String("username", c.username),
+			clog.String("msg_type", string(msg.GetType())))
 		return fmt.Errorf("写入通道已满")
 	}
 }
@@ -292,6 +413,12 @@ func (c *Client) SendErrorMessage(errMsg string, details string) error {
 		Message:     errMsg,
 		Details:     details,
 	}
+
+	clog.Debug("发送错误消息",
+		clog.String("username", c.username),
+		clog.String("error_msg", errMsg),
+		clog.String("details", details))
+
 	return c.SendMessage(msg)
 }
 
@@ -318,6 +445,8 @@ func (c *Client) Close() {
 		// 关闭连接
 		c.conn.Close()
 
-		log.Printf("客户端连接已关闭: %s", c.username)
+		clog.Info("客户端连接已关闭",
+			clog.String("username", c.username),
+			clog.String("remote_addr", c.conn.RemoteAddr().String()))
 	})
 }
