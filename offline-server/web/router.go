@@ -54,10 +54,7 @@ func initKeyGenRouter(r *gin.Engine) {
 	keyGenGroup := r.Group("/keygen")
 	keyGenGroup.Use(KeyAuthMiddleware()) // 使用专门的中间件验证密钥操作权限
 	{
-		// 密钥生成操作
-		keyGenGroup.POST("/create", handler.GenerateKey)          // 发起密钥生成任务
-		keyGenGroup.GET("/session/:id", handler.GetKeyGenSession) // 获取密钥生成会话
-		keyGenGroup.GET("/status/:id", handler.KeyGenStatus)      // 获取密钥生成任务状态
+
 	}
 }
 
@@ -66,14 +63,7 @@ func initSignRouter(r *gin.Engine) {
 	signGroup := r.Group("/sign")
 	signGroup.Use(KeyAuthMiddleware()) // 使用专门的中间件验证密钥操作权限
 	{
-		signGroup.GET("/participants/:addr", handler.GetParticipantsByAccount) // 获取账户参与者
-		// 签名操作
-		signGroup.POST("/create", handler.CreateSignature)    // 创建签名任务
-		signGroup.GET("/session/:id", handler.GetSignSession) // 获取签名会话信息
-		signGroup.GET("/status/:id", handler.SignStatus)      // 获取签名任务状态
 
-		// 根据账户地址查询相关信息
-		signGroup.GET("/account/:addr", handler.GetSignByAccount) // 根据账户地址查询签名会话
 	}
 }
 
@@ -82,8 +72,7 @@ func initShareRouter(r *gin.Engine) {
 	shareGroup := r.Group("/share")
 	shareGroup.Use(AdminAuthMiddleware()) // 需要认证
 	{
-		shareGroup.GET("/:session", handler.GetSessionShares)        // 获取特定会话的密钥分享
-		shareGroup.GET("/account/:addr", handler.GetSharesByAccount) // 通过账户地址获取分享
+
 	}
 }
 

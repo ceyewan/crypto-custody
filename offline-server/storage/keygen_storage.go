@@ -2,6 +2,7 @@
 package storage
 
 import (
+	"fmt"
 	"log"
 	"sync"
 
@@ -71,6 +72,7 @@ func (s *KeyGenStorage) CreateSession(sessionKey, initiator string, threshold, t
 		TotalParts:   totalParts,
 		Participants: model.StringSlice(participants),
 		Responses:    makeWaitingResponses(participants),
+		Chips:        makeDefaultChips(len(participants)),
 		Status:       model.StatusCreated,
 	}
 
@@ -86,9 +88,18 @@ func (s *KeyGenStorage) CreateSession(sessionKey, initiator string, threshold, t
 func makeWaitingResponses(participants []string) model.StringSlice {
 	responses := make(model.StringSlice, len(participants))
 	for i := range responses {
-		responses[i] = string(model.StatusWaitingInviteResponse)
+		responses[i] = string(model.ParticipantInit) // 所有参与者初始状态为等待邀请响应
 	}
 	return responses
+}
+
+// makeDefaultChips 创建一个与参与者列表等长的 Chips 数组，默认值从 "SE000" 开始递增
+func makeDefaultChips(count int) model.StringSlice {
+	chips := make(model.StringSlice, count)
+	for i := 0; i < count; i++ {
+		chips[i] = fmt.Sprintf("SE%03d", i) // 格式化为 "SE000", "SE001", ...
+	}
+	return chips
 }
 
 // GetSession 获取指定密钥ID的生成会话
@@ -186,16 +197,16 @@ func (s *KeyGenStorage) UpdateStatus(sessionKey string, status model.SessionStat
 	return nil
 }
 
-// UpdateResponse 更新参与者对会话的响应状态
+// UpdateParticipantStatus 更新指定会话中某个参与者的状态
 // 参数：
 //   - sessionKey: 会话密钥，用于定位会话
-//   - userName: 参与者用户名
-//   - agreed: 是否同意参与密钥生成
+//   - index: 参与者在数组中的索引
+//   - status: 新的状态（如 accepted、rejected、completed 等）
 //
 // 返回：
 //   - 如果更新失败则返回错误信息
-func (s *KeyGenStorage) UpdateResponse(sessionKey, userName string, agreed bool) error {
-	if sessionKey == "" || userName == "" {
+func (s *KeyGenStorage) UpdateParticipantStatus(sessionKey string, index int, status model.ParticipantStatus) error {
+	if sessionKey == "" || index < 0 || status == "" {
 		return ErrInvalidParameter
 	}
 
@@ -217,109 +228,26 @@ func (s *KeyGenStorage) UpdateResponse(sessionKey, userName string, agreed bool)
 		return ErrOperationFailed
 	}
 
-	// 查找参与者在数组中的索引
-	participantIndex := -1
-	for i, participant := range session.Participants {
-		if participant == userName {
-			participantIndex = i
-			break
-		}
-	}
-
-	// 如果找不到参与者，返回错误
-	if participantIndex == -1 {
-		log.Printf("参与者 %s 不在会话 %s 的参与列表中", userName, sessionKey)
-		return ErrParticipantNotFound
-	}
-
-	// 确保 Responses 数组长度足够
-	if len(session.Responses) <= participantIndex {
-		// 将 Responses 扩展到与 Participants 相同长度
-		newResponses := make(model.StringSlice, len(session.Participants))
-		copy(newResponses, session.Responses)
-		session.Responses = newResponses
-	}
-
-	// 更新响应状态
-	status := model.StatusRejected
-	if agreed {
-		status = model.StatusAccepted
-	}
-	session.Responses[participantIndex] = string(status)
-
-	// 保存更新
-	if err := database.Save(&session).Error; err != nil {
-		log.Printf("更新密钥生成会话响应失败: %v", err)
-		return ErrOperationFailed
-	}
-
-	return nil
-}
-
-// UpdateCompleted 更新参与者完成状态
-// 参数：
-//   - sessionKey: 会话密钥，用于定位会话
-//   - userName: 参与者用户名
-//   - completed: 是否已完成密钥生成过程
-//
-// 返回：
-//   - 如果更新失败则返回错误信息
-func (s *KeyGenStorage) UpdateCompleted(sessionKey, userName string, completed bool) error {
-	if sessionKey == "" || userName == "" {
+	// 验证索引是否有效
+	if index >= len(session.Participants) {
+		log.Printf("更新失败: 索引 %d 超出参与者列表范围 (长度: %d)", index, len(session.Participants))
 		return ErrInvalidParameter
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	database := db.GetDB()
-	if database == nil {
-		return ErrDatabaseNotInitialized
-	}
-
-	// 获取当前会话
-	var session model.KeyGenSession
-	if err := database.Where("session_key = ?", sessionKey).First(&session).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return ErrSessionNotFound
-		}
-		log.Printf("获取密钥生成会话失败: %v", err)
-		return ErrOperationFailed
-	}
-
-	// 查找参与者在数组中的索引
-	participantIndex := -1
-	for i, participant := range session.Participants {
-		if participant == userName {
-			participantIndex = i
-			break
-		}
-	}
-
-	// 如果找不到参与者，返回错误
-	if participantIndex == -1 {
-		log.Printf("参与者 %s 不在会话 %s 的参与列表中", userName, sessionKey)
-		return ErrParticipantNotFound
-	}
-
 	// 确保 Responses 数组长度足够
-	if len(session.Responses) <= participantIndex {
+	if len(session.Responses) <= index {
 		// 将 Responses 扩展到与 Participants 相同长度
 		newResponses := make(model.StringSlice, len(session.Participants))
 		copy(newResponses, session.Responses)
 		session.Responses = newResponses
 	}
 
-	// 更新完成状态
-	status := model.StatusProcessing
-	if completed {
-		status = model.StatusCompleted
-	}
-	session.Responses[participantIndex] = string(status)
+	// 更新状态
+	session.Responses[index] = string(status)
 
 	// 保存更新
 	if err := database.Save(&session).Error; err != nil {
-		log.Printf("更新密钥生成会话完成状态失败: %v", err)
+		log.Printf("更新密钥生成会话参与者状态失败: %v", err)
 		return ErrOperationFailed
 	}
 
@@ -389,4 +317,116 @@ func (s *KeyGenStorage) DeleteSession(sessionKey string) error {
 	}
 
 	return nil
+}
+
+// UpdateChips 更新指定会话的 Chips 字段
+// 参数：
+//   - sessionKey: 会话密钥，用于定位会话
+//   - chips: 新的 Chips 数组
+//
+// 返回：
+//   - 如果更新失败则返回错误信息
+func (s *KeyGenStorage) UpdateChips(sessionKey string, chips []string) error {
+	if sessionKey == "" || len(chips) == 0 {
+		return ErrInvalidParameter
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	database := db.GetDB()
+	if database == nil {
+		return ErrDatabaseNotInitialized
+	}
+
+	// 获取当前会话
+	var session model.KeyGenSession
+	if err := database.Where("session_key = ?", sessionKey).First(&session).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return ErrSessionNotFound
+		}
+		log.Printf("获取密钥生成会话失败: %v", err)
+		return ErrOperationFailed
+	}
+
+	// 验证 Chips 数组长度是否与 Participants 数组长度匹配
+	if len(chips) != len(session.Participants) {
+		log.Printf("更新失败: Chips 数组长度 (%d) 与 Participants 数组长度 (%d) 不匹配", len(chips), len(session.Participants))
+		return ErrInvalidParameter
+	}
+
+	// 更新 Chips 字段
+	session.Chips = model.StringSlice(chips)
+
+	// 保存更新
+	if err := database.Save(&session).Error; err != nil {
+		log.Printf("更新密钥生成会话 Chips 失败: %v", err)
+		return ErrOperationFailed
+	}
+
+	return nil
+}
+
+// AllKeyGenInvitationsAccepted 检查所有参与者是否接受了邀请
+func (s *KeyGenStorage) AllKeyGenInvitationsAccepted(sessionKey string) bool {
+	if sessionKey == "" {
+		return false
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	database := db.GetDB()
+	if database == nil {
+		return false
+	}
+
+	var session model.KeyGenSession
+	if err := database.Where("session_key = ?", sessionKey).First(&session).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return false
+		}
+		log.Printf("获取密钥生成会话失败: %v", err)
+		return false
+	}
+
+	for _, response := range session.Responses {
+		if response != string(model.ParticipantAccepted) {
+			return false // 只要有一个参与者未接受邀请，返回 false
+		}
+	}
+
+	return true // 所有参与者都已接受邀请
+}
+
+// AllKeyGenPartsCompleted 检查所有参与者是否完成了密钥生成
+func (s *KeyGenStorage) AllKeyGenPartsCompleted(sessionKey string) bool {
+	if sessionKey == "" {
+		return false
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	database := db.GetDB()
+	if database == nil {
+		return false
+	}
+
+	var session model.KeyGenSession
+	if err := database.Where("session_key = ?", sessionKey).First(&session).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return false
+		}
+		log.Printf("获取密钥生成会话失败: %v", err)
+		return false
+	}
+
+	for _, response := range session.Responses {
+		if response != string(model.ParticipantCompleted) {
+			return false // 只要有一个参与者未完成，返回 false
+		}
+	}
+
+	return true // 所有参与者都已完成
 }

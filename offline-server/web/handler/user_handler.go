@@ -43,7 +43,7 @@ func Login(c *gin.Context) {
 	}
 
 	// 生成JWT令牌
-	token, err := tools.GenerateToken(user.Username, user.Role, time.Hour)
+	token, err := tools.GenerateToken(user.Username, string(user.Role), time.Hour)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "生成令牌失败"})
 		return
@@ -167,10 +167,10 @@ func UpdateUserRole(c *gin.Context) {
 // isValidRole 检查角色是否有效
 func isValidRole(role string) bool {
 	validRoles := []string{
-		string(model.Admin),
-		string(model.Coordinator),
-		string(model.Participant),
-		string(model.Guest),
+		string(model.RoleAdmin),
+		string(model.RoleCoordinator),
+		string(model.RoleParticipant),
+		string(model.RoleGuest),
 	}
 
 	for _, validRole := range validRoles {

@@ -40,8 +40,8 @@ func GetSignStorage() ISignStorage {
 //
 // 返回：
 //   - 如果创建失败则返回错误信息
-func (s *SignStorage) CreateSession(sessionKey, initiator, data, accountAddr string, participants []string) error {
-	if sessionKey == "" || initiator == "" || data == "" || accountAddr == "" || len(participants) == 0 {
+func (s *SignStorage) CreateSession(sessionKey, initiator, data, address string, participants []string) error {
+	if sessionKey == "" || initiator == "" || data == "" || address == "" || len(participants) == 0 {
 		return ErrInvalidParameter
 	}
 
@@ -68,7 +68,7 @@ func (s *SignStorage) CreateSession(sessionKey, initiator, data, accountAddr str
 		SessionKey:   sessionKey,
 		Initiator:    initiator,
 		Data:         data,
-		AccountAddr:  accountAddr,
+		Address:      address,
 		Participants: model.StringSlice(participants),
 		Responses:    makeWaitingResponses(participants),
 		Status:       model.StatusCreated,
@@ -146,150 +146,6 @@ func (s *SignStorage) UpdateStatus(sessionKey string, status model.SessionStatus
 	return nil
 }
 
-// UpdateResponse 更新参与者对会话的响应状态
-// 参数：
-//   - sessionKey: 会话密钥，用于定位会话
-//   - userName: 参与者用户名
-//   - agreed: 是否同意参与签名
-//
-// 返回：
-//   - 如果更新失败则返回错误信息
-func (s *SignStorage) UpdateResponse(sessionKey, userName string, agreed bool) error {
-	if sessionKey == "" || userName == "" {
-		return ErrInvalidParameter
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	database := db.GetDB()
-	if database == nil {
-		return ErrDatabaseNotInitialized
-	}
-
-	// 获取当前会话
-	var session model.SignSession
-	if err := database.Where("session_key = ?", sessionKey).First(&session).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return ErrSessionNotFound
-		}
-		log.Printf("获取签名会话失败: %v", err)
-		return ErrOperationFailed
-	}
-
-	// 查找参与者在数组中的索引
-	participantIndex := -1
-	for i, participant := range session.Participants {
-		if participant == userName {
-			participantIndex = i
-			break
-		}
-	}
-
-	// 如果找不到参与者，返回错误
-	if participantIndex == -1 {
-		log.Printf("参与者 %s 不在会话 %s 的参与列表中", userName, sessionKey)
-		return ErrParticipantNotFound
-	}
-
-	// 确保 Responses 数组长度足够
-	if len(session.Responses) <= participantIndex {
-		// 将 Responses 扩展到与 Participants 相同长度
-		newResponses := make(model.StringSlice, len(session.Participants))
-		copy(newResponses, session.Responses)
-		session.Responses = newResponses
-	}
-
-	// 更新响应状态
-	status := model.StatusRejected
-	if agreed {
-		status = model.StatusAccepted
-	}
-	session.Responses[participantIndex] = string(status)
-
-	// 保存更新
-	if err := database.Save(&session).Error; err != nil {
-		log.Printf("更新签名会话响应失败: %v", err)
-		return ErrOperationFailed
-	}
-
-	return nil
-}
-
-// UpdateResult 更新参与者的签名结果
-// 参数：
-//   - sessionKey: 会话密钥，用于定位会话
-//   - userName: 参与者用户名
-//   - result: 参与者生成的部分签名结果
-//
-// 返回：
-//   - 如果更新失败则返回错误信息
-func (s *SignStorage) UpdateResult(sessionKey, userName, result string) error {
-	if sessionKey == "" || userName == "" || result == "" {
-		return ErrInvalidParameter
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	database := db.GetDB()
-	if database == nil {
-		return ErrDatabaseNotInitialized
-	}
-
-	// 获取当前会话
-	var session model.SignSession
-	if err := database.Where("session_key = ?", sessionKey).First(&session).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return ErrSessionNotFound
-		}
-		log.Printf("获取签名会话失败: %v", err)
-		return ErrOperationFailed
-	}
-
-	// 查找参与者在数组中的索引
-	participantIndex := -1
-	for i, participant := range session.Participants {
-		if participant == userName {
-			participantIndex = i
-			break
-		}
-	}
-
-	// 如果找不到参与者，返回错误
-	if participantIndex == -1 {
-		log.Printf("参与者 %s 不在会话 %s 的参与列表中", userName, sessionKey)
-		return ErrParticipantNotFound
-	}
-
-	// 更新响应状态为已完成
-	if len(session.Responses) <= participantIndex {
-		// 将 Responses 扩展到与 Participants 相同长度
-		newResponses := make(model.StringSlice, len(session.Participants))
-		copy(newResponses, session.Responses)
-		session.Responses = newResponses
-	}
-	session.Responses[participantIndex] = string(model.StatusCompleted)
-
-	// 为会话添加部分签名结果字段
-	updates := map[string]interface{}{
-		"responses": session.Responses,
-	}
-
-	// 部分签名结果存储在signature字段
-	// 每次只处理一个用户的结果，在这里我们简单地更新为最新结果
-	// 在实际应用中，可能需要将多个部分签名结合起来
-	updates["signature"] = result
-
-	// 保存更新
-	if err := database.Model(&model.SignSession{}).Where("session_key = ?", sessionKey).Updates(updates).Error; err != nil {
-		log.Printf("更新参与者签名结果失败: %v", err)
-		return ErrOperationFailed
-	}
-
-	return nil
-}
-
 // UpdateSignature 更新最终签名结果并将状态标记为已完成
 // 参数：
 //   - sessionKey: 会话密钥，用于定位会话
@@ -357,4 +213,181 @@ func (s *SignStorage) DeleteSession(sessionKey string) error {
 	}
 
 	return nil
+}
+
+// 在文件开头添加以下函数
+
+// 在UpdateSignature函数之前添加UpdateParticipantStatus函数
+
+// UpdateParticipantStatus 更新指定会话中某个参与者的状态
+// 参数：
+//   - sessionKey: 会话密钥，用于定位会话
+//   - index: 参与者在数组中的索引
+//   - status: 新的状态（如 accepted、rejected、completed 等）
+//
+// 返回：
+//   - 如果更新失败则返回错误信息
+func (s *SignStorage) UpdateParticipantStatus(sessionKey string, index int, status model.ParticipantStatus) error {
+	if sessionKey == "" || index < 0 || status == "" {
+		return ErrInvalidParameter
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	database := db.GetDB()
+	if database == nil {
+		return ErrDatabaseNotInitialized
+	}
+
+	// 获取当前会话
+	var session model.SignSession
+	if err := database.Where("session_key = ?", sessionKey).First(&session).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return ErrSessionNotFound
+		}
+		log.Printf("获取签名会话失败: %v", err)
+		return ErrOperationFailed
+	}
+
+	// 验证索引是否有效
+	if index >= len(session.Participants) {
+		log.Printf("更新失败: 索引 %d 超出参与者列表范围 (长度: %d)", index, len(session.Participants))
+		return ErrInvalidParameter
+	}
+
+	// 确保 Responses 数组长度足够
+	if len(session.Responses) <= index {
+		// 将 Responses 扩展到与 Participants 相同长度
+		newResponses := make(model.StringSlice, len(session.Participants))
+		copy(newResponses, session.Responses)
+		session.Responses = newResponses
+	}
+
+	// 更新状态
+	session.Responses[index] = string(status)
+
+	// 保存更新
+	if err := database.Save(&session).Error; err != nil {
+		log.Printf("更新签名会话参与者状态失败: %v", err)
+		return ErrOperationFailed
+	}
+
+	return nil
+}
+
+// 在DeleteSession函数之前添加UpdateChips函数
+
+// UpdateChips 更新指定会话的 Chips 字段
+// 参数：
+//   - sessionKey: 会话密钥，用于定位会话
+//   - chips: 新的 Chips 数组
+//
+// 返回：
+//   - 如果更新失败则返回错误信息
+func (s *SignStorage) UpdateChips(sessionKey string, chips []string) error {
+	if sessionKey == "" || len(chips) == 0 {
+		return ErrInvalidParameter
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	database := db.GetDB()
+	if database == nil {
+		return ErrDatabaseNotInitialized
+	}
+
+	// 获取当前会话
+	var session model.SignSession
+	if err := database.Where("session_key = ?", sessionKey).First(&session).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return ErrSessionNotFound
+		}
+		log.Printf("获取签名会话失败: %v", err)
+		return ErrOperationFailed
+	}
+
+	// 验证 Chips 数组长度是否与 Participants 数组长度匹配
+	if len(chips) != len(session.Participants) {
+		log.Printf("更新失败: Chips 数组长度 (%d) 与 Participants 数组长度 (%d) 不匹配", len(chips), len(session.Participants))
+		return ErrInvalidParameter
+	}
+
+	// 更新 Chips 字段
+	session.Chips = model.StringSlice(chips)
+
+	// 保存更新
+	if err := database.Save(&session).Error; err != nil {
+		log.Printf("更新签名会话 Chips 失败: %v", err)
+		return ErrOperationFailed
+	}
+
+	return nil
+}
+
+// 在文件末尾添加以下函数
+
+// AllKeyGenInvitationsAccepted 检查所有参与者是否接受了邀请
+func (s *SignStorage) AllKeyGenInvitationsAccepted(sessionKey string) bool {
+	if sessionKey == "" {
+		return false
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	database := db.GetDB()
+	if database == nil {
+		return false
+	}
+
+	var session model.SignSession
+	if err := database.Where("session_key = ?", sessionKey).First(&session).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return false
+		}
+		log.Printf("获取签名会话失败: %v", err)
+		return false
+	}
+
+	for _, response := range session.Responses {
+		if response != string(model.ParticipantAccepted) {
+			return false // 只要有一个参与者未接受邀请，返回 false
+		}
+	}
+
+	return true // 所有参与者都已接受邀请
+}
+
+// AllKeyGenPartsCompleted 检查所有参与者是否完成了签名
+func (s *SignStorage) AllKeyGenPartsCompleted(sessionKey string) bool {
+	if sessionKey == "" {
+		return false
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	database := db.GetDB()
+	if database == nil {
+		return false
+	}
+
+	var session model.SignSession
+	if err := database.Where("session_key = ?", sessionKey).First(&session).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return false
+		}
+		log.Printf("获取签名会话失败: %v", err)
+		return false
+	}
+
+	for _, response := range session.Responses {
+		if response != string(model.ParticipantCompleted) {
+			return false // 只要有一个参与者未完成，返回 false
+		}
+	}
+
+	return true // 所有参与者都已完成
 }

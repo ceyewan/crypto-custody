@@ -90,13 +90,13 @@ func (c *Client) Start() {
 		clog.String("remote_addr", c.conn.RemoteAddr().String()))
 }
 
-// Username 获取客户端用户名
-func (c *Client) Username() string {
+// GetUserName 获取客户端用户名
+func (c *Client) GetUserName() string {
 	return c.username
 }
 
 // SetUsername 设置客户端用户名
-func (c *Client) SetUsername(username string) {
+func (c *Client) SetUserName(username string) {
 	c.username = username
 }
 
@@ -352,7 +352,7 @@ func (c *Client) handleRegisterMessage(msg RegisterMessage) error {
 	}
 
 	// 设置客户端属性
-	c.SetUsername(msg.Username)
+	c.SetUserName(msg.Username)
 	c.SetRole(msg.Role)
 
 	// 注册到Hub

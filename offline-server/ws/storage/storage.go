@@ -60,8 +60,8 @@ func (m *SessionManager) CreateKeyGenSession(sessionKey, initiator string, thres
 }
 
 // CreateSignSession 在内存中创建一个新的签名会话（不立即保存到数据库）
-func (m *SessionManager) CreateSignSession(sessionKey, initiator, data, accountAddr string, participants []string) (*model.SignSession, error) {
-	if sessionKey == "" || initiator == "" || data == "" || accountAddr == "" || len(participants) == 0 {
+func (m *SessionManager) CreateSignSession(sessionKey, initiator, data, address string, participants []string) (*model.SignSession, error) {
+	if sessionKey == "" || initiator == "" || data == "" || address == "" || len(participants) == 0 {
 		return nil, storage.ErrInvalidParameter
 	}
 
@@ -70,7 +70,7 @@ func (m *SessionManager) CreateSignSession(sessionKey, initiator, data, accountA
 		SessionKey:   sessionKey,
 		Initiator:    initiator,
 		Data:         data,
-		AccountAddr:  accountAddr,
+		Address:      address,
 		Participants: model.StringSlice(participants),
 		Responses:    makeWaitingResponses(participants),
 		Status:       model.StatusCreated,
@@ -132,7 +132,6 @@ func (m *SessionManager) SaveKeyGenSession(session *model.KeyGenSession) error {
 	// 检查会话是否存在
 	var count int64
 	if err := database.Model(&model.KeyGenSession{}).Where("session_key = ?", session.SessionKey).Count(&count).Error; err != nil {
-		log.Printf("查询密钥生成会话失败: %v", err)
 		return storage.ErrOperationFailed
 	}
 
@@ -146,7 +145,6 @@ func (m *SessionManager) SaveKeyGenSession(session *model.KeyGenSession) error {
 	}
 
 	if err != nil {
-		log.Printf("保存密钥生成会话 %s 失败: %v", session.SessionKey, err)
 		return storage.ErrOperationFailed
 	}
 
@@ -167,7 +165,6 @@ func (m *SessionManager) SaveSignSession(session *model.SignSession) error {
 	// 检查会话是否存在
 	var count int64
 	if err := database.Model(&model.SignSession{}).Where("session_key = ?", session.SessionKey).Count(&count).Error; err != nil {
-		log.Printf("查询签名会话失败: %v", err)
 		return storage.ErrOperationFailed
 	}
 
@@ -181,7 +178,6 @@ func (m *SessionManager) SaveSignSession(session *model.SignSession) error {
 	}
 
 	if err != nil {
-		log.Printf("保存签名会话 %s 失败: %v", session.SessionKey, err)
 		return storage.ErrOperationFailed
 	}
 

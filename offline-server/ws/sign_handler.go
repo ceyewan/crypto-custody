@@ -33,7 +33,7 @@ func NewSignHandler(shareStorage storage.IShareStorage, seStorage storage.ISeSto
 func (h *SignHandler) ProcessMessage(msgType MessageType, rawMessage []byte, sender *Client) error {
 	clog.Debug("处理签名消息",
 		clog.String("msg_type", string(msgType)),
-		clog.String("username", sender.Username()),
+		clog.String("username", sender.GetUserName()),
 		clog.Int("msg_size", len(rawMessage)))
 
 	// 根据消息类型分发处理
@@ -43,7 +43,7 @@ func (h *SignHandler) ProcessMessage(msgType MessageType, rawMessage []byte, sen
 		if err := json.Unmarshal(rawMessage, &msg); err != nil {
 			clog.Error("解析签名请求消息失败",
 				clog.Err(err),
-				clog.String("username", sender.Username()))
+				clog.String("username", sender.GetUserName()))
 			return fmt.Errorf("解析签名请求消息失败: %w", err)
 		}
 		return h.handleSignRequest(msg, sender)
@@ -53,7 +53,7 @@ func (h *SignHandler) ProcessMessage(msgType MessageType, rawMessage []byte, sen
 		if err := json.Unmarshal(rawMessage, &msg); err != nil {
 			clog.Error("解析签名响应消息失败",
 				clog.Err(err),
-				clog.String("username", sender.Username()))
+				clog.String("username", sender.GetUserName()))
 			return fmt.Errorf("解析签名响应消息失败: %w", err)
 		}
 		return h.handleSignResponse(msg, sender)
@@ -63,7 +63,7 @@ func (h *SignHandler) ProcessMessage(msgType MessageType, rawMessage []byte, sen
 		if err := json.Unmarshal(rawMessage, &msg); err != nil {
 			clog.Error("解析签名结果消息失败",
 				clog.Err(err),
-				clog.String("username", sender.Username()))
+				clog.String("username", sender.GetUserName()))
 			return fmt.Errorf("解析签名结果消息失败: %w", err)
 		}
 		return h.handleSignResult(msg, sender)
@@ -71,7 +71,7 @@ func (h *SignHandler) ProcessMessage(msgType MessageType, rawMessage []byte, sen
 	default:
 		clog.Error("不支持的签名消息类型",
 			clog.String("msg_type", string(msgType)),
-			clog.String("username", sender.Username()))
+			clog.String("username", sender.GetUserName()))
 		return fmt.Errorf("不支持的签名消息类型: %s", msgType)
 	}
 }
@@ -86,7 +86,7 @@ func (h *SignHandler) handleSignRequest(msg SignRequestMessage, sender *Client) 
 
 	clog.Info("收到签名请求",
 		clog.String("session_key", sessionKey),
-		clog.String("initiator", sender.Username()),
+		clog.String("initiator", sender.GetUserName()),
 		clog.String("address", address),
 		clog.Int("participants_count", len(participants)))
 
@@ -97,7 +97,7 @@ func (h *SignHandler) handleSignRequest(msg SignRequestMessage, sender *Client) 
 		clog.Any("participants", participants))
 
 	// 创建签名会话
-	session, err := h.sessionManager.CreateSignSession(sessionKey, sender.Username(), data, address, participants)
+	session, err := h.sessionManager.CreateSignSession(sessionKey, sender.GetUserName(), data, address, participants)
 	if err != nil {
 		clog.Error("创建签名会话失败",
 			clog.Err(err),
@@ -194,14 +194,14 @@ func (h *SignHandler) handleSignResponse(msg SignResponseMessage, sender *Client
 
 	clog.Info("收到签名响应",
 		clog.String("session_key", sessionKey),
-		clog.String("participant", sender.Username()),
+		clog.String("participant", sender.GetUserName()),
 		clog.Int("part_index", partIndex),
 		clog.Bool("accept", accept))
 
 	if !accept {
 		clog.Debug("参与方拒绝原因",
 			clog.String("session_key", sessionKey),
-			clog.String("participant", sender.Username()),
+			clog.String("participant", sender.GetUserName()),
 			clog.String("reason", reason))
 	}
 
@@ -211,7 +211,7 @@ func (h *SignHandler) handleSignResponse(msg SignResponseMessage, sender *Client
 		session.Responses[partIndex-1] = string(model.ParticipantAccepted)
 		clog.Debug("参与方接受签名邀请",
 			clog.String("session_key", sessionKey),
-			clog.String("participant", sender.Username()),
+			clog.String("participant", sender.GetUserName()),
 			clog.Int("part_index", partIndex))
 
 		// 检查是否所有参与方都已接受
@@ -240,18 +240,18 @@ func (h *SignHandler) handleSignResponse(msg SignResponseMessage, sender *Client
 			// 向所有参与方发送参数
 			for _, participant := range session.Participants {
 				// 获取该参与者的密钥分片数据
-				encryptedShard, err := h.shareStorage.GetEthereumKeyShard(participant, session.AccountAddr)
+				encryptedShard, err := h.shareStorage.GetEthereumKeyShard(participant, session.Address)
 				if err != nil {
 					clog.Error("获取参与方的密钥分片失败",
 						clog.Err(err),
 						clog.String("participant", participant),
-						clog.String("address", session.AccountAddr))
+						clog.String("address", session.Address))
 					continue
 				}
 
 				clog.Debug("获取到参与方密钥分片",
 					clog.String("participant", participant),
-					clog.String("address", session.AccountAddr),
+					clog.String("address", session.Address),
 					clog.Int("shard_index", encryptedShard.ShardIndex))
 
 				// 生成签名参与者列表(索引集合)
@@ -265,7 +265,7 @@ func (h *SignHandler) handleSignResponse(msg SignResponseMessage, sender *Client
 					BaseMessage:    BaseMessage{Type: MsgSignParams},
 					SessionKey:     sessionKey,
 					Data:           session.Data,
-					Address:        session.AccountAddr,
+					Address:        session.Address,
 					PartIndex:      encryptedShard.ShardIndex,
 					FileName:       fmt.Sprintf("%s_%d.json", sessionKey, encryptedShard.ShardIndex),
 					Parties:        fmt.Sprintf("%v", parties),
@@ -299,7 +299,7 @@ func (h *SignHandler) handleSignResponse(msg SignResponseMessage, sender *Client
 		session.Responses[partIndex-1] = string(model.ParticipantRejected)
 		clog.Info("参与方拒绝签名邀请",
 			clog.String("session_key", sessionKey),
-			clog.String("participant", sender.Username()),
+			clog.String("participant", sender.GetUserName()),
 			clog.Int("part_index", partIndex),
 			clog.String("reason", reason))
 
@@ -307,7 +307,7 @@ func (h *SignHandler) handleSignResponse(msg SignResponseMessage, sender *Client
 		initiator := session.Initiator
 		rejectMsg := ErrorMessage{
 			BaseMessage: BaseMessage{Type: MsgError},
-			Message:     fmt.Sprintf("参与方 %s 拒绝了签名邀请", sender.Username()),
+			Message:     fmt.Sprintf("参与方 %s 拒绝了签名邀请", sender.GetUserName()),
 			Details:     reason,
 		}
 
@@ -339,12 +339,12 @@ func (h *SignHandler) handleSignResult(msg SignResultMessage, sender *Client) er
 
 	clog.Info("收到签名结果",
 		clog.String("session_key", sessionKey),
-		clog.String("participant", sender.Username()),
+		clog.String("participant", sender.GetUserName()),
 		clog.Int("part_index", partIndex))
 
 	clog.Debug("签名结果详情",
 		clog.String("session_key", sessionKey),
-		clog.String("participant", sender.Username()),
+		clog.String("participant", sender.GetUserName()),
 		clog.Int("part_index", partIndex),
 		clog.Int("signature_length", len(signature)))
 
@@ -356,7 +356,7 @@ func (h *SignHandler) handleSignResult(msg SignResultMessage, sender *Client) er
 	session.Signature = signature
 	clog.Debug("更新参与方完成状态",
 		clog.String("session_key", sessionKey),
-		clog.String("participant", sender.Username()),
+		clog.String("participant", sender.GetUserName()),
 		clog.Int("part_index", partIndex))
 
 	// 检查是否所有参与方都已完成
@@ -380,7 +380,7 @@ func (h *SignHandler) handleSignResult(msg SignResultMessage, sender *Client) er
 	if allCompleted {
 		clog.Info("签名已完成",
 			clog.String("session_key", sessionKey),
-			clog.String("address", session.AccountAddr),
+			clog.String("address", session.Address),
 			clog.Int("signature_length", len(signature)))
 
 		// 通知发起者签名已完成
