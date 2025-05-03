@@ -4,211 +4,485 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"offline-server/tools"
 
-	"github.com/gorilla/websocket"
+	"offline-server/storage"
+	"offline-server/storage/model"
+	mem_storage "offline-server/ws/storage"
 )
 
-// MessageHandler 处理所有WebSocket消息
-// 提供了消息分发和处理的功能，负责维护与客户端的通信
+// MessageHandler 消息处理器
+// 负责处理各种WebSocket消息
 type MessageHandler struct {
-	store Storage // 存储状态和客户端连接的接口
+	shareStorage   storage.IShareStorage       // 私钥分片存储接口
+	seStorage      storage.ISeStorage          // 安全芯片存储接口
+	sessionManager *mem_storage.SessionManager // 会话管理器
 }
 
-// NewMessageHandler 创建并初始化一个新的消息处理器
-// 参数:
-//   - store: 用于存储状态和客户端连接的存储接口
-//
-// 返回:
-//   - 初始化后的MessageHandler指针
-func NewMessageHandler(store Storage) *MessageHandler {
+// NewMessageHandler 创建新的消息处理器
+func NewMessageHandler() *MessageHandler {
 	return &MessageHandler{
-		store: store,
+		shareStorage:   storage.GetShareStorage(),
+		seStorage:      storage.GetSeStorage(),
+		sessionManager: mem_storage.GetSessionManager(),
 	}
 }
 
-// HandleMessage 根据消息类型分发并处理接收到的WebSocket消息
-// 参数:
-//   - conn: 发送消息的WebSocket连接
-//   - msg: 收到的消息对象
-//
-// 返回:
-//   - error: 处理过程中遇到的错误
-func (h *MessageHandler) HandleMessage(conn *websocket.Conn, msg Message) error {
-	// 处理注册消息
-	if msg.Type == RegisterMsg {
-		return h.handleRegister(conn, msg)
-	}
-
-	// 处理错误消息和服务器确认消息
-	if msg.Type == ErrorMsg || msg.Type == RegisterConfirmMsg {
-		// 这些消息不需要验证Token
-		err := fmt.Errorf("无法处理消息类型: %s", msg.Type)
-		log.Printf("[ERROR] %v", err)
-		return err
-	}
-
-	// 验证其他所有消息的Token
-	if msg.Token == "" {
-		err := fmt.Errorf("请求失败: 缺少Token")
-		log.Printf("[ERROR] %v", err)
-		if err := sendErrorMessage(conn, "缺少Token"); err != nil {
-			log.Printf("[ERROR] 发送错误消息失败: %v", err)
-		}
-		return err
-	}
-
-	// 验证JWT令牌
-	tokenUserID, _, err := tools.ValidateToken(msg.Token)
-	if err != nil {
-		err := fmt.Errorf("请求失败: Token验证失败: %v", err)
-		log.Printf("[ERROR] %v", err)
-		if err := sendErrorMessage(conn, "Token验证失败"); err != nil {
-			log.Printf("[ERROR] 发送错误消息失败: %v", err)
-		}
-		return err
-	}
-
-	// 验证用户ID匹配
-	if msg.UserID != "" && msg.UserID != tokenUserID {
-		log.Printf("[ERROR] Token用户ID与消息用户ID不匹配: %s != %s", tokenUserID, msg.UserID)
-		err := fmt.Errorf("请求失败: Token用户ID与消息用户ID不匹配")
-		log.Printf("[ERROR] %v", err)
-		if err := sendErrorMessage(conn, "Token用户ID与消息用户ID不匹配"); err != nil {
-			log.Printf("[ERROR] 发送错误消息失败: %v", err)
-		}
-		return err
-	}
-
+// ProcessMessage 处理收到的WebSocket消息
+func (h *MessageHandler) ProcessMessage(msgType MessageType, rawMessage []byte, sender *Client) error {
 	// 根据消息类型分发处理
-	switch msg.Type {
-	case KeyGenRequestMsg:
-		return HandleKeyGenRequest(h.store, msg)
-	case KeyGenResponseMsg:
-		return HandleKeyGenResponse(h.store, msg)
-	case KeyGenCompleteMsg:
-		return HandleKeyGenComplete(h.store, msg)
-	case SignRequestMsg:
-		return HandleSignRequest(h.store, msg)
-	case SignResponseMsg:
-		return HandleSignResponse(h.store, msg)
-	case SignResultMsg:
-		return HandleSignResult(h.store, msg)
+	switch msgType {
+	case MsgKeyGenRequest:
+		var msg KeyGenRequestMessage
+		if err := json.Unmarshal(rawMessage, &msg); err != nil {
+			return fmt.Errorf("解析密钥生成请求消息失败: %w", err)
+		}
+		return h.handleKeyGenRequest(msg, sender)
+
+	case MsgKeyGenResponse:
+		var msg KeyGenResponseMessage
+		if err := json.Unmarshal(rawMessage, &msg); err != nil {
+			return fmt.Errorf("解析密钥生成响应消息失败: %w", err)
+		}
+		return h.handleKeyGenResponse(msg, sender)
+
+	case MsgKeyGenResult:
+		var msg KeyGenResultMessage
+		if err := json.Unmarshal(rawMessage, &msg); err != nil {
+			return fmt.Errorf("解析密钥生成结果消息失败: %w", err)
+		}
+		return h.handleKeyGenResult(msg, sender)
+
+	case MsgSignRequest:
+		var msg SignRequestMessage
+		if err := json.Unmarshal(rawMessage, &msg); err != nil {
+			return fmt.Errorf("解析签名请求消息失败: %w", err)
+		}
+		return h.handleSignRequest(msg, sender)
+
+	case MsgSignResponse:
+		var msg SignResponseMessage
+		if err := json.Unmarshal(rawMessage, &msg); err != nil {
+			return fmt.Errorf("解析签名响应消息失败: %w", err)
+		}
+		return h.handleSignResponse(msg, sender)
+
+	case MsgSignResult:
+		var msg SignResultMessage
+		if err := json.Unmarshal(rawMessage, &msg); err != nil {
+			return fmt.Errorf("解析签名结果消息失败: %w", err)
+		}
+		return h.handleSignResult(msg, sender)
+
 	default:
-		err := fmt.Errorf("未知消息类型: %s", msg.Type)
-		log.Printf("[ERROR] %v", err)
-		return err
+		return fmt.Errorf("不支持的消息类型: %s", msgType)
 	}
 }
 
-// handleRegister 处理客户端注册请求
-// 解析注册信息，验证Token，将客户端添加到存储中，并发送确认消息
-// 参数:
-//   - conn: 发送注册请求的WebSocket连接
-//   - msg: 包含注册信息的消息对象
-//
-// 返回:
-//   - error: 处理过程中遇到的错误
-func (h *MessageHandler) handleRegister(conn *websocket.Conn, msg Message) error {
-	var payload RegisterPayload
-	payloadBytes, err := json.Marshal(msg.Payload)
+// handleKeyGenRequest 处理密钥生成请求
+func (h *MessageHandler) handleKeyGenRequest(msg KeyGenRequestMessage, sender *Client) error {
+	// 直接从消息结构体获取需要的字段
+	sessionKey := msg.SessionKey
+	threshold := msg.Threshold
+	totalParts := msg.TotalParts
+	participants := msg.Participants
+
+	log.Printf("收到密钥生成请求 SessionKey: %s, 阈值: %d, 总分片数: %d, 参与者: %v",
+		sessionKey, threshold, totalParts, participants)
+
+	// 创建密钥生成会话
+	if err := h.sessionManager.CreateKeyGenSession(sessionKey, sender.Username(), threshold, totalParts, participants); err != nil {
+		return fmt.Errorf("创建密钥生成会话失败: %w", err)
+	}
+
+	// 获取 totalParts 数量的安全芯片 SeID
+	chips, err := h.seStorage.GetRandomSeIds(totalParts)
 	if err != nil {
-		log.Printf("[ERROR] 序列化注册载荷失败: %v", err)
-		return fmt.Errorf("序列化注册载荷失败: %w", err)
+		return fmt.Errorf("获取安全芯片标识符失败: %w", err)
 	}
 
-	if err := json.Unmarshal(payloadBytes, &payload); err != nil {
-		log.Printf("[ERROR] 解析注册载荷失败: %v", err)
-		return fmt.Errorf("解析注册载荷失败: %w", err)
-	}
+	// 更新密钥生成会话的安全芯片标识符
+	h.sessionManager.GetKeyGenSession(sessionKey).Chips = chips
 
-	userID := payload.UserID
-	role := payload.Role
-
-	// 验证Token
-	if msg.Token == "" {
-		err := fmt.Errorf("注册失败: 缺少Token")
-		log.Printf("[ERROR] %v", err)
-		if err := sendErrorMessage(conn, "缺少Token"); err != nil {
-			log.Printf("[ERROR] 发送错误消息失败: %v", err)
+	// 向所有参与方发送邀请
+	for i, participant := range participants {
+		// 准备邀请消息
+		inviteMsg := KeyGenInviteMessage{
+			BaseMessage:  BaseMessage{Type: MsgKeyGenInvite},
+			SessionKey:   sessionKey,
+			Coordinator:  sender.Username(),
+			Threshold:    threshold,
+			TotalParts:   totalParts,
+			PartIndex:    i + 1,    // 索引从1开始
+			SeID:         chips[i], // 安全芯片标识符
+			Participants: participants,
 		}
-		return err
-	}
 
-	// 验证JWT令牌并确保用户ID匹配
-	tokenUserID, userRole, err := tools.ValidateToken(msg.Token)
-	if err != nil {
-		err := fmt.Errorf("注册失败: Token验证失败: %v", err)
-		log.Printf("[ERROR] %v", err)
-		if err := sendErrorMessage(conn, "Token验证失败"); err != nil {
-			log.Printf("[ERROR] 发送错误消息失败: %v", err)
+		// 发送邀请
+		client, exists := sender.Hub().GetClient(participant)
+		if !exists {
+			log.Printf("参与方 %s 不在线，无法发送邀请", participant)
+			continue
 		}
-		return err
-	}
 
-	// 验证Token中的用户ID与注册请求中的用户ID是否匹配
-	if userID != tokenUserID {
-		err := fmt.Errorf("注册失败: Token用户ID与注册用户ID不匹配")
-		log.Printf("[ERROR] %v", err)
-		if err := sendErrorMessage(conn, "Token用户ID与注册用户ID不匹配"); err != nil {
-			log.Printf("[ERROR] 发送错误消息失败: %v", err)
+		if err := client.SendMessage(inviteMsg); err != nil {
+			log.Printf("向参与方 %s 发送邀请失败: %v", participant, err)
 		}
-		return err
 	}
 
-	// 验证必要字段
-	if userID == "" {
-		err := fmt.Errorf("注册失败: 缺少用户ID")
-		log.Printf("[ERROR] %v", err)
-		if err := sendErrorMessage(conn, "缺少用户ID"); err != nil {
-			log.Printf("[ERROR] 发送错误消息失败: %v", err)
-		}
-		return err
-	}
+	h.sessionManager.GetKeyGenSession(sessionKey).Status = model.StatusInvited
 
-	// 如果Token中的角色是admin，则允许任何角色注册
-	// 否则，角色必须与Token中的角色匹配
-	if userRole != "admin" && role != userRole {
-		err := fmt.Errorf("注册失败: 角色不匹配，Token角色: %s, 请求角色: %s", userRole, role)
-		log.Printf("[ERROR] %v", err)
-		if err := sendErrorMessage(conn, "角色不匹配"); err != nil {
-			log.Printf("[ERROR] 发送错误消息失败: %v", err)
-		}
-		return err
-	}
-
-	h.store.AddClient(userID, conn)
-	h.store.SetClientRole(userID, role)
-	log.Printf("[INFO] 客户端 %s 已注册为 %s", userID, role)
-
-	// 发送确认消息
-	response := Message{
-		Type:    RegisterConfirmMsg,
-		UserID:  userID,
-		Payload: map[string]string{"status": "success"},
-	}
-	if err := SendMessage(conn, response); err != nil {
-		log.Printf("[ERROR] 发送注册确认消息失败: %v", err)
-		return fmt.Errorf("发送注册确认消息失败: %w", err)
-	}
 	return nil
 }
 
-// sendErrorMessage 向客户端发送错误消息
-// 参数:
-//   - conn: 要发送消息的WebSocket连接
-//   - errorMsg: 错误信息
-//
-// 返回:
-//   - error: 发送过程中遇到的错误
-func sendErrorMessage(conn *websocket.Conn, errorMsg string) error {
-	errResponse := Message{
-		Type:    ErrorMsg,
-		Payload: map[string]string{"error": errorMsg},
+// handleKeyGenResponse 处理密钥生成响应
+func (h *MessageHandler) handleKeyGenResponse(msg KeyGenResponseMessage, sender *Client) error {
+	// 直接从消息结构体获取字段
+	sessionKey := msg.SessionKey
+	partIndex := msg.PartIndex
+	cpic := msg.CPIC
+	accept := msg.Accept
+	reason := msg.Reason
+
+	log.Printf("收到密钥生成响应 SessionKey: %s, 索引: %d, 接受状态: %v",
+		sessionKey, partIndex, accept)
+
+	// 获取会话
+	session := h.sessionManager.GetKeyGenSession(sessionKey)
+
+	// 验证芯片标识符是否匹配
+	se, err := h.seStorage.GetSeBySeId(session.Chips[partIndex])
+	if err != nil {
+		return fmt.Errorf("验证安全芯片标识符失败: %w", err)
 	}
-	if err := SendMessage(conn, errResponse); err != nil {
-		log.Printf("[ERROR] 发送错误消息失败: %v", err)
-		return fmt.Errorf("发送错误消息失败: %w", err)
+	if se.CPIC != cpic {
+		return fmt.Errorf("安全芯片标识符不匹配: %s != %s", se.CPIC, cpic)
 	}
+
+	// 更新会话状态
+	if accept {
+		// 接受邀请
+		session.Responses[partIndex-1] = string(model.ParticipantAccepted)
+
+		// 检查是否所有参与方都已接受，统计 session.Responses 是否全为 Accepted
+		flag := true
+		for _, status := range session.Responses {
+			if status != string(model.ParticipantAccepted) {
+				flag = false
+			}
+		}
+
+		if flag {
+			// 向所有参与方发送参数
+			for i, participant := range session.Participants {
+				// 准备参数消息
+				paramsMsg := KeyGenParamsMessage{
+					BaseMessage: BaseMessage{Type: MsgKeyGenParams},
+					SessionKey:  sessionKey,
+					Threshold:   session.Threshold,
+					TotalParts:  len(session.Participants),
+					PartIndex:   i + 1,
+					FileName:    fmt.Sprintf("%s_%d.json", sessionKey, i+1),
+				}
+
+				// 发送参数
+				client, exists := sender.Hub().GetClient(participant)
+				if !exists {
+					log.Printf("参与方 %s 不在线，无法发送参数", participant)
+					continue
+				}
+
+				if err := client.SendMessage(paramsMsg); err != nil {
+					log.Printf("向参与方 %s 发送参数失败: %v", participant, err)
+				}
+			}
+		}
+	} else {
+		// 拒绝邀请
+		session.Responses[partIndex-1] = string(model.ParticipantRejected)
+
+		// 通知发起者有参与方拒绝
+		initiator := session.Initiator
+		rejectMsg := ErrorMessage{
+			BaseMessage: BaseMessage{Type: MsgError},
+			Message:     fmt.Sprintf("参与方 %s 拒绝了密钥生成邀请", sender.Username()),
+			Details:     reason,
+		}
+
+		// 发送拒绝通知
+		client, exists := sender.Hub().GetClient(initiator)
+		if exists {
+			if err := client.SendMessage(rejectMsg); err != nil {
+				log.Printf("向发起者 %s 发送拒绝通知失败: %v", initiator, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// handleKeyGenResult 处理密钥生成结果
+func (h *MessageHandler) handleKeyGenResult(msg KeyGenResultMessage, sender *Client) error {
+	// 直接从消息结构体获取字段
+	success := msg.Success
+	if !success {
+		return fmt.Errorf("密钥生成失败: %s", msg.Message)
+	}
+	sessionKey := msg.SessionKey
+	partIndex := msg.PartIndex
+	address := msg.Address
+	cpic := msg.CPIC
+	encryptedShard := msg.EncryptedShard
+
+	log.Printf("收到密钥生成结果 SessionKey: %s, 索引: %d", sessionKey, partIndex)
+
+	// 保存私钥分片
+	if err := h.shareStorage.CreateEthereumKeyShard(sender.Username(), address, cpic, encryptedShard, partIndex); err != nil {
+		return fmt.Errorf("保存密钥分片失败: %w", err)
+	}
+
+	// 更新会话状态
+	session := h.sessionManager.GetKeyGenSession(sessionKey)
+
+	// 标记该部分已完成
+	session.Responses[partIndex-1] = string(model.ParticipantCompleted)
+
+	// 检查是否所有参与方都已完成
+	allCompleted := true
+	for _, status := range session.Responses {
+		if status != string(model.ParticipantCompleted) {
+			allCompleted = false
+			break
+		}
+	}
+
+	if allCompleted {
+		// 更新会话状态为完成
+		session.Status = model.StatusCompleted
+
+		// 通知发起者密钥生成已完成
+		initiator := session.Initiator
+		confirmMsg := KeyGenCompleteMessage{
+			BaseMessage: BaseMessage{Type: MsgKeyGenComplete},
+			SessionKey:  sessionKey,
+			Address:     address,
+			Success:     true,
+			Message:     "密钥生成已完成",
+		}
+
+		// 发送确认消息
+		client, exists := sender.Hub().GetClient(initiator)
+		if exists {
+			if err := client.SendMessage(confirmMsg); err != nil {
+				log.Printf("向发起者 %s 发送确认消息失败: %v", initiator, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// handleSignRequest 处理签名请求
+func (h *MessageHandler) handleSignRequest(msg SignRequestMessage, sender *Client) error {
+	// 直接从消息结构体获取字段
+	sessionKey := msg.SessionKey
+	data := msg.Data
+	address := msg.Address
+	participants := msg.Participants
+
+	log.Printf("收到签名请求 SessionKey: %s, 数据: %s, 账户地址: %s, 参与者: %v",
+		sessionKey, data, address, participants)
+
+	// 创建签名会话
+	session, err := h.sessionManager.CreateSignSession(sessionKey, sender.Username(), data, address, participants)
+	if err != nil {
+		return fmt.Errorf("创建签名会话失败: %w", err)
+	}
+
+	// 为每个参与者分配安全芯片ID
+	chips, err := h.seStorage.GetRandomSeIds(len(participants))
+	if err != nil {
+		return fmt.Errorf("获取安全芯片标识符失败: %w", err)
+	}
+	session.Chips = chips
+
+	// 向所有参与方发送邀请
+	for i, participant := range participants {
+		// 准备邀请消息
+		inviteMsg := SignInviteMessage{
+			BaseMessage:  BaseMessage{Type: MsgSignInvite},
+			SessionKey:   sessionKey,
+			Data:         data,
+			Address:      address,
+			PartIndex:    i + 1,
+			SeID:         chips[i], // 安全芯片标识符
+			Participants: participants,
+		}
+
+		// 发送邀请
+		client, exists := sender.Hub().GetClient(participant)
+		if !exists {
+			log.Printf("参与方 %s 不在线，无法发送邀请", participant)
+			continue
+		}
+
+		if err := client.SendMessage(inviteMsg); err != nil {
+			log.Printf("向参与方 %s 发送邀请失败: %v", participant, err)
+		}
+	}
+
+	// 更新会话状态为已邀请
+	session.Status = model.StatusInvited
+
+	return nil
+}
+
+// handleSignResponse 处理签名响应
+func (h *MessageHandler) handleSignResponse(msg SignResponseMessage, sender *Client) error {
+	// 直接从消息结构体获取字段
+	sessionKey := msg.SessionKey
+	partIndex := msg.PartIndex
+	cpic := msg.CPIC
+	accept := msg.Accept
+	reason := msg.Reason
+
+	// 获取会话
+	session := h.sessionManager.GetSignSession(sessionKey)
+
+	// 验证芯片标识符是否匹配
+	se, err := h.seStorage.GetSeBySeId(session.Chips[partIndex-1])
+	if err != nil {
+		return fmt.Errorf("验证安全芯片标识符失败: %w", err)
+	}
+	if se.CPIC != cpic {
+		return fmt.Errorf("安全芯片标识符不匹配: %s != %s", se.CPIC, cpic)
+	}
+
+	log.Printf("收到签名响应 SessionKey: %s, 索引: %d, 接受状态: %v",
+		sessionKey, partIndex, accept)
+
+	// 更新会话状态
+	if accept {
+		// 接受邀请
+		session.Responses[partIndex-1] = string(model.ParticipantAccepted)
+
+		// 检查是否所有参与方都已接受
+		allAccepted := true
+		for _, status := range session.Responses {
+			if status != string(model.ParticipantAccepted) {
+				allAccepted = false
+				break
+			}
+		}
+
+		if allAccepted {
+			// 向所有参与方发送参数
+			for _, participant := range session.Participants {
+				// 获取该参与者的密钥分片数据
+				encryptedShard, err := h.shareStorage.GetEthereumKeyShard(participant, session.AccountAddr)
+				if err != nil {
+					log.Printf("获取参与方 %s 的密钥分片失败: %v", participant, err)
+					continue
+				}
+
+				// 生成签名参与者列表(索引集合)
+				parties := make([]int, len(session.Participants))
+				for j := range session.Participants {
+					parties[j] = j + 1
+				}
+
+				// 准备参数消息
+				paramsMsg := SignParamsMessage{
+					BaseMessage:    BaseMessage{Type: MsgSignParams},
+					SessionKey:     sessionKey,
+					Data:           session.Data,
+					Address:        session.AccountAddr,
+					PartIndex:      encryptedShard.ShardIndex,
+					FileName:       fmt.Sprintf("%s_%d.json", sessionKey, encryptedShard.ShardIndex),
+					Parties:        fmt.Sprintf("%v", parties),
+					EncryptedShard: encryptedShard.PrivateShard,
+				}
+
+				// 发送参数
+				client, exists := sender.Hub().GetClient(participant)
+				if !exists {
+					log.Printf("参与方 %s 不在线，无法发送参数", participant)
+					continue
+				}
+
+				if err := client.SendMessage(paramsMsg); err != nil {
+					log.Printf("向参与方 %s 发送参数失败: %v", participant, err)
+				}
+			}
+		}
+	} else {
+		// 拒绝邀请
+		session.Responses[partIndex-1] = string(model.ParticipantRejected)
+
+		// 通知发起者有参与方拒绝
+		initiator := session.Initiator
+		rejectMsg := ErrorMessage{
+			BaseMessage: BaseMessage{Type: MsgError},
+			Message:     fmt.Sprintf("参与方 %s 拒绝了签名邀请", sender.Username()),
+			Details:     reason,
+		}
+
+		// 发送拒绝通知
+		client, exists := sender.Hub().GetClient(initiator)
+		if exists {
+			if err := client.SendMessage(rejectMsg); err != nil {
+				log.Printf("向发起者 %s 发送拒绝通知失败: %v", initiator, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// handleSignResult 处理签名结果
+func (h *MessageHandler) handleSignResult(msg SignResultMessage, sender *Client) error {
+	// 直接从消息结构体获取字段
+	sessionKey := msg.SessionKey
+	partIndex := msg.PartIndex
+	signature := msg.Signature
+
+	log.Printf("收到签名结果 SessionKey: %s, 索引: %d", sessionKey, partIndex)
+
+	// 获取会话
+	session := h.sessionManager.GetSignSession(sessionKey)
+
+	// 更新会话状态
+	session.Responses[partIndex-1] = string(model.ParticipantCompleted)
+	session.Signature = signature
+
+	// 检查是否所有参与方都已完成
+	allCompleted := true
+	for _, status := range session.Responses {
+		if status != string(model.ParticipantCompleted) {
+			allCompleted = false
+			break
+		}
+	}
+
+	if allCompleted {
+
+		// 通知发起者签名已完成
+		initiator := session.Initiator
+		completeMsg := SignCompleteMessage{
+			BaseMessage: BaseMessage{Type: MsgSignComplete},
+			SessionKey:  sessionKey,
+			Signature:   signature,
+			Success:     true,
+			Message:     "签名已完成",
+		}
+
+		// 发送完成消息
+		client, exists := sender.Hub().GetClient(initiator)
+		if exists {
+			if err := client.SendMessage(completeMsg); err != nil {
+				log.Printf("向发起者 %s 发送完成消息失败: %v", initiator, err)
+			}
+		}
+	}
+
 	return nil
 }

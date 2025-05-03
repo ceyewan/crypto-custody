@@ -1,163 +1,323 @@
 package ws
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
+	"offline-server/tools"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 )
 
-// Client 表示一个WebSocket客户端连接
-// 负责处理与客户端的通信，包括接收消息、发送消息和断开连接处理
+// 缓冲区大小常量
+const (
+	ReadBufferSize  = 256 // 读缓冲区大小
+	WriteBufferSize = 256 // 写缓冲区大小
+
+	MaxMessageSize = 65536            // 最大消息大小(64KB)
+	PongWait       = 60 * time.Second // pong等待时间
+	PingPeriod     = 30 * time.Second // ping发送周期
+	WriteWait      = 10 * time.Second // 写超时
+)
+
+// Client 表示单个WebSocket客户端连接
+// 负责管理连接生命周期和消息处理
 type Client struct {
+	// 客户端标识
+	username string     // 用户名
+	role     ClientRole // 用户角色
+
+	// 连接相关
 	conn    *websocket.Conn // WebSocket连接
+	hub     *Hub            // 客户端集线器
 	handler *MessageHandler // 消息处理器
-	store   Storage         // 存储接口
-	userID  string          // 客户端用户ID
+
+	// 消息通道
+	readChan  chan []byte // 读取消息的缓冲通道
+	writeChan chan []byte // 写入消息的缓冲通道
+
+	// 协程控制
+	readCtx     context.Context    // 读取协程上下文
+	readCancel  context.CancelFunc // 读取协程取消函数
+	writeCtx    context.Context    // 写入协程上下文
+	writeCancel context.CancelFunc // 写入协程取消函数
+	wg          sync.WaitGroup     // 等待协程组
+
+	// 状态管理
+	closed      bool         // 连接是否已关闭
+	closedMutex sync.RWMutex // 保护closed字段的锁
+	closeOnce   sync.Once    // 确保只关闭一次
 }
 
-// NewClient 创建并初始化一个新的客户端实例
-//
-// 参数:
-//   - conn: WebSocket连接对象
-//   - handler: 用于处理消息的处理器
-//   - store: 用于存储状态和客户端信息的存储接口
-//
-// 返回:
-//   - 初始化后的Client对象
-func NewClient(conn *websocket.Conn, handler *MessageHandler, store Storage) *Client {
-	return &Client{
-		conn:    conn,
-		handler: handler,
-		store:   store,
+// NewClient 创建并初始化新的客户端
+func NewClient(conn *websocket.Conn, hub *Hub, handler *MessageHandler) *Client {
+	// 创建上下文
+	readCtx, readCancel := context.WithCancel(context.Background())
+	writeCtx, writeCancel := context.WithCancel(context.Background())
+
+	// 初始化客户端
+	client := &Client{
+		conn:        conn,
+		hub:         hub,
+		handler:     handler,
+		readChan:    make(chan []byte, ReadBufferSize),
+		writeChan:   make(chan []byte, WriteBufferSize),
+		readCtx:     readCtx,
+		readCancel:  readCancel,
+		writeCtx:    writeCtx,
+		writeCancel: writeCancel,
+	}
+
+	return client
+}
+
+// Start 启动客户端消息处理循环
+func (c *Client) Start() {
+	// 启动读写协程
+	c.wg.Add(2)
+	go c.readPump()
+	go c.writePump()
+
+	log.Printf("启动客户端处理")
+}
+
+// Username 获取客户端用户名
+func (c *Client) Username() string {
+	return c.username
+}
+
+// SetUsername 设置客户端用户名
+func (c *Client) SetUsername(username string) {
+	c.username = username
+}
+
+// Role 获取客户端角色
+func (c *Client) Role() ClientRole {
+	return c.role
+}
+
+// SetRole 设置客户端角色
+func (c *Client) SetRole(role ClientRole) {
+	c.role = role
+}
+
+// Hub 获取客户端所属的Hub
+func (c *Client) Hub() *Hub {
+	return c.hub
+}
+
+// readPump 处理读取WebSocket消息的协程
+func (c *Client) readPump() {
+	defer c.wg.Done()
+	defer c.Close()
+
+	// 设置连接参数
+	c.conn.SetReadLimit(MaxMessageSize)
+	c.conn.SetReadDeadline(time.Now().Add(PongWait))
+	c.conn.SetPongHandler(func(string) error {
+		c.conn.SetReadDeadline(time.Now().Add(PongWait))
+		return nil
+	})
+
+	// 持续读取消息
+	for {
+		select {
+		case <-c.readCtx.Done():
+			// 上下文已取消，退出协程
+			return
+		default:
+			// 读取消息
+			_, message, err := c.conn.ReadMessage()
+			if err != nil {
+				if websocket.IsUnexpectedCloseError(err,
+					websocket.CloseGoingAway,
+					websocket.CloseAbnormalClosure) {
+					log.Printf("读取错误: %v", err)
+				}
+				return
+			}
+
+			// 处理收到的消息
+			if err := c.handleMessage(message); err != nil {
+				log.Printf("处理客户端消息失败: %v", err)
+				// 发送错误响应
+				if errMsg := c.SendErrorMessage(err.Error(), ""); errMsg != nil {
+					log.Printf("发送错误消息失败: %v", errMsg)
+				}
+			}
+		}
 	}
 }
 
-// Listen 开始监听客户端消息
-// 这是一个阻塞方法，应该在一个新的goroutine中运行
-// 会持续监听客户端消息，直到连接关闭或出现错误
-func (c *Client) Listen() {
-	defer func() {
-		c.conn.Close()
-		c.handleDisconnect()
-	}()
+// writePump 处理发送WebSocket消息的协程
+func (c *Client) writePump() {
+	defer c.wg.Done()
 
-	heartbeatTicker := time.NewTicker(30 * time.Second)
-	defer heartbeatTicker.Stop()
+	ticker := time.NewTicker(PingPeriod)
+	defer ticker.Stop()
 
 	for {
 		select {
-		case <-heartbeatTicker.C:
-			// 发送心跳包
-			err := c.conn.WriteMessage(websocket.PingMessage, nil)
-			if err != nil {
-				log.Printf("发送心跳包失败: %v", err)
+		case <-c.writeCtx.Done():
+			// 上下文已取消，退出协程
+			return
+		case message, ok := <-c.writeChan:
+			// 设置写入截止时间
+			c.conn.SetWriteDeadline(time.Now().Add(WriteWait))
+			if !ok {
+				// 通道已关闭
+				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
-		default:
-			// 读取消息
-			_, msgBytes, err := c.conn.ReadMessage()
+
+			w, err := c.conn.NextWriter(websocket.TextMessage)
 			if err != nil {
-				// 处理连接关闭或错误
-				log.Printf("客户端 %s 读取消息错误: %v", c.userID, err)
-				return // 错误时直接返回，触发defer中的清理
+				return
+			}
+			w.Write(message)
+
+			// 添加队列中的所有消息
+			n := len(c.writeChan)
+			for i := 0; i < n; i++ {
+				w.Write(<-c.writeChan)
 			}
 
-			// 解析消息
-			var msg Message
-			if err := json.Unmarshal(msgBytes, &msg); err != nil {
-				log.Printf("解析消息失败: %v", err)
-				continue
+			if err := w.Close(); err != nil {
+				return
 			}
-
-			// 如果是注册消息，设置客户端ID
-			if msg.Type == RegisterMsg {
-				var payload RegisterPayload
-				payloadBytes, err := json.Marshal(msg.Payload)
-				if err != nil {
-					log.Printf("序列化注册载荷失败: %v", err)
-					continue
-				}
-
-				if err := json.Unmarshal(payloadBytes, &payload); err == nil {
-					c.userID = payload.UserID
-				}
+		case <-ticker.C:
+			// 发送ping消息
+			c.conn.SetWriteDeadline(time.Now().Add(WriteWait))
+			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
 			}
-
-			// 处理消息
-			c.handler.HandleMessage(c.conn, msg)
 		}
 	}
 }
 
-// handleDisconnect 处理客户端断开连接
-// 从存储中移除客户端，并记录日志
-func (c *Client) handleDisconnect() {
-	if c.userID != "" {
-		c.store.RemoveClient(c.userID)
-		log.Printf("客户端 %s 已断开连接", c.userID)
+// handleMessage 处理收到的消息
+func (c *Client) handleMessage(message []byte) error {
+	// 首先解析基础消息以获取类型
+	var baseMsg BaseMessage
+	if err := json.Unmarshal(message, &baseMsg); err != nil {
+		return fmt.Errorf("解析消息类型失败: %w", err)
+	}
+
+	// 根据消息类型进行不同处理
+	switch baseMsg.Type {
+	case MsgRegister:
+		// 处理注册消息 - 需要验证Token
+		var registerMsg RegisterMessage
+		if err := json.Unmarshal(message, &registerMsg); err != nil {
+			return fmt.Errorf("解析注册消息失败: %w", err)
+		}
+		return c.handleRegisterMessage(registerMsg)
+
+	default:
+		// 非注册消息 - 检查客户端是否已注册
+		if c.username == "" {
+			return fmt.Errorf("客户端尚未注册，请先发送注册消息")
+		}
+
+		// 交由消息处理器处理其他类型消息
+		return c.handler.ProcessMessage(baseMsg.Type, message, c)
 	}
 }
 
-// SendMessage 向客户端发送WebSocket消息
-//
-// 参数:
-//   - conn: 要发送消息的WebSocket连接
-//   - msg: 要发送的消息对象
-//
-// 返回:
-//   - error: 如果消息发送失败则返回错误，否则返回nil
-func SendMessage(conn *websocket.Conn, msg Message) error {
-	// 序列化消息
-	msgBytes, err := json.Marshal(msg)
+// handleRegisterMessage 处理注册消息
+func (c *Client) handleRegisterMessage(msg RegisterMessage) error {
+	// 验证Token
+	username, role, err := tools.ValidateToken(msg.Token)
 	if err != nil {
-		log.Printf("序列化消息失败: %v", err)
+		return fmt.Errorf("验证Token失败: %w", err)
+	}
+
+	// 验证Token中的信息与消息中的信息是否一致
+	if username != msg.Username {
+		return fmt.Errorf("token中的用户名与消息中的用户名不匹配")
+	}
+	if ClientRole(role) != msg.Role {
+		return fmt.Errorf("token中的角色与消息中的角色不匹配")
+	}
+
+	// 设置客户端属性
+	c.SetUsername(msg.Username)
+	c.SetRole(msg.Role)
+
+	// 注册到Hub
+	c.hub.RegisterClient(msg.Username, c)
+
+	// 发送确认消息
+	confirmMsg := RegisterCompleteMessage{
+		BaseMessage: BaseMessage{Type: MsgRegisterComplete},
+		Success:     true,
+		Message:     "注册成功",
+	}
+
+	return c.SendMessage(confirmMsg)
+}
+
+// SendMessage 发送消息
+func (c *Client) SendMessage(msg Message) error {
+	// 序列化消息
+	data, err := json.Marshal(msg)
+	if err != nil {
 		return fmt.Errorf("序列化消息失败: %w", err)
 	}
 
-	// 发送消息，最多重试3次
-	maxRetries := 3
-	for i := 0; i < maxRetries; i++ {
-		err := conn.WriteMessage(websocket.TextMessage, msgBytes)
-		if err == nil {
-			// 添加消息发送成功的日志
-			log.Printf("成功发送消息 类型: %s, 用户: %s", msg.Type, msg.UserID)
-			return nil
-		}
-
-		log.Printf("发送消息失败 (尝试 %d/%d): %v", i+1, maxRetries, err)
-		if i < maxRetries-1 {
-			// 重试前等待一小段时间
-			time.Sleep(100 * time.Millisecond)
-		}
+	// 检查连接是否已关闭
+	c.closedMutex.RLock()
+	closed := c.closed
+	c.closedMutex.RUnlock()
+	if closed {
+		return fmt.Errorf("连接已关闭")
 	}
 
-	log.Printf("发送消息最终失败")
-	return fmt.Errorf("发送消息失败，已重试%d次", maxRetries)
+	// 发送消息
+	select {
+	case c.writeChan <- data:
+		return nil
+	default:
+		return fmt.Errorf("写入通道已满")
+	}
 }
 
-// SendMessageToUser 向特定用户发送消息
-//
-// 参数:
-//   - store: 存储接口，用于查找用户连接
-//   - userID: 目标用户ID
-//   - msg: 要发送的消息对象
-//
-// 返回:
-//   - error: 如果消息发送失败则返回错误，否则返回nil
-func SendMessageToUser(store Storage, userID string, msg Message) error {
-	conn, exists := store.GetClient(userID)
-	if !exists {
-		log.Printf("找不到用户 %s 的连接", userID)
-		return fmt.Errorf("找不到用户 %s 的连接", userID)
+// SendErrorMessage 发送错误消息
+func (c *Client) SendErrorMessage(errMsg string, details string) error {
+	msg := ErrorMessage{
+		BaseMessage: BaseMessage{Type: MsgError},
+		Message:     errMsg,
+		Details:     details,
 	}
+	return c.SendMessage(msg)
+}
 
-	if wsConn, ok := conn.(*websocket.Conn); ok {
-		return SendMessage(wsConn, msg)
-	}
+// Close 关闭客户端连接
+func (c *Client) Close() {
+	c.closeOnce.Do(func() {
+		// 设置关闭标志
+		c.closedMutex.Lock()
+		c.closed = true
+		c.closedMutex.Unlock()
 
-	log.Printf("用户 %s 的连接类型无效", userID)
-	return fmt.Errorf("用户 %s 的连接类型无效", userID)
+		// 取消上下文
+		c.readCancel()
+		c.writeCancel()
+
+		// 关闭通道
+		close(c.writeChan)
+
+		// 从Hub注销
+		if c.username != "" {
+			c.hub.UnregisterClient(c.username)
+		}
+
+		// 关闭连接
+		c.conn.Close()
+
+		log.Printf("客户端连接已关闭: %s", c.username)
+	})
 }
