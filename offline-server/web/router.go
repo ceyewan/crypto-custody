@@ -54,7 +54,7 @@ func initKeyGenRouter(r *gin.Engine) {
 	keyGenGroup := r.Group("/keygen")
 	keyGenGroup.Use(KeyAuthMiddleware()) // 使用专门的中间件验证密钥操作权限
 	{
-
+		keyGenGroup.GET("/create/:initiator", handler.CreateKenGenSessionKey) // 创建密钥生成会话
 	}
 }
 
@@ -63,7 +63,7 @@ func initSignRouter(r *gin.Engine) {
 	signGroup := r.Group("/sign")
 	signGroup.Use(KeyAuthMiddleware()) // 使用专门的中间件验证密钥操作权限
 	{
-
+		signGroup.GET("/create/:initiator", handler.CreateSignSessionKey) // 创建签名会话
 	}
 }
 
