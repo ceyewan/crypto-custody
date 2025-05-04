@@ -261,7 +261,7 @@ func (h *KeyGenHandler) handleKeyGenResponse(msg KeyGenResponseMessage, sender *
 	if session == nil {
 		errMsg := fmt.Sprintf("找不到对应的密钥生成会话: %s", sessionKey)
 		clog.Error(errMsg)
-		return fmt.Errorf(errMsg)
+		return fmt.Errorf("%s", errMsg)
 	}
 
 	// 如果会话状态已经是失败，直接返回
@@ -327,7 +327,7 @@ func (h *KeyGenHandler) handleKeyGenResponse(msg KeyGenResponseMessage, sender *
 			fmt.Sprintf("参与方 %s 的安全芯片标识符不匹配", sender.GetUserName()),
 			errMsg)
 
-		return fmt.Errorf(errMsg)
+		return fmt.Errorf("%s", errMsg)
 	}
 
 	// 接受邀请
@@ -428,7 +428,7 @@ func (h *KeyGenHandler) handleKeyGenResult(msg KeyGenResultMessage, sender *Clie
 	if session == nil {
 		errMsg := fmt.Sprintf("找不到对应的密钥生成会话: %s", sessionKey)
 		clog.Error(errMsg)
-		return fmt.Errorf(errMsg)
+		return fmt.Errorf("%s", errMsg)
 	}
 
 	// 如果会话状态已经是失败，直接返回

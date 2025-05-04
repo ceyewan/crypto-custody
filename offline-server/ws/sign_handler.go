@@ -259,7 +259,7 @@ func (h *SignHandler) handleSignResponse(msg SignResponseMessage, sender *Client
 	if session == nil {
 		errMsg := fmt.Sprintf("找不到对应的签名会话: %s", sessionKey)
 		clog.Error(errMsg)
-		return fmt.Errorf(errMsg)
+		return fmt.Errorf("%s", errMsg)
 	}
 
 	// 如果会话状态已经是失败，直接返回
@@ -330,7 +330,7 @@ func (h *SignHandler) handleSignResponse(msg SignResponseMessage, sender *Client
 			fmt.Sprintf("参与方 %s 的安全芯片标识符不匹配", sender.GetUserName()),
 			errMsg)
 
-		return fmt.Errorf(errMsg)
+		return fmt.Errorf("%s", errMsg)
 	}
 
 	// 接受邀请
@@ -480,7 +480,7 @@ func (h *SignHandler) handleSignResult(msg SignResultMessage, sender *Client) er
 	if session == nil {
 		errMsg := fmt.Sprintf("找不到对应的签名会话: %s", sessionKey)
 		clog.Error(errMsg)
-		return fmt.Errorf(errMsg)
+		return fmt.Errorf("%s", errMsg)
 	}
 
 	// 如果会话状态已经是失败，直接返回

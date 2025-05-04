@@ -48,7 +48,7 @@ func main() {
 
 	// 启动WebSocket服务器
 	log.Println("正在启动WebSocket服务器...")
-	wsServer := ws.NewServer("ws://localhost:8081")
+	wsServer := ws.NewServer("localhost:8081")
 	if err := wsServer.Start(); err != nil {
 		log.Fatalf("启动WebSocket服务器失败: %v", err)
 	}
