@@ -76,6 +76,46 @@ func (h *KeyGenHandler) ProcessMessage(msgType MessageType, rawMessage []byte, s
 	}
 }
 
+// notifySessionFailure 通知会话发起者失败
+func (h *KeyGenHandler) notifySessionFailure(sessionKey string, sender *Client, message string, details string) {
+	session := h.sessionManager.GetKeyGenSession(sessionKey)
+	if session == nil {
+		clog.Warn("无法获取会话信息，无法发送失败通知",
+			clog.String("session_key", sessionKey))
+		return
+	}
+
+	// 更新会话状态为失败
+	session.Status = model.StatusFailed
+
+	// 通知发起者失败
+	initiator := session.Initiator
+	failureMsg := ErrorMessage{
+		BaseMessage: BaseMessage{Type: MsgError},
+		Message:     message,
+		Details:     details,
+	}
+
+	client, exists := sender.Hub().GetClient(initiator)
+	if exists {
+		if err := client.SendMessage(failureMsg); err != nil {
+			clog.Error("向发起者发送失败通知失败",
+				clog.Err(err),
+				clog.String("initiator", initiator),
+				clog.String("session_key", sessionKey))
+		} else {
+			clog.Debug("向发起者发送失败通知成功",
+				clog.String("initiator", initiator),
+				clog.String("session_key", sessionKey),
+				clog.String("message", message))
+		}
+	} else {
+		clog.Warn("发起者不在线，无法发送失败通知",
+			clog.String("initiator", initiator),
+			clog.String("session_key", sessionKey))
+	}
+}
+
 // handleKeyGenRequest 处理密钥生成请求
 func (h *KeyGenHandler) handleKeyGenRequest(msg KeyGenRequestMessage, sender *Client) error {
 	// 直接从消息结构体获取需要的字段
@@ -85,9 +125,7 @@ func (h *KeyGenHandler) handleKeyGenRequest(msg KeyGenRequestMessage, sender *Cl
 	participants := msg.Participants
 
 	clog.Info("收到密钥生成请求",
-		clog.String("session_key", sessionKey),
-		clog.String("initiator", sender.GetUserName()),
-		clog.Int("participants_count", len(participants)))
+		clog.String("session_key", sessionKey))
 
 	clog.Debug("密钥生成请求详情",
 		clog.String("session_key", sessionKey),
@@ -100,6 +138,19 @@ func (h *KeyGenHandler) handleKeyGenRequest(msg KeyGenRequestMessage, sender *Cl
 		clog.Error("创建密钥生成会话失败",
 			clog.Err(err),
 			clog.String("session_key", sessionKey))
+
+		// 直接向发起者发送失败消息
+		failureMsg := ErrorMessage{
+			BaseMessage: BaseMessage{Type: MsgError},
+			Message:     "创建密钥生成会话失败",
+			Details:     err.Error(),
+		}
+		if sendErr := sender.SendMessage(failureMsg); sendErr != nil {
+			clog.Error("向发起者发送失败通知失败",
+				clog.Err(sendErr),
+				clog.String("username", sender.GetUserName()))
+		}
+
 		return fmt.Errorf("创建密钥生成会话失败: %w", err)
 	}
 
@@ -109,6 +160,16 @@ func (h *KeyGenHandler) handleKeyGenRequest(msg KeyGenRequestMessage, sender *Cl
 		clog.Error("获取安全芯片标识符失败",
 			clog.Err(err),
 			clog.Int("requested_count", totalParts))
+
+		// 获取会话并更新状态为失败
+		session := h.sessionManager.GetKeyGenSession(sessionKey)
+		if session != nil {
+			session.Status = model.StatusFailed
+		}
+
+		// 通知发起者失败
+		h.notifySessionFailure(sessionKey, sender, "获取安全芯片标识符失败", err.Error())
+
 		return fmt.Errorf("获取安全芯片标识符失败: %w", err)
 	}
 
@@ -117,7 +178,11 @@ func (h *KeyGenHandler) handleKeyGenRequest(msg KeyGenRequestMessage, sender *Cl
 		clog.Any("chips", chips))
 
 	// 更新密钥生成会话的安全芯片标识符
-	h.sessionManager.GetKeyGenSession(sessionKey).Chips = chips
+	session := h.sessionManager.GetKeyGenSession(sessionKey)
+	session.Chips = chips
+
+	// 记录离线参与者
+	offlineParticipants := []string{}
 
 	// 向所有参与方发送邀请
 	for i, participant := range participants {
@@ -139,6 +204,7 @@ func (h *KeyGenHandler) handleKeyGenRequest(msg KeyGenRequestMessage, sender *Cl
 			clog.Warn("参与方不在线，无法发送邀请",
 				clog.String("participant", participant),
 				clog.String("session_key", sessionKey))
+			offlineParticipants = append(offlineParticipants, participant)
 			continue
 		}
 
@@ -147,10 +213,27 @@ func (h *KeyGenHandler) handleKeyGenRequest(msg KeyGenRequestMessage, sender *Cl
 				clog.Err(err),
 				clog.String("participant", participant),
 				clog.String("session_key", sessionKey))
+			offlineParticipants = append(offlineParticipants, participant)
 		}
 	}
 
-	h.sessionManager.GetKeyGenSession(sessionKey).Status = model.StatusInvited
+	// 检查是否有参与者离线
+	if len(offlineParticipants) > 0 {
+		clog.Error("部分参与者离线或发送邀请失败",
+			clog.Any("offline_participants", offlineParticipants),
+			clog.String("session_key", sessionKey))
+
+		// 更新会话状态为失败
+		session.Status = model.StatusFailed
+
+		// 构建失败消息
+		offlineMsg := fmt.Sprintf("以下参与者不在线或发送邀请失败: %v", offlineParticipants)
+		h.notifySessionFailure(sessionKey, sender, "密钥生成初始化失败", offlineMsg)
+
+		return fmt.Errorf("部分参与者离线或发送邀请失败: %v", offlineParticipants)
+	}
+
+	session.Status = model.StatusInvited
 	clog.Info("密钥生成会话状态已更新为已邀请",
 		clog.String("session_key", sessionKey),
 		clog.String("status", string(model.StatusInvited)))
@@ -173,100 +256,23 @@ func (h *KeyGenHandler) handleKeyGenResponse(msg KeyGenResponseMessage, sender *
 		clog.Int("part_index", partIndex),
 		clog.Bool("accept", accept))
 
-	if !accept {
-		clog.Debug("参与方拒绝原因",
-			clog.String("session_key", sessionKey),
-			clog.String("participant", sender.GetUserName()),
-			clog.String("reason", reason))
-	}
-
 	// 获取会话
 	session := h.sessionManager.GetKeyGenSession(sessionKey)
-
-	// 验证芯片标识符是否匹配
-	se, err := h.seStorage.GetSeBySeId(session.Chips[partIndex])
-	if err != nil {
-		clog.Error("验证安全芯片标识符失败",
-			clog.Err(err),
-			clog.String("session_key", sessionKey),
-			clog.String("se_id", session.Chips[partIndex]))
-		return fmt.Errorf("验证安全芯片标识符失败: %w", err)
-	}
-	if se.CPIC != cpic {
-		clog.Error("安全芯片标识符不匹配",
-			clog.String("session_key", sessionKey),
-			clog.String("expected_cpic", se.CPIC),
-			clog.String("actual_cpic", cpic))
-		return fmt.Errorf("安全芯片标识符不匹配: %s != %s", se.CPIC, cpic)
+	if session == nil {
+		errMsg := fmt.Sprintf("找不到对应的密钥生成会话: %s", sessionKey)
+		clog.Error(errMsg)
+		return fmt.Errorf(errMsg)
 	}
 
-	// 更新会话状态
-	if accept {
-		// 接受邀请
-		session.Responses[partIndex-1] = string(model.ParticipantAccepted)
-		clog.Debug("参与方接受密钥生成邀请",
+	// 如果会话状态已经是失败，直接返回
+	if session.Status == model.StatusFailed {
+		clog.Warn("会话已处于失败状态，忽略响应",
 			clog.String("session_key", sessionKey),
-			clog.String("participant", sender.GetUserName()),
-			clog.Int("part_index", partIndex))
+			clog.String("participant", sender.GetUserName()))
+		return nil
+	}
 
-		// 检查是否所有参与方都已接受，统计 session.Responses 是否全为 Accepted
-		flag := true
-		acceptedCount := 0
-		for _, status := range session.Responses {
-			if status == string(model.ParticipantAccepted) {
-				acceptedCount++
-			}
-			if status != string(model.ParticipantAccepted) {
-				flag = false
-			}
-		}
-
-		clog.Debug("密钥生成参与方接受状态",
-			clog.String("session_key", sessionKey),
-			clog.Int("accepted_count", acceptedCount),
-			clog.Int("total_count", len(session.Responses)),
-			clog.Bool("all_accepted", flag))
-
-		if flag {
-			clog.Info("所有参与方已接受密钥生成邀请，开始发送参数",
-				clog.String("session_key", sessionKey),
-				clog.Int("participants_count", len(session.Participants)))
-
-			// 向所有参与方发送参数
-			for i, participant := range session.Participants {
-				// 准备参数消息
-				paramsMsg := KeyGenParamsMessage{
-					BaseMessage: BaseMessage{Type: MsgKeyGenParams},
-					SessionKey:  sessionKey,
-					Threshold:   session.Threshold,
-					TotalParts:  len(session.Participants),
-					PartIndex:   i + 1,
-					FileName:    fmt.Sprintf("%s_%d.json", sessionKey, i+1),
-				}
-
-				// 发送参数
-				client, exists := sender.Hub().GetClient(participant)
-				if !exists {
-					clog.Warn("参与方不在线，无法发送参数",
-						clog.String("participant", participant),
-						clog.String("session_key", sessionKey))
-					continue
-				}
-
-				if err := client.SendMessage(paramsMsg); err != nil {
-					clog.Error("向参与方发送参数失败",
-						clog.Err(err),
-						clog.String("participant", participant),
-						clog.String("session_key", sessionKey))
-				} else {
-					clog.Debug("向参与方发送参数成功",
-						clog.String("participant", participant),
-						clog.String("session_key", sessionKey),
-						clog.Int("part_index", i+1))
-				}
-			}
-		}
-	} else {
+	if !accept {
 		// 拒绝邀请
 		session.Responses[partIndex-1] = string(model.ParticipantRejected)
 		clog.Info("参与方拒绝密钥生成邀请",
@@ -275,28 +281,140 @@ func (h *KeyGenHandler) handleKeyGenResponse(msg KeyGenResponseMessage, sender *
 			clog.Int("part_index", partIndex),
 			clog.String("reason", reason))
 
+		// 更新会话状态
+		session.Status = model.StatusFailed
+		clog.Info("密钥生成会话状态已更新为失败")
+
 		// 通知发起者有参与方拒绝
-		initiator := session.Initiator
-		rejectMsg := ErrorMessage{
-			BaseMessage: BaseMessage{Type: MsgError},
-			Message:     fmt.Sprintf("参与方 %s 拒绝了密钥生成邀请", sender.GetUserName()),
-			Details:     reason,
+		h.notifySessionFailure(sessionKey, sender,
+			fmt.Sprintf("参与方 %s 拒绝了密钥生成邀请", sender.GetUserName()),
+			reason)
+
+		return nil
+	}
+
+	// 验证芯片标识符是否匹配
+	se, err := h.seStorage.GetSeBySeId(session.Chips[partIndex-1])
+	if err != nil {
+		clog.Error("验证安全芯片标识符失败",
+			clog.Err(err),
+			clog.String("session_key", sessionKey),
+			clog.String("se_id", session.Chips[partIndex-1]))
+
+		// 更新会话状态为失败
+		session.Status = model.StatusFailed
+
+		// 通知发起者失败
+		h.notifySessionFailure(sessionKey, sender,
+			"验证安全芯片标识符失败",
+			err.Error())
+
+		return fmt.Errorf("验证安全芯片标识符失败: %w", err)
+	}
+
+	if se.CPIC != cpic {
+		errMsg := fmt.Sprintf("安全芯片标识符不匹配: %s != %s", se.CPIC, cpic)
+		clog.Error(errMsg,
+			clog.String("session_key", sessionKey),
+			clog.String("expected_cpic", se.CPIC),
+			clog.String("actual_cpic", cpic))
+
+		// 更新会话状态为失败
+		session.Status = model.StatusFailed
+
+		// 通知发起者失败
+		h.notifySessionFailure(sessionKey, sender,
+			fmt.Sprintf("参与方 %s 的安全芯片标识符不匹配", sender.GetUserName()),
+			errMsg)
+
+		return fmt.Errorf(errMsg)
+	}
+
+	// 接受邀请
+	session.Responses[partIndex-1] = string(model.ParticipantAccepted)
+	clog.Debug("参与方接受密钥生成邀请",
+		clog.String("session_key", sessionKey),
+		clog.String("participant", sender.GetUserName()),
+		clog.Int("part_index", partIndex))
+
+	// 检查是否所有参与方都已接受，统计 session.Responses 是否全为 Accepted
+	acceptedCount := 0
+	for _, status := range session.Responses {
+		if status == string(model.ParticipantAccepted) {
+			acceptedCount++
+		}
+	}
+
+	clog.Debug("密钥生成参与方接受状态",
+		clog.String("session_key", sessionKey),
+		clog.Int("accepted_count", acceptedCount),
+		clog.Int("total_count", len(session.Responses)))
+
+	if acceptedCount == len(session.Responses) {
+		clog.Info("所有参与方已接受密钥生成邀请，开始发送参数",
+			clog.String("session_key", sessionKey),
+			clog.Int("participants_count", len(session.Participants)))
+
+		// 记录发送失败的参与者
+		failedParticipants := []string{}
+
+		// 向所有参与方发送参数
+		for i, participant := range session.Participants {
+			// 准备参数消息
+			paramsMsg := KeyGenParamsMessage{
+				BaseMessage: BaseMessage{Type: MsgKeyGenParams},
+				SessionKey:  sessionKey,
+				Threshold:   session.Threshold,
+				TotalParts:  len(session.Participants),
+				PartIndex:   i + 1,
+				FileName:    fmt.Sprintf("%s_%d.json", sessionKey, i+1),
+			}
+
+			// 发送参数
+			client, exists := sender.Hub().GetClient(participant)
+			if !exists {
+				clog.Warn("参与方不在线，无法发送参数",
+					clog.String("participant", participant),
+					clog.String("session_key", sessionKey))
+				failedParticipants = append(failedParticipants, participant)
+				continue
+			}
+
+			if err := client.SendMessage(paramsMsg); err != nil {
+				clog.Error("向参与方发送参数失败",
+					clog.Err(err),
+					clog.String("participant", participant),
+					clog.String("session_key", sessionKey))
+				failedParticipants = append(failedParticipants, participant)
+			} else {
+				clog.Debug("向参与方发送参数成功",
+					clog.String("participant", participant),
+					clog.String("session_key", sessionKey),
+					clog.Int("part_index", i+1))
+			}
 		}
 
-		// 发送拒绝通知
-		client, exists := sender.Hub().GetClient(initiator)
-		if exists {
-			if err := client.SendMessage(rejectMsg); err != nil {
-				clog.Error("向发起者发送拒绝通知失败",
-					clog.Err(err),
-					clog.String("initiator", initiator),
-					clog.String("session_key", sessionKey))
-			}
-		} else {
-			clog.Warn("发起者不在线，无法发送拒绝通知",
-				clog.String("initiator", initiator),
+		// 检查是否有发送参数失败的情况
+		if len(failedParticipants) > 0 {
+			clog.Error("部分参与者发送参数失败",
+				clog.Any("failed_participants", failedParticipants),
 				clog.String("session_key", sessionKey))
+
+			// 更新会话状态为失败
+			session.Status = model.StatusFailed
+
+			// 通知发起者失败
+			failedMsg := fmt.Sprintf("向以下参与者发送参数失败: %v", failedParticipants)
+			h.notifySessionFailure(sessionKey, sender, "密钥生成过程失败", failedMsg)
+
+			return fmt.Errorf("部分参与者发送参数失败: %v", failedParticipants)
 		}
+
+		// 更新会话状态为处理中
+		session.Status = model.StatusProcessing
+		clog.Info("密钥生成会话状态已更新为处理中",
+			clog.String("session_key", sessionKey),
+			clog.String("status", string(model.StatusProcessing)))
 	}
 
 	return nil
@@ -304,17 +422,42 @@ func (h *KeyGenHandler) handleKeyGenResponse(msg KeyGenResponseMessage, sender *
 
 // handleKeyGenResult 处理密钥生成结果
 func (h *KeyGenHandler) handleKeyGenResult(msg KeyGenResultMessage, sender *Client) error {
+	// 获取会话
+	sessionKey := msg.SessionKey
+	session := h.sessionManager.GetKeyGenSession(sessionKey)
+	if session == nil {
+		errMsg := fmt.Sprintf("找不到对应的密钥生成会话: %s", sessionKey)
+		clog.Error(errMsg)
+		return fmt.Errorf(errMsg)
+	}
+
+	// 如果会话状态已经是失败，直接返回
+	if session.Status == model.StatusFailed {
+		clog.Warn("会话已处于失败状态，忽略结果",
+			clog.String("session_key", sessionKey),
+			clog.String("participant", sender.GetUserName()))
+		return nil
+	}
+
 	// 直接从消息结构体获取字段
 	success := msg.Success
 	if !success {
 		clog.Error("密钥生成失败",
-			clog.String("session_key", msg.SessionKey),
+			clog.String("session_key", sessionKey),
 			clog.String("participant", sender.GetUserName()),
 			clog.String("message", msg.Message))
+
+		// 更新会话状态为失败
+		session.Status = model.StatusFailed
+
+		// 通知发起者失败
+		h.notifySessionFailure(sessionKey, sender,
+			fmt.Sprintf("参与方 %s 的密钥生成失败", sender.GetUserName()),
+			msg.Message)
+
 		return fmt.Errorf("密钥生成失败: %s", msg.Message)
 	}
 
-	sessionKey := msg.SessionKey
 	partIndex := msg.PartIndex
 	address := msg.Address
 	cpic := msg.CPIC
@@ -340,11 +483,17 @@ func (h *KeyGenHandler) handleKeyGenResult(msg KeyGenResultMessage, sender *Clie
 			clog.String("session_key", sessionKey),
 			clog.String("participant", sender.GetUserName()),
 			clog.String("address", address))
+
+		// 更新会话状态为失败
+		session.Status = model.StatusFailed
+
+		// 通知发起者失败
+		h.notifySessionFailure(sessionKey, sender,
+			fmt.Sprintf("保存参与方 %s 的密钥分片失败", sender.GetUserName()),
+			err.Error())
+
 		return fmt.Errorf("保存密钥分片失败: %w", err)
 	}
-
-	// 更新会话状态
-	session := h.sessionManager.GetKeyGenSession(sessionKey)
 
 	// 标记该部分已完成
 	session.Responses[partIndex-1] = string(model.ParticipantCompleted)

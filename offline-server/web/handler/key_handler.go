@@ -9,17 +9,14 @@ import (
 )
 
 func CreateKenGenSessionKey(c *gin.Context) {
-	// 获取请求参数
-	var req struct {
-		Initiator string `json:"initiator" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
+	// 从URL参数获取initiator
+	initiator := c.Param("initiator")
+	if initiator == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "缺少发起者参数"})
 		return
 	}
-
 	// 调用服务层创建密钥生成会话
-	sessionKey, err := service.CreateKenGenSessionKey(req.Initiator)
+	sessionKey, err := service.CreateKenGenSessionKey(initiator)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
