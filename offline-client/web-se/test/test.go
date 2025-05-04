@@ -340,7 +340,7 @@ func runSignTest() {
 	fmt.Println("✅ 私钥加载成功")
 
 	// 准备测试数据
-	testData := "hello"
+	testData := "\"hello\""
 	fmt.Printf("测试数据: %s\n", testData)
 
 	// 签名请求处理

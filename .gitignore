@@ -6,3 +6,4 @@ offline-client/web-se/private_keys/ec_private_key.pem
 offline-client/web-se/logs/app.log
 offline-client/web-se/web-se
 offline-client/web-se/logs/app.log
+offline-server/private_keys/ec_private_key.pem
