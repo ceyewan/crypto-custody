@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"offline-server/clog"
 	"offline-server/manager"
 	"offline-server/storage/db"
 	"offline-server/web"
@@ -36,6 +37,13 @@ func main() {
 	// 捕获终止信号
 	ctx, cancel := context.WithCancel(context.Background())
 	setupSignalHandler(cancel)
+
+	// 初始化日志系统
+	if err := clog.Init(clog.DefaultConfig()); err != nil {
+		log.Fatalf("初始化日志系统失败: %v", err)
+	}
+	clog.SetDefaultLevel(clog.DebugLevel)
+	defer clog.Sync() // 刷新缓冲区
 
 	// 初始化数据库
 	if err := db.Init(); err != nil {
