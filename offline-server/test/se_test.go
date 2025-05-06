@@ -4,14 +4,18 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"testing"
 )
 
+// 安全芯片测试相关常量
 const (
-	// 安全芯片服务器配置
+	// 服务器配置
 	MpcBaseURL = "http://localhost:8088"
+
+	// 测试用安全芯片ID
+	DefaultSEID = "SE000"
 )
 
 // 安全芯片CPIC响应结构
@@ -32,38 +36,6 @@ type CreateSeResponse struct {
 	Data interface{} `json:"data"`
 }
 
-// TestCreateSecurityElement 测试安全芯片记录创建流程
-func TestCreateSecurityElement(t *testing.T) {
-	// 1. 获取管理员令牌
-	fmt.Println("1. 登录管理员账号...")
-	adminLogin, err := LoginUser(AdminUsername, AdminPassword)
-	if err != nil {
-		t.Fatalf("管理员登录失败: %v", err)
-	}
-	adminToken := adminLogin.Token
-	fmt.Printf("管理员登录成功，获取令牌: %s\n", adminToken)
-
-	// 2. 获取CPIC数据
-	fmt.Println("\n2. 从MPC服务获取CPIC数据...")
-	cpic, err := GetCPIC()
-	if err != nil {
-		t.Fatalf("获取CPIC数据失败: %v", err)
-	}
-	fmt.Printf("成功获取CPIC数据，长度: %d\n", len(cpic))
-
-	// 3. 提示用户输入SEID
-	seid := "SE000"
-	fmt.Printf("输入的SEID: %s\n", seid)
-
-	// 4. 创建安全芯片记录
-	fmt.Println("\n4. 创建安全芯片记录...")
-	err = CreateSecurityElement(adminToken, seid, cpic)
-	if err != nil {
-		t.Fatalf("创建安全芯片记录失败: %v", err)
-	}
-	fmt.Println("安全芯片记录创建成功!")
-}
-
 // GetCPIC 从MPC服务获取CPIC数据
 func GetCPIC() (string, error) {
 	// 发送GET请求获取CPIC数据
@@ -74,7 +46,7 @@ func GetCPIC() (string, error) {
 	defer resp.Body.Close()
 
 	// 读取响应内容
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", fmt.Errorf("读取响应失败: %v", err)
 	}
@@ -131,7 +103,7 @@ func CreateSecurityElement(token string, seid string, cpic string) error {
 	defer resp.Body.Close()
 
 	// 读取响应内容
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("读取响应失败: %v", err)
 	}
@@ -153,4 +125,41 @@ func CreateSecurityElement(token string, seid string, cpic string) error {
 	}
 
 	return nil
+}
+
+// 完整的安全芯片创建流程，包括获取管理员令牌、获取CPIC、创建安全芯片记录
+func CompleteSecurityElementFlow(seid string) error {
+	// 1. 获取管理员令牌
+	adminToken, err := GetAdminToken()
+	if err != nil {
+		return fmt.Errorf("获取管理员令牌失败: %v", err)
+	}
+
+	// 2. 获取CPIC数据
+	cpic, err := GetCPIC()
+	if err != nil {
+		return fmt.Errorf("获取CPIC数据失败: %v", err)
+	}
+
+	// 3. 创建安全芯片记录
+	err = CreateSecurityElement(adminToken, seid, cpic)
+	if err != nil {
+		return fmt.Errorf("创建安全芯片记录失败: %v", err)
+	}
+
+	return nil
+}
+
+// TestCreateSecurityElement 测试安全芯片记录创建流程
+func TestCreateSecurityElement(t *testing.T) {
+	fmt.Println("===== 开始安全芯片测试 =====")
+
+	// 使用默认SEID执行安全芯片创建流程
+	err := CompleteSecurityElementFlow(DefaultSEID)
+	if err != nil {
+		t.Fatalf("安全芯片创建失败: %v", err)
+	}
+
+	fmt.Println("安全芯片记录创建成功!")
+	fmt.Println("\n===== 安全芯片测试完成 =====")
 }
