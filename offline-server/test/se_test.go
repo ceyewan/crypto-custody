@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	// 服务器配置
+	// 安全芯片服务器配置
 	MpcBaseURL = "http://localhost:8088"
 )
 
