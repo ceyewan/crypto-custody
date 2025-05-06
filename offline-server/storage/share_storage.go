@@ -56,7 +56,7 @@ func (s *ShareStorage) CreateEthereumKeyShard(username, address, pcic, privateSh
 	// 检查是否已存在相同用户名、地址和索引的分片
 	var count int64
 	if err := database.Model(&model.EthereumKeyShard{}).
-		Where("username = ? AND address = ? AND index = ?", username, address, shardIndex).
+		Where("username = ? AND address = ? AND shard_index = ?", username, address, shardIndex).
 		Count(&count).Error; err != nil {
 		log.Printf("查询以太坊私钥分片失败: %v", err)
 		return ErrOperationFailed
