@@ -10,14 +10,45 @@ import (
 	"time"
 )
 
-// 常量定义
+// 全局常量定义
 const (
-	BaseURL         = "http://localhost:8080" // API服务器基础URL
-	AdminUsername   = "admin"                 // 管理员用户名
-	AdminPassword   = "admin123"              // 管理员密码
-	CoordinatorRole = "coordinator"           // 协调者角色
-	ParticipantRole = "participant"           // 参与者角色
+	// 服务器配置
+	BaseURL = "http://localhost:8080" // API服务器基础URL
+
+	// 用户角色常量
+	AdminUsername   = "admin"       // 管理员用户名
+	AdminPassword   = "admin123"    // 管理员密码
+	CoordinatorRole = "coordinator" // 协调者角色
+	ParticipantRole = "participant" // 参与者角色
 )
+
+// 全局测试用户数据
+var TestUsers = []UserInfo{
+	{
+		Username: "coordinator",
+		Password: "password123",
+		Email:    "coordinator@example.com",
+		Role:     CoordinatorRole,
+	},
+	{
+		Username: "participant1",
+		Password: "password123",
+		Email:    "participant1@example.com",
+		Role:     ParticipantRole,
+	},
+	{
+		Username: "participant2",
+		Password: "password123",
+		Email:    "participant2@example.com",
+		Role:     ParticipantRole,
+	},
+	{
+		Username: "participant3",
+		Password: "password123",
+		Email:    "participant3@example.com",
+		Role:     ParticipantRole,
+	},
+}
 
 // 用户信息结构体
 type UserInfo struct {
@@ -198,175 +229,75 @@ func UpdateUserRole(token string, username, role string) error {
 	return nil
 }
 
-// 主测试函数
-func RunUserTest() {
-	fmt.Println("===== 开始用户测试 =====")
-
-	// 定义用户信息（一个协调者和三个参与者）
-	users := []UserInfo{
-		{
-			Username: "coordinator",
-			Password: "password123",
-			Email:    "coordinator@example.com",
-			Role:     CoordinatorRole,
-		},
-		{
-			Username: "participant1",
-			Password: "password123",
-			Email:    "participant1@example.com",
-			Role:     ParticipantRole,
-		},
-		{
-			Username: "participant2",
-			Password: "password123",
-			Email:    "participant2@example.com",
-			Role:     ParticipantRole,
-		},
-		{
-			Username: "participant3",
-			Password: "password123",
-			Email:    "participant3@example.com",
-			Role:     ParticipantRole,
-		},
-	}
-
-	// 1. 先登录管理员账号
-	fmt.Println("1. 登录管理员账号...")
+// 管理员账户登录并返回令牌
+func GetAdminToken() (string, error) {
 	adminLogin, err := LoginUser(AdminUsername, AdminPassword)
 	if err != nil {
-		fmt.Printf("管理员登录失败: %v\n", err)
-		return
+		return "", fmt.Errorf("管理员登录失败: %v", err)
 	}
-	adminToken := adminLogin.Token
-	fmt.Printf("管理员登录成功, 令牌: %s\n", adminToken)
+	return adminLogin.Token, nil
+}
+
+// 注册并设置用户角色
+func RegisterAndSetupUsers() error {
+	// 1. 获取管理员令牌
+	adminToken, err := GetAdminToken()
+	if err != nil {
+		return fmt.Errorf("获取管理员令牌失败: %v", err)
+	}
 
 	// 2. 注册所有测试用户
-	fmt.Println("\n2. 注册测试用户...")
-	for i, user := range users {
-		fmt.Printf("注册用户 %d/%d: %s...\n", i+1, len(users), user.Username)
-		registerResp, err := RegisterUser(user)
+	for _, user := range TestUsers {
+		_, err := RegisterUser(user)
 		if err != nil {
-			fmt.Printf("注册用户 %s 失败: %v\n", user.Username, err)
-			continue
+			return fmt.Errorf("注册用户 %s 失败: %v", user.Username, err)
 		}
-		fmt.Printf("用户 %s 注册成功, 默认角色: %s\n", user.Username, registerResp.User.Role)
 	}
 
-	// 3. 使用管理员权限更新用户角色
-	fmt.Println("\n3. 更新用户角色...")
-	time.Sleep(1 * time.Second) // 简单延迟，确保注册完成
+	// 3. 允许用户注册完成
+	time.Sleep(1 * time.Second)
 
-	for i, user := range users {
-		fmt.Printf("更新用户 %d/%d: %s 角色为 %s...\n", i+1, len(users), user.Username, user.Role)
+	// 4. 为所有用户设置正确的角色
+	for _, user := range TestUsers {
 		err := UpdateUserRole(adminToken, user.Username, user.Role)
 		if err != nil {
-			fmt.Printf("更新用户 %s 角色失败: %v\n", user.Username, err)
-			continue
+			return fmt.Errorf("更新用户 %s 角色失败: %v", user.Username, err)
 		}
-		fmt.Printf("用户 %s 角色已更新为 %s\n", user.Username, user.Role)
 	}
 
-	// 4. 测试用户登录并获取令牌
-	fmt.Println("\n4. 测试用户登录并获取令牌...")
-	for i, user := range users {
-		fmt.Printf("登录用户 %d/%d: %s...\n", i+1, len(users), user.Username)
+	return nil
+}
+
+// 登录所有测试用户
+func LoginAllUsers() error {
+	for i, user := range TestUsers {
 		loginResp, err := LoginUser(user.Username, user.Password)
 		if err != nil {
-			fmt.Printf("登录用户 %s 失败: %v\n", user.Username, err)
-			continue
+			return fmt.Errorf("登录用户 %s 失败: %v", user.Username, err)
 		}
-		fmt.Printf("用户 %s 登录成功, 当前角色: %s\n", user.Username, loginResp.User.Role)
-		fmt.Printf("令牌: %s\n", loginResp.Token)
 
-		// 更新用户的Token
-		users[i].Token = loginResp.Token
+		// 更新全局用户数据中的令牌
+		TestUsers[i].Token = loginResp.Token
 	}
-
-	fmt.Println("\n===== 用户测试完成 =====")
+	return nil
 }
 
 // TestUserRegisterLoginFlow 使用 Go 的测试框架测试用户注册和登录流程
 func TestUserRegisterLoginFlow(t *testing.T) {
 	fmt.Println("===== 开始用户测试 =====")
 
-	// 定义用户信息（一个协调者和三个参与者）
-	users := []UserInfo{
-		{
-			Username: "coordinator",
-			Password: "password123",
-			Email:    "coordinator@example.com",
-			Role:     CoordinatorRole,
-		},
-		{
-			Username: "participant1",
-			Password: "password123",
-			Email:    "participant1@example.com",
-			Role:     ParticipantRole,
-		},
-		{
-			Username: "participant2",
-			Password: "password123",
-			Email:    "participant2@example.com",
-			Role:     ParticipantRole,
-		},
-		{
-			Username: "participant3",
-			Password: "password123",
-			Email:    "participant3@example.com",
-			Role:     ParticipantRole,
-		},
-	}
-
-	// 1. 先登录管理员账号
-	fmt.Println("1. 登录管理员账号...")
-	adminLogin, err := LoginUser(AdminUsername, AdminPassword)
+	// 注册并设置用户角色
+	err := RegisterAndSetupUsers()
 	if err != nil {
-		t.Fatalf("管理员登录失败: %v", err)
-	}
-	adminToken := adminLogin.Token
-	fmt.Printf("管理员登录成功, 令牌: %s\n", adminToken)
-
-	// 2. 注册所有测试用户
-	fmt.Println("\n2. 注册测试用户...")
-	for i, user := range users {
-		fmt.Printf("注册用户 %d/%d: %s...\n", i+1, len(users), user.Username)
-		registerResp, err := RegisterUser(user)
-		if err != nil {
-			t.Errorf("注册用户 %s 失败: %v", user.Username, err)
-			continue
-		}
-		fmt.Printf("用户 %s 注册成功, 默认角色: %s\n", user.Username, registerResp.User.Role)
+		t.Fatalf("用户注册与设置失败: %v", err)
 	}
 
-	// 3. 使用管理员权限更新用户角色
-	fmt.Println("\n3. 更新用户角色...")
-	time.Sleep(1 * time.Second) // 简单延迟，确保注册完成
-
-	for i, user := range users {
-		fmt.Printf("更新用户 %d/%d: %s 角色为 %s...\n", i+1, len(users), user.Username, user.Role)
-		err := UpdateUserRole(adminToken, user.Username, user.Role)
-		if err != nil {
-			t.Errorf("更新用户 %s 角色失败: %v", user.Username, err)
-			continue
-		}
-		fmt.Printf("用户 %s 角色已更新为 %s\n", user.Username, user.Role)
+	// 登录所有测试用户
+	err = LoginAllUsers()
+	if err != nil {
+		t.Fatalf("用户登录失败: %v", err)
 	}
 
-	// 4. 测试用户登录并获取令牌
-	fmt.Println("\n4. 测试用户登录并获取令牌...")
-	for i, user := range users {
-		fmt.Printf("登录用户 %d/%d: %s...\n", i+1, len(users), user.Username)
-		loginResp, err := LoginUser(user.Username, user.Password)
-		if err != nil {
-			t.Errorf("登录用户 %s 失败: %v", user.Username, err)
-			continue
-		}
-		fmt.Printf("用户 %s 登录成功, 当前角色: %s\n", user.Username, loginResp.User.Role)
-		fmt.Printf("令牌: %s\n", loginResp.Token)
-
-		// 更新用户的Token
-		users[i].Token = loginResp.Token
-	}
-
+	fmt.Println("用户注册和登录成功完成")
 	fmt.Println("\n===== 用户测试完成 =====")
 }
