@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"offline-server/storage"
+	"offline-server/storage/db"
 	"offline-server/storage/model"
 	"strings"
 )
@@ -117,4 +118,55 @@ func UpdateUserRole(userName, role string) error {
 
 	// 调用存储接口更新用户角色
 	return userStorage.UpdateUserRole(userName, role)
+}
+
+// GetAvailableUsers 获取可以参与密钥生成的用户列表（协调者和参与者）
+func GetAvailableUsers() ([]model.User, error) {
+	users, err := userStorage.GetAllUsers()
+	if err != nil {
+		return nil, err
+	}
+
+	// 筛选出只有协调者和参与者角色的用户
+	availableUsers := []model.User{}
+	for _, user := range users {
+		if user.Role == model.RoleCoordinator || user.Role == model.RoleParticipant {
+			availableUsers = append(availableUsers, user)
+		}
+	}
+
+	return availableUsers, nil
+}
+
+// GetUsersByAddress 获取拥有特定地址分片的用户列表
+func GetUsersByAddress(address string) ([]model.User, error) {
+	if strings.TrimSpace(address) == "" {
+		return nil, errors.New("以太坊地址不能为空")
+	}
+
+	// 获取DB实例
+	database := db.GetDB()
+	if database == nil {
+		return nil, errors.New("数据库未初始化")
+	}
+
+	// 查询拥有该地址分片的所有用户名
+	var usernames []string
+	if err := database.Model(&model.EthereumKeyShard{}).
+		Where("address = ?", address).
+		Pluck("username", &usernames).Error; err != nil {
+		return nil, errors.New("查询密钥分片失败: " + err.Error())
+	}
+
+	if len(usernames) == 0 {
+		return []model.User{}, nil
+	}
+
+	// 获取这些用户的详细信息
+	var users []model.User
+	if err := database.Where("username IN ?", usernames).Find(&users).Error; err != nil {
+		return nil, errors.New("查询用户信息失败: " + err.Error())
+	}
+
+	return users, nil
 }

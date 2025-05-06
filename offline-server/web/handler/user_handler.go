@@ -180,3 +180,62 @@ func isValidRole(role string) bool {
 	}
 	return false
 }
+
+// GetAvailableUsers 获取可以参与密钥生成的用户列表（协调者和参与者）
+func GetAvailableUsers(c *gin.Context) {
+	// 调用服务层获取可用用户
+	users, err := service.GetAvailableUsers()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取用户列表失败: " + err.Error()})
+		return
+	}
+
+	// 构建响应，只返回必要的字段
+	var response []gin.H
+	for _, user := range users {
+		response = append(response, gin.H{
+			"id":       user.ID,
+			"username": user.Username,
+			"email":    user.Email,
+			"role":     user.Role,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code": 0,
+		"data": response,
+	})
+}
+
+// GetUsersByAddress 获取特定地址的用户列表
+func GetUsersByAddress(c *gin.Context) {
+	// 从URL参数获取地址
+	address := c.Param("address")
+	if address == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "缺少地址参数"})
+		return
+	}
+
+	// 调用服务层获取拥有该地址分片的用户
+	users, err := service.GetUsersByAddress(address)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取用户列表失败: " + err.Error()})
+		return
+	}
+
+	// 构建响应，只返回必要的字段
+	var response []gin.H
+	for _, user := range users {
+		response = append(response, gin.H{
+			"id":       user.ID,
+			"username": user.Username,
+			"email":    user.Email,
+			"role":     user.Role,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code": 0,
+		"data": response,
+	})
+}
