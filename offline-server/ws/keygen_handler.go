@@ -3,6 +3,7 @@ package ws
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"offline-server/clog"
 	"offline-server/storage"
@@ -392,6 +393,7 @@ func (h *KeyGenHandler) handleKeyGenResponse(msg KeyGenResponseMessage, sender *
 					clog.String("session_key", sessionKey),
 					clog.Int("part_index", i+1))
 			}
+			time.Sleep(1 * time.Second)
 		}
 
 		// 检查是否有发送参数失败的情况

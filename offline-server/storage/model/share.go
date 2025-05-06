@@ -11,7 +11,7 @@ type EthereumKeyShard struct {
 	gorm.Model
 	Username     string `gorm:"column:username;size:50;comment:用户名，用于唯一标识私钥分片"`
 	Address      string `gorm:"column:address;size:100;comment:以太坊账户地址，用于唯一标识私钥分片"`
-	ShardIndex   int    `gorm:"column:index;comment:私钥分片的序号"`
+	ShardIndex   int    `gorm:"column:shard_index;comment:私钥分片的序号"`
 	PCIC         string `gorm:"column:pcic;size:100;comment:加密密钥所在的安全芯片标识"`
 	PrivateShard string `gorm:"column:private;type:text;comment:Base64 编码的加密私钥分片"`
 }

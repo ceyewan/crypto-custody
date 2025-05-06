@@ -1,6 +1,7 @@
 package test
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -77,6 +78,7 @@ type WSClient struct {
 	Username string
 	Role     string
 	Token    string
+	StopChan chan struct{} // 用于停止心跳协程
 }
 
 // 可用用户列表响应
@@ -93,6 +95,28 @@ type AvailableUsersResponse struct {
 // 会话密钥响应
 type SessionKeyResponse struct {
 	SessionKey string `json:"session_key"`
+}
+
+// 密钥生成参数消息
+type KeyGenParamsMessage struct {
+	BaseMessage
+	SessionKey string `json:"session_key"` // 会话唯一标识
+	Threshold  int    `json:"threshold"`   // 门限值
+	TotalParts int    `json:"total_parts"` // 总分片数
+	PartIndex  int    `json:"part_index"`  // 参与者索引i
+	FileName   string `json:"filename"`    // 密钥生成配置文件名
+}
+
+// 密钥生成结果消息
+type KeyGenResultMessage struct {
+	BaseMessage
+	SessionKey     string `json:"session_key"`     // 会话唯一标识
+	PartIndex      int    `json:"part_index"`      // 参与者索引i
+	Address        string `json:"address"`         // 生成的账户地址
+	CPIC           string `json:"cpic"`            // 安全芯片唯一标识符
+	EncryptedShard string `json:"encrypted_shard"` // Base64编码的加密密钥分片
+	Success        bool   `json:"success"`         // 密钥生成是否成功
+	Message        string `json:"message"`         // 成功或失败的消息
 }
 
 // 创建WebSocket客户端并连接
@@ -115,6 +139,7 @@ func CreateWSClient(user UserInfo) (*WSClient, error) {
 		Username: user.Username,
 		Role:     user.Role,
 		Token:    user.Token,
+		StopChan: make(chan struct{}),
 	}
 
 	// 发送注册消息
@@ -131,8 +156,30 @@ func CreateWSClient(user UserInfo) (*WSClient, error) {
 		return nil, fmt.Errorf("发送注册消息失败: %v", err)
 	}
 
+	// 启动心跳协程
+	go client.startHeartbeat()
+
 	fmt.Printf("用户 %s 已连接到WebSocket服务器并注册\n", user.Username)
 	return client, nil
+}
+
+// 启动心跳保活
+func (c *WSClient) startHeartbeat() {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			// 发送ping消息
+			if err := c.Conn.WriteMessage(websocket.PingMessage, []byte{}); err != nil {
+				fmt.Printf("发送心跳消息失败: %v\n", err)
+				return
+			}
+		case <-c.StopChan:
+			return
+		}
+	}
 }
 
 // 发送WebSocket消息
@@ -160,6 +207,8 @@ func (c *WSClient) ReadMessage() ([]byte, error) {
 // 关闭WebSocket连接
 func (c *WSClient) Close() {
 	if c.Conn != nil {
+		// 停止心跳协程
+		close(c.StopChan)
 		c.Conn.Close()
 	}
 }
@@ -486,6 +535,70 @@ func TestKeyGenFlow(t *testing.T) {
 
 			// 继续监听消息处理密钥生成参数等
 			fmt.Printf("参与者 %s 等待后续消息...\n", client.Username)
+
+			// 接收密钥生成参数消息
+			paramsMessage, err := client.ReadMessage()
+			if err != nil {
+				t.Errorf("参与者 %s 读取参数消息失败: %v", client.Username, err)
+				return
+			}
+
+			// 解析参数消息
+			var paramsMsg KeyGenParamsMessage
+			if err := json.Unmarshal(paramsMessage, &paramsMsg); err != nil {
+				t.Errorf("参与者 %s 解析参数消息失败: %v", client.Username, err)
+				return
+			}
+
+			if paramsMsg.Type != MsgKeyGenParams {
+				t.Errorf("参与者 %s 预期收到参数消息，但收到: %v", client.Username, paramsMsg.Type)
+				return
+			}
+
+			fmt.Printf("参与者 %s 收到密钥生成参数，会话密钥: %s, 索引: %d, 文件名: %s\n",
+				client.Username, paramsMsg.SessionKey, paramsMsg.PartIndex, paramsMsg.FileName)
+
+			// 调用MPC密钥生成API
+			fmt.Printf("参与者 %s 正在调用密钥生成API...\n", client.Username)
+			address, encryptedKey, err := CallMpcKeyGen(
+				paramsMsg.Threshold,
+				paramsMsg.TotalParts,
+				paramsMsg.PartIndex,
+				paramsMsg.FileName,
+				client.Username,
+			)
+			if err != nil {
+				t.Errorf("参与者 %s 调用密钥生成API失败: %v", client.Username, err)
+				return
+			}
+			fmt.Printf("参与者 %s 密钥生成成功，地址: %s\n", client.Username, address)
+
+			// 获取CPIC值用于返回结果
+			var newCpic string
+			newCpic, err = GetCPIC()
+			if err != nil {
+				t.Errorf("参与者 %s 获取CPIC失败: %v", client.Username, err)
+				return
+			}
+			fmt.Printf("参与者 %s 获取CPIC成功: %s\n", client.Username, newCpic)
+
+			// 发送密钥生成结果
+			resultMsg := KeyGenResultMessage{
+				BaseMessage:    BaseMessage{Type: MsgKeyGenResult},
+				SessionKey:     paramsMsg.SessionKey,
+				PartIndex:      paramsMsg.PartIndex,
+				Address:        address,
+				CPIC:           newCpic,
+				EncryptedShard: encryptedKey,
+				Success:        true,
+				Message:        "密钥生成成功",
+			}
+
+			if err := client.SendMessage(resultMsg); err != nil {
+				t.Errorf("参与者 %s 发送结果消息失败: %v", client.Username, err)
+				return
+			}
+			fmt.Printf("参与者 %s 已发送密钥生成结果\n", client.Username)
 		}(i, participant)
 	}
 
@@ -549,9 +662,59 @@ func TestKeyGenFlow(t *testing.T) {
 	// 等待所有参与者处理完成
 	wg.Wait()
 
-	// 等待一段时间以确保所有消息处理完成
-	fmt.Println("\n等待密钥生成过程完成...")
-	time.Sleep(30 * time.Second)
-
 	fmt.Println("\n===== 密钥生成测试完成 =====")
+}
+
+// 调用MPC密钥生成API
+func CallMpcKeyGen(threshold, parties, index int, filename, username string) (string, string, error) {
+	// 构建请求体
+	requestBody, err := json.Marshal(map[string]interface{}{
+		"threshold": threshold,
+		"parties":   parties,
+		"index":     index,
+		"filename":  filename,
+		"username":  username,
+	})
+	if err != nil {
+		return "", "", fmt.Errorf("构建请求体失败: %v", err)
+	}
+
+	// 发送POST请求
+	resp, err := http.Post(
+		"http://localhost:8088/api/v1/mpc/keygen",
+		"application/json",
+		bytes.NewBuffer(requestBody),
+	)
+	if err != nil {
+		return "", "", fmt.Errorf("发送请求失败: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// 读取响应内容
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", "", fmt.Errorf("读取响应失败: %v", err)
+	}
+
+	// 检查响应状态码
+	if resp.StatusCode != http.StatusOK {
+		return "", "", fmt.Errorf("密钥生成API调用失败，状态码: %d, 响应: %s", resp.StatusCode, body)
+	}
+
+	// 解析响应
+	var response struct {
+		Success      bool   `json:"success"`
+		UserName     string `json:"userName"`
+		Address      string `json:"address"`
+		EncryptedKey string `json:"encryptedKey"`
+	}
+	if err := json.Unmarshal(body, &response); err != nil {
+		return "", "", fmt.Errorf("解析响应失败: %v", err)
+	}
+
+	if !response.Success {
+		return "", "", fmt.Errorf("密钥生成API返回失败状态")
+	}
+
+	return response.Address, response.EncryptedKey, nil
 }
