@@ -19,6 +19,7 @@ func Register() *gin.Engine {
 	initSignRouter(r)   // 新增签名专用路由
 	initShareRouter(r)
 	initPushRouter(r)
+	initSeRouter(r) // 新增SE相关路由
 
 	// 处理404请求
 	r.NoRoute(func(c *gin.Context) {
@@ -55,6 +56,7 @@ func initKeyGenRouter(r *gin.Engine) {
 	keyGenGroup.Use(KeyAuthMiddleware()) // 使用专门的中间件验证密钥操作权限
 	{
 		keyGenGroup.GET("/create/:initiator", handler.CreateKenGenSessionKey) // 创建密钥生成会话
+		keyGenGroup.GET("/users", handler.GetAvailableUsers)                  // 获取可参与密钥生成的用户列表
 	}
 }
 
@@ -64,6 +66,7 @@ func initSignRouter(r *gin.Engine) {
 	signGroup.Use(KeyAuthMiddleware()) // 使用专门的中间件验证密钥操作权限
 	{
 		signGroup.GET("/create/:initiator", handler.CreateSignSessionKey) // 创建签名会话
+		signGroup.GET("/users/:address", handler.GetUsersByAddress)       // 获取特定地址的用户列表
 	}
 }
 
@@ -83,6 +86,15 @@ func initPushRouter(r *gin.Engine) {
 	pushGroup.Use(AuthMiddleware())
 	{
 		// 保留推送路由，待实现
+	}
+}
+
+// initSeRouter 初始化安全芯片相关路由
+func initSeRouter(r *gin.Engine) {
+	seGroup := r.Group("/se")
+	seGroup.Use(AdminAuthMiddleware()) // 需要管理员权限
+	{
+		seGroup.POST("/create", handler.CreateSe) // 创建安全芯片记录
 	}
 }
 

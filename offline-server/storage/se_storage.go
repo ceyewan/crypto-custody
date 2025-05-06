@@ -184,19 +184,32 @@ func (s *SeStorage) GetRandomSeIds(count int) ([]string, error) {
 
 	var ses []model.Se
 	// 使用随机排序来确保获取随机的安全芯片记录
-	if err := database.Order("RANDOM()").Limit(count).Find(&ses).Error; err != nil {
+	if err := database.Order("RANDOM()").Find(&ses).Error; err != nil {
 		log.Printf("随机获取安全芯片记录失败: %v", err)
 		return nil, ErrOperationFailed
 	}
 
-	// 如果获取到的记录数少于请求数，记录警告日志
-	if len(ses) < count {
-		log.Printf("警告: 请求%d个安全芯片ID, 但仅找到%d个", count, len(ses))
+	// 如果数据库中没有安全芯片记录
+	if len(ses) == 0 {
+		return nil, ErrRecordNotFound
 	}
 
-	seIds := make([]string, len(ses))
-	for i, se := range ses {
-		seIds[i] = se.SeId
+	// 准备返回结果
+	seIds := make([]string, count)
+
+	// 先填充所有可用的不同ID
+	availableCount := len(ses)
+	for i := 0; i < min(count, availableCount); i++ {
+		seIds[i] = ses[i].SeId
+	}
+
+	// 如果可用ID不足，重复使用已有ID填充至请求数量
+	if availableCount < count {
+		log.Printf("警告: 请求%d个安全芯片ID, 但仅找到%d个，将重复使用已有ID", count, availableCount)
+		for i := availableCount; i < count; i++ {
+			// 循环使用已有ID填充剩余位置
+			seIds[i] = ses[i%availableCount].SeId
+		}
 	}
 
 	return seIds, nil
