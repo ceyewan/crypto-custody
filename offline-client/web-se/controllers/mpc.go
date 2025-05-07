@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 
 	"web-se/clog"
 
@@ -21,30 +22,38 @@ var (
 	mpcService      *services.MPCService
 )
 
+var initOnce sync.Once
+
 // Init 初始化控制器
 func Init() error {
-	var err error
+	var initErr error
 
-	// 加载配置
-	cfg, err = config.LoadConfig()
-	if err != nil {
-		clog.Error("加载配置失败", clog.String("error", err.Error()))
-		return err
-	}
+	initOnce.Do(func() {
+		var err error
 
-	// 创建安全芯片服务
-	securityService, err = services.NewSecurityService(cfg)
-	if err != nil {
-		clog.Error("创建安全芯片服务失败", clog.String("error", err.Error()))
-		return err
-	}
-	clog.Info("安全芯片服务初始化成功")
+		// 加载配置
+		cfg, err = config.LoadConfig()
+		if err != nil {
+			clog.Error("加载配置失败", clog.String("error", err.Error()))
+			initErr = err
+			return
+		}
 
-	// 创建MPC服务
-	mpcService = services.NewMPCService(cfg, securityService)
-	clog.Info("MPC控制器初始化成功")
+		// 创建安全芯片服务
+		securityService, err = services.NewSecurityService(cfg)
+		if err != nil {
+			clog.Error("创建安全芯片服务失败", clog.String("error", err.Error()))
+			initErr = err
+			return
+		}
+		clog.Info("安全芯片服务初始化成功")
 
-	return nil
+		// 创建MPC服务
+		mpcService = services.NewMPCService(cfg, securityService)
+		clog.Info("MPC控制器初始化成功")
+	})
+
+	return initErr
 }
 
 // Shutdown 关闭所有控制器相关资源

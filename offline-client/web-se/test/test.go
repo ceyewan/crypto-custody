@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	serverBaseURL      = "http://localhost:8080"
+	serverBaseURL      = "http://localhost:8088"
 	keygenAPIEndpoint  = serverBaseURL + "/api/v1/mpc/keygen"
 	signAPIEndpoint    = serverBaseURL + "/api/v1/mpc/sign"
 	cplcAPIEndpoint    = serverBaseURL + "/api/v1/mpc/cplc"
@@ -257,17 +257,19 @@ func testDeleteMessage(username, address, signature string) error {
 }
 
 func main() {
-	// 测试获取CPLC信息
-	runGetCPLCTest()
+	for i := 1; i <= 10; i++ {
+		// 测试获取CPLC信息
+		runGetCPLCTest()
+	}
 
-	// 测试密钥生成
-	runKeygenTest()
+	// // 测试密钥生成
+	// runKeygenTest()
 
-	// 测试签名
-	runSignTest()
+	// // 测试签名
+	// runSignTest()
 
-	// 测试删除用户数据
-	runDeleteMessageTest()
+	// // 测试删除用户数据
+	// runDeleteMessageTest()
 }
 
 // 运行密钥生成测试

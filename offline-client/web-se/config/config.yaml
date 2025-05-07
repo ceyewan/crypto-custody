@@ -1,12 +1,12 @@
 # 应用程序配置文件
 debug: true
-port: "8080"
+port: "8088"
 temp_dir: "./temp"
 bin_dir: "./bin"
 keygen_bin: "gg20_keygen"
 signing_bin: "gg20_signing"
 security_chip: true
-manager_addr: "http://192.168.192.1:8888"
+manager_addr: "http://localhost:8000"
 
 # 日志配置
 log_dir: "./logs"
