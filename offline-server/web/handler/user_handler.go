@@ -42,7 +42,7 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	// 生成JWT令牌
+	// 生成JWT令牌 - 不添加Bearer前缀，直接返回裸token
 	token, err := tools.GenerateToken(user.Username, string(user.Role), time.Hour)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "生成令牌失败"})

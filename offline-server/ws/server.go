@@ -58,7 +58,6 @@ type serverStats struct {
 	activeConnections  int       // 活动连接数
 	failedConnections  int       // 失败连接数
 	lastConnectionTime time.Time // 最后连接时间
-	totalMessages      int64     // 总消息数
 	startTime          time.Time // 服务启动时间
 }
 
