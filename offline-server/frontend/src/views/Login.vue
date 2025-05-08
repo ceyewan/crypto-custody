@@ -72,10 +72,13 @@ export default {
                     // 连接WebSocket
                     this.$store.dispatch('connectWebSocket')
 
-                    // 跳转到仪表板
-                    this.$router.push('/dashboard')
+                    // 延迟一点时间以确保WebSocket连接建立
+                    setTimeout(() => {
+                        // 跳转到仪表板
+                        this.$router.push('/dashboard')
 
-                    this.$message.success('登录成功')
+                        this.$message.success('登录成功')
+                    }, 500)
                 } catch (error) {
                     console.error('登录失败:', error)
                     this.$message.error(error.response?.data?.error || '登录失败，请检查用户名和密码')
