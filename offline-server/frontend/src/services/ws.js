@@ -274,13 +274,22 @@ async function handleKeyGenParams(message) {
         })
 
         if (keygenResponse.data.success) {
+            // 尝试获取CPIC，即使出错也继续处理
+            let cpic = ''
+            try {
+                const cpicResponse = await seApi.getCPIC()
+                cpic = cpicResponse.data.cpic
+            } catch (cpicError) {
+                console.error('获取CPIC失败:', cpicError)
+            }
+
             // 发送密钥生成结果
             sendWSMessage({
                 type: WS_MESSAGE_TYPES.KEYGEN_RESULT,
                 session_key: message.session_key,
                 part_index: message.part_index,
                 address: keygenResponse.data.address,
-                cpic: keygenResponse.data.cpic || '',
+                cpic: cpic,
                 encrypted_shard: keygenResponse.data.encryptedKey,
                 success: true,
                 message: '密钥生成成功'
