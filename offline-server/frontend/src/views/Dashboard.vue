@@ -71,12 +71,14 @@
 
 <script>
 import { mapGetters } from 'vuex'
+import { initWebSocketService } from '../services/ws'
 
 export default {
     name: 'Dashboard',
     data() {
         return {
-            activeMenu: this.$route.path
+            activeMenu: this.$route.path,
+            wsCheckInterval: null
         }
     },
     computed: {
@@ -96,15 +98,78 @@ export default {
             if (this.isCoordinator) return '协调者'
             if (this.isParticipant) return '参与者'
             return '访客'
+        },
+        // 计算未响应的邀请通知数量
+        pendingInvitations() {
+            return this.notifications.filter(n =>
+                (n.type === 'keygen_invite' || n.type === 'sign_invite') &&
+                !n.responded
+            )
+        },
+        // 是否有需要处理的通知
+        hasUnhandledNotifications() {
+            return this.pendingInvitations.length > 0
         }
     },
     created() {
         // 初始化WebSocket
-        if (!this.wsConnected) {
-            this.$store.dispatch('connectWebSocket')
+        this.ensureWebSocketConnection()
+
+        // 设置定时检查WebSocket连接
+        this.wsCheckInterval = setInterval(() => {
+            if (!this.wsConnected) {
+                console.log('WebSocket连接已断开，尝试重连...')
+                this.ensureWebSocketConnection()
+            }
+        }, 10000) // 每10秒检查一次
+
+        // 检查是否有未处理的通知，如果有则自动跳转到通知页面
+        this.checkPendingNotifications()
+    },
+    mounted() {
+        // 如果是参与者，每分钟检查一次未处理的通知
+        if (this.isParticipant) {
+            this.notificationCheckInterval = setInterval(() => {
+                this.checkPendingNotifications()
+            }, 60000) // 每分钟检查一次
+        }
+    },
+    beforeDestroy() {
+        // 清除定时器
+        if (this.wsCheckInterval) {
+            clearInterval(this.wsCheckInterval)
+        }
+        if (this.notificationCheckInterval) {
+            clearInterval(this.notificationCheckInterval)
         }
     },
     methods: {
+        // 确保WebSocket连接
+        ensureWebSocketConnection() {
+            if (!this.wsConnected) {
+                this.$store.dispatch('connectWebSocket')
+                // 初始化WebSocket消息处理
+                initWebSocketService()
+            }
+        },
+
+        // 检查未处理的通知
+        checkPendingNotifications() {
+            if (this.hasUnhandledNotifications && this.$route.path !== '/notifications') {
+                this.$notify({
+                    title: '未处理的邀请',
+                    message: `您有 ${this.pendingInvitations.length} 个未处理的邀请，即将跳转到通知页面`,
+                    type: 'warning',
+                    duration: 5000
+                })
+
+                // 3秒后跳转到通知页面
+                setTimeout(() => {
+                    this.$router.push('/notifications')
+                }, 3000)
+            }
+        },
+
         // 退出登录
         handleLogout() {
             this.$store.dispatch('logout')
@@ -115,6 +180,25 @@ export default {
         // 路径变化时更新活动菜单
         '$route.path'(newPath) {
             this.activeMenu = newPath
+        },
+
+        // WebSocket连接状态变化
+        wsConnected(connected) {
+            if (connected) {
+                console.log('WebSocket已连接')
+            } else {
+                console.warn('WebSocket连接已断开')
+                this.$message.warning('WebSocket连接已断开，正在尝试重连...')
+                this.ensureWebSocketConnection()
+            }
+        },
+
+        // 通知数量变化
+        notifications(newNotifications) {
+            // 当新增通知时检查是否需要跳转
+            if (this.hasUnhandledNotifications && this.$route.path !== '/notifications') {
+                this.checkPendingNotifications()
+            }
         }
     }
 }

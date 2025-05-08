@@ -15,6 +15,7 @@ import (
 
 	"web-se/clog"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
@@ -51,6 +52,16 @@ func main() {
 
 	// 创建Gin引擎
 	r := gin.Default()
+
+	// 配置CORS中间件
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"*"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
 
 	// 注册中间件
 	r.Use(middleware.ErrorHandler())

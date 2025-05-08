@@ -25,6 +25,10 @@ const (
 	MsgRegister         MessageType = "register"          // 客户端向服务器注册身份
 	MsgRegisterComplete MessageType = "register_complete" // 服务器注册完成
 
+	// 心跳消息
+	MsgPing MessageType = "ping" // 客户端发送的ping消息
+	MsgPong MessageType = "pong" // 服务器回复的pong消息
+
 	// 错误消息
 	MsgError MessageType = "error" // 错误消息
 )

@@ -24,6 +24,10 @@ export const WS_MESSAGE_TYPES = {
     SIGN_RESULT: 'sign_result',
     SIGN_COMPLETE: 'sign_complete',
 
+    // 心跳消息
+    PING: 'ping',
+    PONG: 'pong',
+
     // 错误消息
     ERROR: 'error'
 }
@@ -49,8 +53,16 @@ export function initWebSocketService() {
                     handleRegisterComplete(message)
                     break
 
+                case WS_MESSAGE_TYPES.PONG:
+                    console.log('收到服务器PONG响应')
+                    // 收到pong响应，更新连接状态
+                    store.commit('setWsConnected', true)
+                    break
+
                 case WS_MESSAGE_TYPES.KEYGEN_INVITE:
-                    await handleKeyGenInvite(message)
+                    // 不再自动弹窗，只添加通知
+                    console.log('收到密钥生成邀请:', message)
+                    Message.info(`收到来自 ${message.coordinator} 的密钥生成邀请，请在通知页面处理`)
                     break
 
                 case WS_MESSAGE_TYPES.KEYGEN_PARAMS:
@@ -62,7 +74,9 @@ export function initWebSocketService() {
                     break
 
                 case WS_MESSAGE_TYPES.SIGN_INVITE:
-                    await handleSignInvite(message)
+                    // 不再自动弹窗，只添加通知
+                    console.log('收到签名邀请:', message)
+                    Message.info(`收到签名邀请，地址: ${message.address}，请在通知页面处理`)
                     break
 
                 case WS_MESSAGE_TYPES.SIGN_PARAMS:
@@ -81,12 +95,15 @@ export function initWebSocketService() {
                     console.warn('未处理的WebSocket消息类型:', message.type)
             }
 
-            // 将消息添加到通知列表
-            store.commit('addNotification', {
-                type: message.type,
-                content: message,
-                timestamp: new Date()
-            })
+            // 将消息添加到通知列表（过滤掉ping/pong心跳消息）
+            if (message.type !== WS_MESSAGE_TYPES.PING && message.type !== WS_MESSAGE_TYPES.PONG) {
+                store.commit('addNotification', {
+                    type: message.type,
+                    content: message,
+                    timestamp: new Date(),
+                    responded: false // 添加响应状态标识
+                })
+            }
         } catch (error) {
             console.error('处理WebSocket消息出错:', error)
         }
