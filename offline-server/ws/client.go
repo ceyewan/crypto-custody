@@ -288,6 +288,15 @@ func (c *Client) handleMessage(message []byte) error {
 
 		return c.handleRegisterMessage(registerMsg)
 
+	case MsgPing:
+		// 处理ping消息 - 直接回复pong
+		clog.Debug("收到客户端ping消息，发送pong回复",
+			clog.String("username", c.username))
+
+		// 发送pong响应
+		pongMsg := BaseMessage{Type: MsgPong}
+		return c.SendMessage(pongMsg)
+
 	// 密钥生成相关消息
 	case MsgKeyGenRequest, MsgKeyGenResponse, MsgKeyGenResult:
 		// 非注册消息 - 检查客户端是否已注册
