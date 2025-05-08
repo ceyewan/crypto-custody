@@ -95,7 +95,7 @@ func (c *Client) GetUserName() string {
 	return c.username
 }
 
-// SetUsername 设置客户端用户名
+// SetUserName 设置客户端用户名
 func (c *Client) SetUserName(username string) {
 	c.username = username
 }
@@ -253,10 +253,12 @@ func (c *Client) writePump() {
 				return
 			}
 		case <-ticker.C:
-			// 发送ping消息
+			// 设置写入截止时间
 			c.conn.SetWriteDeadline(time.Now().Add(WriteWait))
+
+			// 发送ping消息以保持连接
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-				clog.Debug("发送ping消息失败",
+				clog.Error("发送ping消息失败",
 					clog.Err(err),
 					clog.String("username", c.username))
 				return
@@ -287,15 +289,6 @@ func (c *Client) handleMessage(message []byte) error {
 			clog.String("role", string(registerMsg.Role)))
 
 		return c.handleRegisterMessage(registerMsg)
-
-	case MsgPing:
-		// 处理ping消息 - 直接回复pong
-		clog.Debug("收到客户端ping消息，发送pong回复",
-			clog.String("username", c.username))
-
-		// 发送pong响应
-		pongMsg := BaseMessage{Type: MsgPong}
-		return c.SendMessage(pongMsg)
 
 	// 密钥生成相关消息
 	case MsgKeyGenRequest, MsgKeyGenResponse, MsgKeyGenResult:

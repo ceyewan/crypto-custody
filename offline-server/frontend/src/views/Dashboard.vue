@@ -80,7 +80,8 @@ export default {
             activeMenu: this.$route.path,
             wsCheckInterval: null,
             wsErrorCount: 0,
-            lastWsReset: 0
+            lastWsReset: 0,
+            healthCheckInterval: null
         }
     },
     computed: {
@@ -133,8 +134,13 @@ export default {
             }, 60000) // 每分钟检查一次
         }
 
-        // 监听页面可见性变化
+        // 添加页面可见性监听
         document.addEventListener('visibilitychange', this.handleVisibilityChange)
+        
+        // 设置定期的连接健康检查
+        this.healthCheckInterval = setInterval(() => {
+            this.checkWsConnection()
+        }, 60000) // 每分钟检查一次连接状态
     },
     beforeDestroy() {
         // 清除定时器
@@ -147,6 +153,11 @@ export default {
 
         // 移除页面可见性监听
         document.removeEventListener('visibilitychange', this.handleVisibilityChange)
+        
+        // 清除健康检查定时器
+        if (this.healthCheckInterval) {
+            clearInterval(this.healthCheckInterval)
+        }
     },
     methods: {
         // 处理页面可见性变化
@@ -160,42 +171,17 @@ export default {
 
         // 检查WebSocket连接状态
         checkWsConnection() {
-            const ws = this.$store.state.wsClient
-
-            // 检查WebSocket是否存在且连接正常
-            if (!ws || ws.readyState !== WebSocket.OPEN) {
-                this.wsErrorCount++
-                console.warn(`WebSocket连接检查失败 (${this.wsErrorCount}/3)`)
-
-                // 如果连续3次检查失败，尝试重置连接
-                if (this.wsErrorCount >= 3) {
-                    // 限制重置频率，至少间隔60秒
-                    const now = Date.now()
-                    if (now - this.lastWsReset > 60000) {
-                        console.warn('连续3次WebSocket连接检查失败，重置连接')
-                        this.resetWsConnection()
-                        this.lastWsReset = now
-                    }
-                }
-            } else {
-                // 连接正常时重置错误计数
-                if (this.wsErrorCount > 0) {
-                    this.wsErrorCount = 0
-                    console.log('WebSocket连接状态正常')
-                }
-            }
+            // 使用store的健康检查方法
+            this.$store.dispatch('checkWebSocketHealth')
         },
 
         // 重置WebSocket连接
         resetWsConnection() {
-            resetWebSocketService()
-            this.$store.dispatch('resetWebSocketConnection')
-            this.wsErrorCount = 0
-
-            // 连接重置后重新初始化WebSocket服务
-            setTimeout(() => {
-                initWebSocketService()
-            }, 2000)  // 等待2秒确保新连接已建立
+            // 使用动态导入，确保使用最新版本的服务
+            import('../services/ws').then(({ resetWebSocketService }) => {
+                resetWebSocketService()
+                this.$store.dispatch('resetWebSocketConnection')
+            })
         },
 
         // 确保WebSocket连接
