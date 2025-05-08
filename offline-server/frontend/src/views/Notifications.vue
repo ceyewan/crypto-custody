@@ -65,7 +65,7 @@
 
 <script>
 import { mapGetters } from 'vuex'
-import { mpcApi } from '../services/api'
+import { mpcApi, seApi } from '../services/api'
 import { sendWSMessage, WS_MESSAGE_TYPES } from '../services/ws'
 
 export default {
@@ -115,7 +115,7 @@ export default {
         async handleKeygenInviteAccept(notification) {
             try {
                 // 获取当前用户的CPIC
-                const cpicResponse = await mpcApi.getCPIC()
+                const cpicResponse = await seApi.getCPIC()
                 const cpic = cpicResponse.data.cpic
 
                 // 发送接受响应
@@ -163,7 +163,7 @@ export default {
         async handleSignInviteAccept(notification) {
             try {
                 // 获取当前用户的CPIC
-                const cpicResponse = await mpcApi.getCPIC()
+                const cpicResponse = await seApi.getCPIC()
                 const cpic = cpicResponse.data.cpic
 
                 // 发送接受响应
