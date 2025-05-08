@@ -79,7 +79,11 @@ export default new Vuex.Store({
     },
     actions: {
         login({ commit }, user) {
-            commit('setToken', user.token)
+            const token = user.token && user.token.startsWith('Bearer ')
+                ? user.token.substring(7)
+                : user.token
+
+            commit('setToken', token)
             commit('setUser', user.user)
         },
         logout({ commit, state }) {
@@ -154,11 +158,15 @@ export default new Vuex.Store({
                     commit('setWsLastError', null)
 
                     if (state.user) {
+                        const token = state.token && state.token.startsWith('Bearer ')
+                            ? state.token.substring(7)
+                            : state.token
+
                         ws.send(JSON.stringify({
                             type: 'register',
                             username: state.user.username,
                             role: state.user.role,
-                            token: state.token
+                            token: token
                         }))
                     }
                 }

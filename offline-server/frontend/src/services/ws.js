@@ -66,8 +66,53 @@ export function initWebSocketService() {
     // 处理WebSocket消息
     ws.onmessage = async (event) => {
         try {
-            const message = JSON.parse(event.data)
-            console.log('收到WebSocket消息:', message)
+            // 尝试解析消息内容
+            let message;
+            try {
+                message = JSON.parse(event.data);
+                console.log('收到WebSocket消息:', message);
+            } catch (parseError) {
+                console.error('WebSocket消息解析失败:', parseError);
+                console.error('收到的原始消息数据:', event.data);
+
+                // 尝试通过消息分隔来恢复
+                if (typeof event.data === 'string') {
+                    // 如果消息看起来包含多个JSON对象，尝试提取第一个有效的JSON
+                    const possibleJsonStart = event.data.indexOf('{');
+                    if (possibleJsonStart >= 0) {
+                        let jsonDepth = 0;
+                        let endPos = -1;
+
+                        // 简单扫描找到匹配的JSON结束位置
+                        for (let i = possibleJsonStart; i < event.data.length; i++) {
+                            if (event.data[i] === '{') jsonDepth++;
+                            else if (event.data[i] === '}') {
+                                jsonDepth--;
+                                if (jsonDepth === 0) {
+                                    endPos = i + 1;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (endPos > 0) {
+                            const jsonPart = event.data.substring(possibleJsonStart, endPos);
+                            try {
+                                message = JSON.parse(jsonPart);
+                                console.log('从损坏的消息中恢复JSON成功:', message);
+                            } catch (e) {
+                                console.error('恢复JSON失败:', e);
+                                return; // 放弃处理
+                            }
+                        }
+                    }
+                }
+
+                // 如果还是无法解析，则放弃处理此消息
+                if (!message) {
+                    return;
+                }
+            }
 
             // 根据消息类型处理
             switch (message.type) {
