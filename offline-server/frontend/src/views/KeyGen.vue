@@ -97,7 +97,22 @@ export default {
                 }
             } catch (error) {
                 console.error('获取参与者列表失败:', error)
-                this.$message.error('获取参与者列表失败')
+
+                // 检查错误类型
+                let errorMsg = '获取参与者列表失败'
+                if (error.response && error.response.status === 401) {
+                    errorMsg = '认证已过期，请重新登录'
+
+                    // 延迟1秒再登出，让用户有时间看到错误信息
+                    setTimeout(() => {
+                        this.$store.dispatch('logout')
+                        this.$router.push('/login')
+                    }, 1000)
+                } else if (error.response) {
+                    errorMsg = error.response.data?.error || error.response.data?.message || errorMsg
+                }
+
+                this.$message.error(errorMsg)
             }
         },
 

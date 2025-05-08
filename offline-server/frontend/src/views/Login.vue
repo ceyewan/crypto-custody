@@ -66,8 +66,27 @@ export default {
                         password: this.loginForm.password
                     })
 
+                    // 验证响应数据
+                    if (!response.data || !response.data.token) {
+                        throw new Error('服务器响应异常：缺少认证令牌')
+                    }
+
+                    // 确保token格式正确
+                    const token = response.data.token.startsWith('Bearer ') 
+                        ? response.data.token 
+                        : `Bearer ${response.data.token}`
+                    
+                    // 保存格式化后的token和用户信息
+                    const userData = {
+                        token: token,
+                        user: response.data.user
+                    }
+
                     // 保存用户信息和令牌
-                    this.$store.dispatch('login', response.data)
+                    this.$store.dispatch('login', userData)
+
+                    // 调试信息
+                    console.log('用户登录成功', userData.user.username, userData.user.role)
 
                     // 连接WebSocket
                     this.$store.dispatch('connectWebSocket')
@@ -81,7 +100,15 @@ export default {
                     }, 500)
                 } catch (error) {
                     console.error('登录失败:', error)
-                    this.$message.error(error.response?.data?.error || '登录失败，请检查用户名和密码')
+                    let errorMsg = '登录失败，请检查用户名和密码'
+                    
+                    if (error.response) {
+                        errorMsg = error.response.data?.error || error.response.data?.message || errorMsg
+                    } else if (error.message) {
+                        errorMsg = error.message
+                    }
+                    
+                    this.$message.error(errorMsg)
                 } finally {
                     this.loading = false
                 }
