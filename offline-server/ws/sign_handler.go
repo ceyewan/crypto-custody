@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"offline-server/clog"
 	"offline-server/storage"
@@ -438,6 +439,7 @@ func (h *SignHandler) handleSignResponse(msg SignResponseMessage, sender *Client
 					clog.String("session_key", sessionKey),
 					clog.Int("shard_index", encryptedShard.ShardIndex))
 			}
+			time.Sleep(1 * time.Second)
 		}
 
 		// 检查是否有发送参数失败的情况

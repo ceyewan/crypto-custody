@@ -15,7 +15,7 @@ const (
 	// 签名数据
 	TestSignData = "0x1234abcd5678efgh9012ijkl3456mnop7890qrst"
 	// 签名地址
-	address = "0x6A546C2CA174dac0f9D9ac91D959d97597c9A06b"
+	address = "0x0248cFDAad57d3f0c6c86EB6D4dEb783694E6fc2"
 )
 
 // 创建签名会话密钥响应结构体
