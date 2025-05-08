@@ -1,6 +1,9 @@
 import store from '../store'
-import { mpcApi } from './api'
+import { mpcApi, seApi } from './api'
 import { MessageBox, Message } from 'element-ui'
+
+// 跟踪WebSocket服务初始化状态
+let wsServiceInitialized = false;
 
 // WebSocket消息类型常量
 export const WS_MESSAGE_TYPES = {
@@ -38,8 +41,16 @@ export function initWebSocketService() {
 
     if (!ws) {
         console.error('WebSocket客户端未初始化')
-        return
+        return false
     }
+
+    // 防止重复初始化
+    if (wsServiceInitialized && ws._messageHandlerInitialized) {
+        console.log('WebSocket消息处理已初始化，跳过')
+        return true
+    }
+
+    console.log('初始化WebSocket消息处理')
 
     // 处理WebSocket消息
     ws.onmessage = async (event) => {
@@ -108,6 +119,17 @@ export function initWebSocketService() {
             console.error('处理WebSocket消息出错:', error)
         }
     }
+
+    // 标记WebSocket实例已初始化消息处理器
+    ws._messageHandlerInitialized = true
+    wsServiceInitialized = true
+
+    return true
+}
+
+// 重置WebSocket消息处理服务
+export function resetWebSocketService() {
+    wsServiceInitialized = false;
 }
 
 // 发送WebSocket消息
@@ -119,8 +141,13 @@ export function sendWSMessage(message) {
         return false
     }
 
-    ws.send(JSON.stringify(message))
-    return true
+    try {
+        ws.send(JSON.stringify(message))
+        return true
+    } catch (error) {
+        console.error('发送WebSocket消息出错:', error)
+        return false
+    }
 }
 
 // 处理注册完成消息
@@ -150,7 +177,7 @@ async function handleKeyGenInvite(message) {
         ).catch(() => false)
 
         // 获取当前用户的CPIC
-        const cpicResponse = await mpcApi.getCPIC()
+        const cpicResponse = await seApi.getCPIC()
         const cpic = cpicResponse.data.cpic
 
         // 发送响应
@@ -256,7 +283,7 @@ async function handleSignInvite(message) {
         ).catch(() => false)
 
         // 获取当前用户的CPIC
-        const cpicResponse = await mpcApi.getCPIC()
+        const cpicResponse = await seApi.getCPIC()
         const cpic = cpicResponse.data.cpic
 
         // 发送响应

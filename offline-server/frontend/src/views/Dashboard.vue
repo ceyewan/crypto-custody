@@ -71,14 +71,16 @@
 
 <script>
 import { mapGetters } from 'vuex'
-import { initWebSocketService } from '../services/ws'
+import { initWebSocketService, resetWebSocketService } from '../services/ws'
 
 export default {
     name: 'Dashboard',
     data() {
         return {
             activeMenu: this.$route.path,
-            wsCheckInterval: null
+            wsCheckInterval: null,
+            wsErrorCount: 0,
+            lastWsReset: 0
         }
     },
     computed: {
@@ -117,10 +119,7 @@ export default {
 
         // 设置定时检查WebSocket连接
         this.wsCheckInterval = setInterval(() => {
-            if (!this.wsConnected) {
-                console.log('WebSocket连接已断开，尝试重连...')
-                this.ensureWebSocketConnection()
-            }
+            this.checkWsConnection()
         }, 10000) // 每10秒检查一次
 
         // 检查是否有未处理的通知，如果有则自动跳转到通知页面
@@ -133,6 +132,9 @@ export default {
                 this.checkPendingNotifications()
             }, 60000) // 每分钟检查一次
         }
+
+        // 监听页面可见性变化
+        document.addEventListener('visibilitychange', this.handleVisibilityChange)
     },
     beforeDestroy() {
         // 清除定时器
@@ -142,15 +144,68 @@ export default {
         if (this.notificationCheckInterval) {
             clearInterval(this.notificationCheckInterval)
         }
+
+        // 移除页面可见性监听
+        document.removeEventListener('visibilitychange', this.handleVisibilityChange)
     },
     methods: {
+        // 处理页面可见性变化
+        handleVisibilityChange() {
+            if (!document.hidden) {
+                // 页面变为可见时，检查WebSocket连接
+                console.log('页面变为可见，检查WebSocket连接')
+                this.checkWsConnection()
+            }
+        },
+
+        // 检查WebSocket连接状态
+        checkWsConnection() {
+            const ws = this.$store.state.wsClient
+
+            // 检查WebSocket是否存在且连接正常
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                this.wsErrorCount++
+                console.warn(`WebSocket连接检查失败 (${this.wsErrorCount}/3)`)
+
+                // 如果连续3次检查失败，尝试重置连接
+                if (this.wsErrorCount >= 3) {
+                    // 限制重置频率，至少间隔60秒
+                    const now = Date.now()
+                    if (now - this.lastWsReset > 60000) {
+                        console.warn('连续3次WebSocket连接检查失败，重置连接')
+                        this.resetWsConnection()
+                        this.lastWsReset = now
+                    }
+                }
+            } else {
+                // 连接正常时重置错误计数
+                if (this.wsErrorCount > 0) {
+                    this.wsErrorCount = 0
+                    console.log('WebSocket连接状态正常')
+                }
+            }
+        },
+
+        // 重置WebSocket连接
+        resetWsConnection() {
+            resetWebSocketService()
+            this.$store.dispatch('resetWebSocketConnection')
+            this.wsErrorCount = 0
+
+            // 连接重置后重新初始化WebSocket服务
+            setTimeout(() => {
+                initWebSocketService()
+            }, 2000)  // 等待2秒确保新连接已建立
+        },
+
         // 确保WebSocket连接
         ensureWebSocketConnection() {
-            if (!this.wsConnected) {
-                this.$store.dispatch('connectWebSocket')
-                // 初始化WebSocket消息处理
+            this.$store.dispatch('connectWebSocket')
+
+            // 初始化WebSocket消息处理
+            setTimeout(() => {
                 initWebSocketService()
-            }
+            }, 1000)  // 等待1秒确保连接已建立
         },
 
         // 检查未处理的通知
@@ -186,10 +241,9 @@ export default {
         wsConnected(connected) {
             if (connected) {
                 console.log('WebSocket已连接')
+                this.wsErrorCount = 0  // 重置错误计数
             } else {
                 console.warn('WebSocket连接已断开')
-                this.$message.warning('WebSocket连接已断开，正在尝试重连...')
-                this.ensureWebSocketConnection()
             }
         },
 
