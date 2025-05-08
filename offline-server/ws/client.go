@@ -242,9 +242,18 @@ func (c *Client) writePump() {
 					clog.String("username", c.username),
 					clog.Int("additional_messages", n))
 			}
-			for i := 0; i < n; i++ {
-				w.Write(<-c.writeChan)
+
+			// 重要：不再一次性发送多条消息，避免JSON解析错误
+			// 之前的实现会导致多条JSON消息连在一起无法解析
+			if n > 0 {
+				clog.Warn("写入通道有多条待发消息，但已禁用批量发送以避免JSON解析错误",
+					clog.String("username", c.username),
+					clog.Int("queued_messages", n))
 			}
+			// 不再处理队列中的其他消息，每条消息单独发送
+			// for i := 0; i < n; i++ {
+			//     w.Write(<-c.writeChan)
+			// }
 
 			if err := w.Close(); err != nil {
 				clog.Error("关闭WebSocket消息写入器失败",
@@ -330,8 +339,14 @@ func (c *Client) handleMessage(message []byte) error {
 
 // handleRegisterMessage 处理注册消息
 func (c *Client) handleRegisterMessage(msg RegisterMessage) error {
+	// 格式化Token: 移除Bearer前缀
+	tokenString := msg.Token
+	if len(tokenString) > 7 && tokenString[:7] == "Bearer " {
+		tokenString = tokenString[7:]
+	}
+
 	// 验证Token
-	username, role, err := tools.ValidateToken(msg.Token)
+	username, role, err := tools.ValidateToken(tokenString)
 	if err != nil {
 		clog.Error("验证Token失败",
 			clog.Err(err),

@@ -108,7 +108,7 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// 验证token
+		// 验证token - 直接使用裸token
 		userName, role, err := tools.ValidateToken(tokenString)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "无效的认证令牌"})
@@ -132,7 +132,7 @@ func KeyAuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// 验证token
+		// 验证token - 直接使用裸token
 		userName, role, err := tools.ValidateToken(tokenString)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "无效的认证令牌"})
@@ -162,7 +162,7 @@ func AdminAuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// 验证token
+		// 验证token - 直接使用裸token
 		userName, role, err := tools.ValidateToken(tokenString)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "无效的认证令牌"})
