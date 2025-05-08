@@ -1,8 +1,25 @@
 <template>
     <div id="app">
+        <ws-status-indicator v-if="isLoggedIn"></ws-status-indicator>
         <router-view />
     </div>
 </template>
+
+<script>
+import WsStatusIndicator from './components/WsStatusIndicator.vue'
+
+export default {
+    name: 'App',
+    components: {
+        WsStatusIndicator
+    },
+    computed: {
+        isLoggedIn() {
+            return this.$store.getters.isLoggedIn
+        }
+    }
+}
+</script>
 
 <style>
 #app {

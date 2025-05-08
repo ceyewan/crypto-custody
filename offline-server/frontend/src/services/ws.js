@@ -27,12 +27,23 @@ export const WS_MESSAGE_TYPES = {
     SIGN_RESULT: 'sign_result',
     SIGN_COMPLETE: 'sign_complete',
 
-    // 心跳消息
-    PING: 'ping',
-    PONG: 'pong',
-
     // 错误消息
     ERROR: 'error'
+}
+
+// WebSocket连接参数常量
+const WS_CONSTANTS = {
+    RECONNECT_INTERVAL: 2000,      // 初始重连时间间隔(2秒)
+    MAX_RECONNECT_INTERVAL: 30000, // 最大重连时间间隔(30秒)
+    RECONNECT_DECAY: 1.5,          // 重连时间递增系数
+    MAX_RECONNECT_ATTEMPTS: 10     // 最大重连尝试次数
+}
+
+// WebSocket连接状态
+let wsConnectionStatus = {
+    connected: false,      // 是否已连接
+    connecting: false,     // 是否正在连接
+    reconnectAttempts: 0   // 重连尝试次数
 }
 
 // 初始化WebSocket服务
@@ -62,12 +73,6 @@ export function initWebSocketService() {
             switch (message.type) {
                 case WS_MESSAGE_TYPES.REGISTER_COMPLETE:
                     handleRegisterComplete(message)
-                    break
-
-                case WS_MESSAGE_TYPES.PONG:
-                    console.log('收到服务器PONG响应')
-                    // 收到pong响应，更新连接状态
-                    store.commit('setWsConnected', true)
                     break
 
                 case WS_MESSAGE_TYPES.KEYGEN_INVITE:
@@ -106,15 +111,13 @@ export function initWebSocketService() {
                     console.warn('未处理的WebSocket消息类型:', message.type)
             }
 
-            // 将消息添加到通知列表（过滤掉ping/pong心跳消息）
-            if (message.type !== WS_MESSAGE_TYPES.PING && message.type !== WS_MESSAGE_TYPES.PONG) {
-                store.commit('addNotification', {
-                    type: message.type,
-                    content: message,
-                    timestamp: new Date(),
-                    responded: false // 添加响应状态标识
-                })
-            }
+            // 将消息添加到通知列表
+            store.commit('addNotification', {
+                type: message.type,
+                content: message,
+                timestamp: new Date(),
+                responded: false // 添加响应状态标识
+            })
         } catch (error) {
             console.error('处理WebSocket消息出错:', error)
         }
@@ -130,6 +133,13 @@ export function initWebSocketService() {
 // 重置WebSocket消息处理服务
 export function resetWebSocketService() {
     wsServiceInitialized = false;
+
+    // 重置连接状态
+    wsConnectionStatus = {
+        connected: false,
+        connecting: false,
+        reconnectAttempts: 0
+    }
 }
 
 // 发送WebSocket消息
@@ -154,6 +164,8 @@ export function sendWSMessage(message) {
 function handleRegisterComplete(message) {
     if (message.success) {
         store.commit('setWsConnected', true)
+        wsConnectionStatus.connected = true
+        wsConnectionStatus.reconnectAttempts = 0
         console.log('WebSocket注册成功')
         Message.success('WebSocket连接成功')
     } else {

@@ -5,29 +5,25 @@ type MessageType string
 
 // 定义所有消息类型常量
 const (
-	// 密钥生成相关消息
-	MsgKeyGenRequest  MessageType = "keygen_request"  // 协调方发送的密钥生成请求
-	MsgKeyGenInvite   MessageType = "keygen_invite"   // 服务器向参与方发送的密钥生成邀请
-	MsgKeyGenResponse MessageType = "keygen_response" // 参与方对密钥生成邀请的响应
-	MsgKeyGenParams   MessageType = "keygen_params"   // 服务器向参与方发送的密钥生成参数
-	MsgKeyGenResult   MessageType = "keygen_result"   // 参与方向服务器发送的密钥生成结果
-	MsgKeyGenComplete MessageType = "keygen_complete" // 服务器向协调方确认密钥生成完成
+	// 注册相关
+	MsgRegister         MessageType = "register"          // 客户端注册消息
+	MsgRegisterComplete MessageType = "register_complete" // 注册完成回复
 
-	// 签名相关消息
-	MsgSignRequest  MessageType = "sign_request"  // 协调方发送的签名请求
-	MsgSignInvite   MessageType = "sign_invite"   // 服务器向参与方发送的签名邀请
-	MsgSignResponse MessageType = "sign_response" // 参与方对签名邀请的响应
-	MsgSignParams   MessageType = "sign_params"   // 服务器向参与方发送的签名参数
-	MsgSignResult   MessageType = "sign_result"   // 参与方向服务器发送的签名结果
-	MsgSignComplete MessageType = "sign_complete" // 服务器向协调方发送的签名完成消息
+	// 密钥生成相关
+	MsgKeyGenRequest  MessageType = "keygen_request"  // 发起密钥生成请求
+	MsgKeyGenInvite   MessageType = "keygen_invite"   // 邀请参与密钥生成
+	MsgKeyGenResponse MessageType = "keygen_response" // 回复密钥生成邀请
+	MsgKeyGenParams   MessageType = "keygen_params"   // 密钥生成参数
+	MsgKeyGenResult   MessageType = "keygen_result"   // 密钥生成结果
+	MsgKeyGenComplete MessageType = "keygen_complete" // 密钥生成完成
 
-	// 注册与连接相关消息
-	MsgRegister         MessageType = "register"          // 客户端向服务器注册身份
-	MsgRegisterComplete MessageType = "register_complete" // 服务器注册完成
-
-	// 心跳消息
-	MsgPing MessageType = "ping" // 客户端发送的ping消息
-	MsgPong MessageType = "pong" // 服务器回复的pong消息
+	// 签名相关
+	MsgSignRequest  MessageType = "sign_request"  // 发起签名请求
+	MsgSignInvite   MessageType = "sign_invite"   // 邀请参与签名
+	MsgSignResponse MessageType = "sign_response" // 回复签名邀请
+	MsgSignParams   MessageType = "sign_params"   // 签名参数
+	MsgSignResult   MessageType = "sign_result"   // 签名结果
+	MsgSignComplete MessageType = "sign_complete" // 签名完成
 
 	// 错误消息
 	MsgError MessageType = "error" // 错误消息

@@ -11,10 +11,11 @@ export default new Vuex.Store({
         wsClient: null,
         notifications: [],
         currentSession: null,
-        wsPingTimer: null,
         wsConnecting: false,
         wsReconnectTimer: null,
-        wsReconnectAttempts: 0
+        wsReconnectAttempts: 0,
+        wsLastError: null,
+        wsConnectionLostTime: null
     },
     getters: {
         isLoggedIn: state => !!state.token,
@@ -57,9 +58,6 @@ export default new Vuex.Store({
         setCurrentSession(state, session) {
             state.currentSession = session
         },
-        setWsPingTimer(state, timer) {
-            state.wsPingTimer = timer
-        },
         setWsConnecting(state, connecting) {
             state.wsConnecting = connecting
         },
@@ -71,6 +69,12 @@ export default new Vuex.Store({
         },
         incrementWsReconnectAttempts(state) {
             state.wsReconnectAttempts++
+        },
+        setWsLastError(state, error) {
+            state.wsLastError = error
+        },
+        setWsConnectionLostTime(state, timestamp) {
+            state.wsConnectionLostTime = timestamp
         }
     },
     actions: {
@@ -83,16 +87,6 @@ export default new Vuex.Store({
                 state.wsClient.close(1000, "用户登出")
                 commit('setWsClient', null)
                 commit('setWsConnected', false)
-            }
-
-            if (state.wsPingTimer) {
-                clearInterval(state.wsPingTimer)
-                commit('setWsPingTimer', null)
-            }
-
-            if (state.wsReconnectTimer) {
-                clearTimeout(state.wsReconnectTimer)
-                commit('setWsReconnectTimer', null)
             }
 
             commit('setWsReconnectAttempts', 0)
@@ -110,15 +104,13 @@ export default new Vuex.Store({
 
             if (state.wsClient) {
                 try {
-                    state.wsClient.close(1000, "主动关闭以重新连接")
+                    if (state.wsClient.readyState === WebSocket.OPEN ||
+                        state.wsClient.readyState === WebSocket.CONNECTING) {
+                        state.wsClient.close(1000, "主动关闭以重新连接")
+                    }
                 } catch (error) {
                     console.error('关闭WebSocket连接出错:', error)
                 }
-            }
-
-            if (state.wsPingTimer) {
-                clearInterval(state.wsPingTimer)
-                commit('setWsPingTimer', null)
             }
 
             if (state.wsReconnectTimer) {
@@ -130,11 +122,36 @@ export default new Vuex.Store({
                 console.log('正在创建新的WebSocket连接...')
                 const ws = new WebSocket('ws://localhost:8081/ws')
 
+                const connectionTimeout = setTimeout(() => {
+                    if (ws.readyState !== WebSocket.OPEN) {
+                        console.error('WebSocket连接超时')
+                        ws.close(3000, "连接超时")
+                        commit('setWsConnecting', false)
+                        commit('setWsLastError', "连接超时")
+
+                        if (state.token && state.user) {
+                            const attempts = state.wsReconnectAttempts;
+                            const delay = Math.min(1000 * Math.pow(1.5, attempts), 30000);
+
+                            console.log(`连接超时，将在 ${delay / 1000} 秒后重新连接...`);
+
+                            const reconnectTimer = setTimeout(() => {
+                                commit('incrementWsReconnectAttempts');
+                                dispatch('connectWebSocket');
+                            }, delay);
+
+                            commit('setWsReconnectTimer', reconnectTimer);
+                        }
+                    }
+                }, 10000);
+
                 ws.onopen = () => {
+                    clearTimeout(connectionTimeout);
                     console.log('WebSocket连接已建立')
                     commit('setWsConnected', true)
                     commit('setWsConnecting', false)
                     commit('setWsReconnectAttempts', 0)
+                    commit('setWsLastError', null)
 
                     if (state.user) {
                         ws.send(JSON.stringify({
@@ -144,39 +161,31 @@ export default new Vuex.Store({
                             token: state.token
                         }))
                     }
-
-                    const pingTimer = setInterval(() => {
-                        if (ws.readyState === WebSocket.OPEN) {
-                            ws.send(JSON.stringify({ type: 'ping' }))
-                            console.log('发送ping保持连接')
-                        } else if (ws.readyState !== WebSocket.CONNECTING) {
-                            console.warn('WebSocket连接已断开，清除ping定时器')
-                            clearInterval(pingTimer)
-                        }
-                    }, 25000)
-
-                    commit('setWsPingTimer', pingTimer)
                 }
 
                 ws.onclose = (event) => {
+                    clearTimeout(connectionTimeout);
                     const wasConnected = state.wsConnected;
                     console.log('WebSocket连接已关闭', event.code, event.reason)
                     commit('setWsConnected', false)
                     commit('setWsConnecting', false)
 
-                    if (state.wsPingTimer) {
-                        clearInterval(state.wsPingTimer)
-                        commit('setWsPingTimer', null)
+                    if (wasConnected) {
+                        commit('setWsConnectionLostTime', Date.now())
                     }
 
-                    const isNormalClosure = event.code === 1000 && event.reason.includes("用户登出");
-                    const isManualClose = event.code === 1000 && event.reason.includes("主动关闭");
+                    const isNormalClosure = event.code === 1000 && (
+                        event.reason.includes("用户登出") ||
+                        event.reason.includes("主动关闭")
+                    );
 
-                    if (!isNormalClosure && !isManualClose && state.token && state.user) {
+                    if (!isNormalClosure && state.token && state.user) {
                         const attempts = state.wsReconnectAttempts;
                         const delay = Math.min(1000 * Math.pow(1.5, attempts), 30000);
 
-                        console.log(`将在 ${delay / 1000} 秒后尝试第 ${attempts + 1} 次重连...`);
+                        console.log(`WebSocket连接非正常关闭，将在 ${delay / 1000} 秒后尝试第 ${attempts + 1} 次重连...`);
+
+                        commit('setWsLastError', `连接关闭: 代码 ${event.code}, 原因: ${event.reason || "未知"}`);
 
                         const reconnectTimer = setTimeout(() => {
                             commit('incrementWsReconnectAttempts');
@@ -189,18 +198,25 @@ export default new Vuex.Store({
 
                 ws.onerror = (error) => {
                     console.error('WebSocket连接错误:', error)
+                    commit('setWsLastError', "连接错误")
                 }
 
                 commit('setWsClient', ws)
             } catch (error) {
                 console.error('创建WebSocket连接失败:', error)
                 commit('setWsConnecting', false)
+                commit('setWsLastError', `连接创建失败: ${error.message || "未知错误"}`)
 
                 if (state.token && state.user) {
+                    const attempts = state.wsReconnectAttempts;
+                    const delay = Math.min(1000 * Math.pow(1.5, attempts), 30000);
+
+                    console.log(`创建连接失败，将在 ${delay / 1000} 秒后重新尝试...`);
+
                     const reconnectTimer = setTimeout(() => {
                         commit('incrementWsReconnectAttempts')
                         dispatch('connectWebSocket')
-                    }, 5000)
+                    }, delay)
 
                     commit('setWsReconnectTimer', reconnectTimer)
                 }
@@ -212,16 +228,14 @@ export default new Vuex.Store({
 
             if (state.wsClient) {
                 try {
-                    state.wsClient.close(1000, "重置连接")
+                    if (state.wsClient.readyState === WebSocket.OPEN ||
+                        state.wsClient.readyState === WebSocket.CONNECTING) {
+                        state.wsClient.close(1000, "重置连接")
+                    }
                 } catch (error) {
                     console.error('关闭WebSocket连接出错:', error)
                 }
                 commit('setWsClient', null)
-            }
-
-            if (state.wsPingTimer) {
-                clearInterval(state.wsPingTimer)
-                commit('setWsPingTimer', null)
             }
 
             if (state.wsReconnectTimer) {
@@ -233,9 +247,26 @@ export default new Vuex.Store({
             commit('setWsConnecting', false)
             commit('setWsReconnectAttempts', 0)
 
-            setTimeout(() => {
-                dispatch('connectWebSocket')
-            }, 1000)
+            if (state.token && state.user) {
+                setTimeout(() => {
+                    dispatch('connectWebSocket')
+                }, 1000)
+            }
+        },
+
+        checkWebSocketHealth({ dispatch, state }) {
+            if (!state.user || !state.token) {
+                return false
+            }
+
+            const ws = state.wsClient
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                console.warn('WebSocket连接不正常，尝试重置...')
+                dispatch('resetWebSocketConnection')
+                return false
+            }
+
+            return true
         }
     }
 }) 
