@@ -111,6 +111,7 @@ function handleRegisterComplete(message) {
     if (message.success) {
         store.commit('setWsConnected', true)
         console.log('WebSocket注册成功')
+        Message.success('WebSocket连接成功')
     } else {
         console.error('WebSocket注册失败:', message.message)
         Message.error('WebSocket注册失败: ' + message.message)
