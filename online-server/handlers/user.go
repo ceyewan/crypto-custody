@@ -5,10 +5,7 @@ import (
 	"log"
 	"net/http"
 
-	"backend/config"
 	"backend/models"
-
-	//"backend/servers"
 
 	"backend/utils"
 
@@ -29,7 +26,7 @@ func Login(c *gin.Context) {
 		return
 	}
 	var users models.User
-	if err := config.DB.Where("Username = ?", loginData.Username).First(&users).Error; err != nil {
+	if err := utils.DB.Where("Username = ?", loginData.Username).First(&users).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -59,7 +56,7 @@ func Register(c *gin.Context) {
 		return
 	}
 	var users models.User
-	if err := config.DB.Where("Username = ?", registerData.Username).First(&users).Error; err == nil {
+	if err := utils.DB.Where("Username = ?", registerData.Username).First(&users).Error; err == nil {
 		err := errors.New("用户名已存在")
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
@@ -79,7 +76,7 @@ func Register(c *gin.Context) {
 		Password: hashedPassword,
 		Roleid:   4,
 	}
-	if err := config.DB.Create(&user).Error; err != nil {
+	if err := utils.DB.Create(&user).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -89,7 +86,7 @@ func Register(c *gin.Context) {
 
 func GetUsers(c *gin.Context) {
 	var users []models.User
-	result := config.DB.Find(&users)
+	result := utils.DB.Find(&users)
 	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
 		return

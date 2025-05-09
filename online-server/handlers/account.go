@@ -6,9 +6,9 @@ import (
 	"math/big"
 	"net/http"
 
-	"backend/config"
 	"backend/models"
 	"backend/servers"
+	"backend/utils"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gin-gonic/gin"
@@ -16,7 +16,7 @@ import (
 
 func GetAccounts(c *gin.Context) {
 	var accounts []models.Account
-	result := config.DB.Find(&accounts)
+	result := utils.DB.Find(&accounts)
 	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
 		return
@@ -44,7 +44,7 @@ func CreateAccount(c *gin.Context) {
 	pubKey := crypto.PubkeyToAddress(ecdsa.PublicKey{X: xInt, Y: yInt})
 
 	account := models.Account{Address: pubKey.Hex(), Balance: "0.00 ETH"}
-	result := config.DB.Create(&account)
+	result := utils.DB.Create(&account)
 	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
 		return
@@ -54,7 +54,7 @@ func CreateAccount(c *gin.Context) {
 
 func TransferAll(c *gin.Context) {
 	var accounts []models.Account
-	result := config.DB.Find(&accounts)
+	result := utils.DB.Find(&accounts)
 	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
 		return
@@ -62,7 +62,7 @@ func TransferAll(c *gin.Context) {
 
 	for _, account := range accounts {
 		servers.Transfer(account.Address)
-		config.DB.Save(&account)
+		utils.DB.Save(&account)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Transfer all accounts successfully"})
@@ -70,7 +70,7 @@ func TransferAll(c *gin.Context) {
 
 func UpdateBalance(c *gin.Context) {
 	var accounts []models.Account
-	result := config.DB.Find(&accounts)
+	result := utils.DB.Find(&accounts)
 	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
 		return
@@ -78,7 +78,7 @@ func UpdateBalance(c *gin.Context) {
 	for _, account := range accounts {
 		balance := servers.GetBalance(account.Address)
 		account.Balance = balance.String() + "ETH"
-		config.DB.Save(&account)
+		utils.DB.Save(&account)
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Update all accounts successfully"})
 }

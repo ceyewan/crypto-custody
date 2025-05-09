@@ -1,12 +1,23 @@
 module backend
 
-go 1.22.2
+go 1.24
+
+toolchain go1.24.0
 
 require (
+	github.com/ceyewan/clog v0.2.0
 	github.com/ethereum/go-ethereum v1.14.11
 	github.com/gin-gonic/gin v1.10.0
 	gorm.io/driver/mysql v1.5.7
 	gorm.io/gorm v1.25.12
+)
+
+require (
+	github.com/mattn/go-sqlite3 v1.14.22 // indirect
+	go.uber.org/multierr v1.11.0 // indirect
+	go.uber.org/zap v1.27.0 // indirect
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
+	gorm.io/driver/sqlite v1.5.7 // indirect
 )
 
 require (

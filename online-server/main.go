@@ -1,15 +1,15 @@
 package main
 
 import (
-	"backend/config"
 	"backend/routes"
+	"backend/utils"
 
 	"github.com/gin-gonic/gin"
 )
 
 func main() {
 	// 连接数据库
-	config.ConnectDatabase()
+	utils.ConnectDatabase()
 
 	r := gin.Default()
 
