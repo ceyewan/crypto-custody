@@ -1,50 +1,194 @@
 package utils
 
 import (
-	"strings"
+	"net/http"
+	"online-server/model"
 	"time"
 
+	"github.com/ceyewan/clog"
 	"github.com/gin-gonic/gin"
 )
 
+// JWTAuth JWT认证中间件
 func JWTAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		logger := clog.Module("middleware")
+		
 		authorization := c.Request.Header.Get("Authorization")
 		if authorization == "" {
-			c.JSON(200, "NeedToken")
+			logger.Warn("访问需要认证的API但未提供令牌", 
+				clog.String("path", c.Request.URL.Path),
+				clog.String("ip", c.ClientIP()))
+			c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "需要登录"})
 			c.Abort()
 			return
 		}
 
-		parts := strings.Split(authorization, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			c.JSON(200, "TokenFormatErr")
-			c.Abort()
-			return
-		}
-
-		claims, err := ValidateJWT(parts[1])
+		userName, role, err := ValidateToken(authorization)
 		if err != nil {
-			c.JSON(200, "TokenErr")
+			logger.Warn("令牌验证失败", 
+				clog.Err(err), 
+				clog.String("token_prefix", authorization[:10]+"..."), 
+				clog.String("ip", c.ClientIP()),
+				clog.String("path", c.Request.URL.Path))
+			c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "令牌无效"})
 			c.Abort()
 			return
 		}
 
-		if time.Now().Unix() > claims.ExpiresAt.Unix() {
-			c.JSON(200, "TokenExpiration")
-			c.Abort()
-			return
-		}
-		if claims.RoleID != 1 {
-			c.JSON(403, "Forbidden")
+		logger.Info("用户认证成功", 
+			clog.String("username", userName), 
+			clog.String("role", role),
+			clog.String("path", c.Request.URL.Path))
+
+		// 设置用户信息到上下文
+		c.Set("Username", userName)
+		c.Set("Role", role)
+
+		c.Next()
+	}
+}
+
+// AdminRequired 管理员权限检查中间件
+func AdminRequired() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		logger := clog.Module("middleware")
+		
+		role, exists := c.Get("Role")
+		if !exists {
+			logger.Warn("访问管理员资源但未提供认证信息", 
+				clog.String("path", c.Request.URL.Path),
+				clog.String("ip", c.ClientIP()))
+			c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "需要登录"})
 			c.Abort()
 			return
 		}
 
-		c.Set("UserId", claims.UserID)
-		c.Set("UserName", claims.Username)
-		c.Set("Role", claims.RoleID)
+		// 检查是否为管理员
+		if role.(string) != string(model.RoleAdmin) {
+			logger.Warn("非管理员尝试访问管理员资源", 
+				clog.String("username", c.GetString("Username")), 
+				clog.String("role", role.(string)),
+				clog.String("path", c.Request.URL.Path),
+				clog.String("ip", c.ClientIP()))
+			c.JSON(http.StatusForbidden, gin.H{"code": 403, "message": "需要管理员权限"})
+			c.Abort()
+			return
+		}
 
+		logger.Info("管理员权限验证通过", 
+			clog.String("username", c.GetString("Username")),
+			clog.String("path", c.Request.URL.Path))
+		c.Next()
+	}
+}
+
+// OfficerRequired 警员权限检查中间件
+func OfficerRequired() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		logger := clog.Module("middleware")
+		
+		role, exists := c.Get("Role")
+		if !exists {
+			logger.Warn("访问警员资源但未提供认证信息", 
+				clog.String("path", c.Request.URL.Path),
+				clog.String("ip", c.ClientIP()))
+			c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "需要登录"})
+			c.Abort()
+			return
+		}
+
+		// 检查是否为管理员或警员
+		if role.(string) != string(model.RoleAdmin) && role.(string) != string(model.RoleOfficer) {
+			logger.Warn("游客尝试访问警员资源", 
+				clog.String("username", c.GetString("Username")), 
+				clog.String("role", role.(string)),
+				clog.String("path", c.Request.URL.Path),
+				clog.String("ip", c.ClientIP()))
+			c.JSON(http.StatusForbidden, gin.H{"code": 403, "message": "需要警员或管理员权限"})
+			c.Abort()
+			return
+		}
+
+		logger.Info("警员权限验证通过", 
+			clog.String("username", c.GetString("Username")),
+			clog.String("role", role.(string)),
+			clog.String("path", c.Request.URL.Path))
+		c.Next()
+	}
+}
+
+// LoggerMiddleware 日志中间件
+func LoggerMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		logger := clog.Module("http")
+		
+		// 开始时间
+		startTime := time.Now()
+
+		// 处理请求
+		c.Next()
+
+		// 执行时间
+		latency := time.Since(startTime)
+
+		// 获取用户信息
+		username, exists := c.Get("Username")
+		userStr := "未登录"
+		if exists {
+			userStr = username.(string)
+		}
+
+		// 记录日志
+		if c.Writer.Status() >= 400 {
+			// 错误请求日志
+			logger.Warn("API请求异常",
+				clog.String("method", c.Request.Method),
+				clog.String("path", c.Request.URL.Path),
+				clog.Int("status", c.Writer.Status()),
+				clog.String("ip", c.ClientIP()),
+				clog.Duration("latency", latency),
+				clog.String("user", userStr),
+				clog.String("user_agent", c.Request.UserAgent()),
+			)
+		} else {
+			// 正常请求日志
+			logger.Info("API请求",
+				clog.String("method", c.Request.Method),
+				clog.String("path", c.Request.URL.Path),
+				clog.Int("status", c.Writer.Status()),
+				clog.String("ip", c.ClientIP()),
+				clog.Duration("latency", latency),
+				clog.String("user", userStr),
+			)
+		}
+	}
+}
+
+// RecoveryMiddleware 恢复中间件，防止服务崩溃
+func RecoveryMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		defer func() {
+			if err := recover(); err != nil {
+				logger := clog.Module("recovery")
+				logger.Error("服务发生严重异常",
+					clog.Any("error", err),
+					clog.String("path", c.Request.URL.Path),
+					clog.String("method", c.Request.Method),
+					clog.String("ip", c.ClientIP()),
+					clog.String("user_agent", c.Request.UserAgent()),
+				)
+				
+				// 获取用户信息（如果有）
+				if username, exists := c.Get("Username"); exists {
+					logger.Error("异常用户信息", 
+						clog.String("username", username.(string)),
+						clog.String("path", c.Request.URL.Path))
+				}
+				
+				c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "服务器内部错误"})
+			}
+		}()
 		c.Next()
 	}
 }
