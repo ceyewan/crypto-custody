@@ -300,9 +300,9 @@ func (tm *TransactionManager) GetUserTransactions(address string) ([]model.Trans
 // monitorTransaction 监控交易确认状态
 func (tm *TransactionManager) monitorTransaction(txHash common.Hash, txID uint) {
 	// 重试逻辑
-	for i := 0; i < tm.client.config.MaxRetries; i++ {
+	for i := 0; i < 3; i++ {
 		// 等待一段时间后检查
-		time.Sleep(tm.client.config.RetryTime)
+		time.Sleep(tm.client.config.ConfirmTime)
 
 		// 获取交易收据
 		receipt, err := tm.client.GetTransactionReceipt(txHash)

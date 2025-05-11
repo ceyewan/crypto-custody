@@ -13,13 +13,16 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
+var (
+	clientInstance     *Client
+	clientInstanceOnce sync.Once
+)
+
 // ClientConfig 以太坊客户端配置
 type ClientConfig struct {
 	RPC         string
 	ChainID     *big.Int
 	ConfirmTime time.Duration // 等待交易确认的时间
-	RetryTime   time.Duration // 重试间隔
-	MaxRetries  int           // 最大重试次数
 }
 
 // DefaultConfig 返回默认配置
@@ -28,8 +31,6 @@ func DefaultConfig() ClientConfig {
 		RPC:         "https://sepolia.infura.io/v3/766c230ed91a48a097e2739b966bbbf7",
 		ChainID:     big.NewInt(11155111), // Sepolia 测试网
 		ConfirmTime: 60 * time.Second,     // 等待交易确认的默认时间
-		RetryTime:   10 * time.Second,     // 默认重试间隔
-		MaxRetries:  5,                    // 默认最大重试次数
 	}
 }
 
@@ -41,8 +42,22 @@ type Client struct {
 	mu      sync.Mutex // 用于并发访问的互斥锁
 }
 
-// NewClient 创建一个新的以太坊客户端
-func NewClient(config ClientConfig) (*Client, error) {
+// GetClientInstance 获取Client单例实例
+func GetClientInstance() (*Client, error) {
+	var err error
+	clientInstanceOnce.Do(func() {
+		clientInstance, err = newClient(DefaultConfig())
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return clientInstance, nil
+}
+
+// newClient 创建一个新的以太坊客户端
+func newClient(config ClientConfig) (*Client, error) {
 	client, err := ethclient.Dial(config.RPC)
 	if err != nil {
 		return nil, fmt.Errorf("连接以太坊节点失败: %w", err)
@@ -144,9 +159,4 @@ func (c *Client) GetTransactionReceipt(txHash common.Hash) (*types.Receipt, erro
 	defer cancel()
 
 	return c.client.TransactionReceipt(ctx, txHash)
-}
-
-// NewEthClient 创建一个默认配置的以太坊客户端
-func NewEthClient() (*Client, error) {
-	return NewClient(DefaultConfig())
 }
