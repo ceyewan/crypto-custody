@@ -8,31 +8,22 @@ import (
 )
 
 func EthereumRoutes(r *gin.Engine) {
+	// 以太坊API路由组
 	ethereum := r.Group("/api/ethereum")
 	{
 		// 公开访问的API
-		ethereum.GET("/balance/:address", handlers.GetAccountBalance)
-		ethereum.GET("/transaction/:id", handlers.GetTransactionStatus)
-		ethereum.GET("/transactions/:address", handlers.GetUserTransactions)
+		ethereum.GET("/balance/:address", handlers.GetBalance) // 查询以太坊余额
 
 		// 需要身份验证的API
 		authenticated := ethereum.Group("/")
 		authenticated.Use(utils.JWTAuth())
 		{
-			// 警员和管理员可访问的交易API
-			officer := authenticated.Group("/")
+			// 交易相关API，需要警员或管理员权限
+			officer := authenticated.Group("/tx")
 			officer.Use(utils.OfficerRequired())
 			{
-				officer.POST("/prepare", handlers.PrepareTransaction)
-				officer.POST("/sign", handlers.SignTransaction)
-				officer.POST("/send/:id", handlers.ProcessTransaction)
-			}
-			
-			// 仅管理员可访问的API
-			admin := authenticated.Group("/admin")
-			admin.Use(utils.AdminRequired())
-			{
-				admin.POST("/check-pending", handlers.CheckPendingTransactions)
+				officer.POST("/prepare", handlers.PrepareTransaction)       // 准备交易
+				officer.POST("/sign-send", handlers.SignAndSendTransaction) // 签名并发送交易
 			}
 		}
 	}

@@ -26,11 +26,13 @@ func UserRoutes(r *gin.Engine) {
 		users.POST("/change-password", handlers.ChangePassword) // 修改密码
 
 		// 用户列表 - 管理员功能
-		admin := users.Group("/")
+		admin := users.Group("/admin")
 		admin.Use(utils.AdminRequired())
 		{
-			admin.GET("/", handlers.GetUsers)               // 获取所有用户
-			admin.GET("/:id", handlers.GetUserByID)         // 获取指定用户信息
+			admin.GET("/users", handlers.GetUsers)                // 获取所有用户
+			admin.GET("/users/:id", handlers.GetUserByID)         // 获取指定用户信息
+			admin.PUT("/users/:id/role", handlers.UpdateUserRole) // 更新用户角色
+			admin.DELETE("/users/:id", handlers.DeleteUser)       // 删除用户
 		}
 	}
 }

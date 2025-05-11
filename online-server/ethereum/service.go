@@ -1,118 +1,201 @@
 package ethereum
 
 import (
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"math/big"
 	"sync"
 
-	"online-server/model"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 var (
-	ethService     *EthService
-	ethServiceOnce sync.Once
+	serviceInstance     *Service
+	serviceInstanceOnce sync.Once
 )
 
-// EthService 集成以太坊服务功能
-type EthService struct {
-	client            *Client
-	transactionMgr    *TransactionManager
-	isInitialized     bool
-	initializationErr error
-	mu                sync.RWMutex // 保护并发访问
+// Service 以太坊服务，提供交易相关功能
+type Service struct {
+	client *Client
+	mu     sync.RWMutex
+	txData map[string]txPackage // 存储消息哈希到交易信息的映射
 }
 
-// NewEthService 创建一个新的以太坊服务
-func NewEthService() (*EthService, error) {
-	client, err := NewEthClient()
-	if err != nil {
-		return nil, fmt.Errorf("创建以太坊客户端失败: %w", err)
-	}
-
-	txManager := NewTransactionManager(client)
-
-	return &EthService{
-		client:         client,
-		transactionMgr: txManager,
-		isInitialized:  true,
-	}, nil
+// txPackage 存储交易相关数据
+type txPackage struct {
+	nonce    uint64
+	to       common.Address
+	value    *big.Int
+	gasLimit uint64
+	gasPrice *big.Int
+	data     []byte
+	from     common.Address
 }
 
-// GetInstance 获取EthService单例
-func GetInstance() (*EthService, error) {
-	ethServiceOnce.Do(func() {
-		var err error
-		ethService, err = NewEthService()
+// GetInstance 获取以太坊服务实例
+func GetInstance() (*Service, error) {
+	var initErr error
+
+	serviceInstanceOnce.Do(func() {
+		client, err := GetClientInstance()
 		if err != nil {
-			ethService = &EthService{
-				isInitialized:     false,
-				initializationErr: err,
-			}
+			initErr = fmt.Errorf("无法初始化以太坊客户端: %w", err)
+			return
+		}
+
+		serviceInstance = &Service{
+			client: client,
+			txData: make(map[string]txPackage),
 		}
 	})
 
-	if !ethService.isInitialized {
-		return nil, ethService.initializationErr
+	if initErr != nil {
+		return nil, initErr
 	}
 
-	return ethService, nil
+	return serviceInstance, nil
 }
 
-// GetBalance 获取账户余额
-func (s *EthService) GetBalance(address string) (*big.Float, error) {
+// GetBalance 获取指定地址的余额
+func (s *Service) GetBalance(address string) (*big.Float, error) {
 	return s.client.GetBalance(address)
 }
 
-// CreateTransaction 创建新交易
-func (s *EthService) CreateTransaction(fromAddress, toAddress string, amount *big.Float) (*model.Transaction, string, error) {
-	// 检查用户是否有未完成的交易
-	inProgress, err := s.transactionMgr.IsTransactionInProgress(fromAddress)
+// PrepareTransaction 准备交易数据
+func (s *Service) PrepareTransaction(from, to string, amount *big.Float) (string, error) {
+	// 验证地址格式
+	if !common.IsHexAddress(from) || !common.IsHexAddress(to) {
+		return "", errors.New("无效的以太坊地址格式")
+	}
+
+	fromAddr := common.HexToAddress(from)
+	toAddr := common.HexToAddress(to)
+
+	// 获取nonce
+	nonce, err := s.client.GetNonce(from)
 	if err != nil {
-		return nil, "", fmt.Errorf("检查用户交易状态失败: %w", err)
+		return "", fmt.Errorf("获取nonce失败: %w", err)
 	}
 
-	if inProgress {
-		return nil, "", fmt.Errorf("用户有正在处理中的交易，请等待完成或检查交易状态")
+	// 转换ETH为Wei
+	value := new(big.Int)
+	weiAmount := new(big.Float).Mul(amount, big.NewFloat(1e18))
+	weiAmount.Int(value)
+
+	// 获取Gas价格
+	gasPrice, err := s.client.SuggestGasPrice()
+	if err != nil {
+		return "", fmt.Errorf("获取gas价格失败: %w", err)
 	}
 
-	return s.transactionMgr.CreateTransaction(fromAddress, toAddress, amount)
-}
+	// 标准ETH转账的gasLimit
+	gasLimit := uint64(21000)
 
-// SignTransaction 使用签名处理交易
-func (s *EthService) SignTransaction(messageHash string, signature string) (*model.Transaction, error) {
-	return s.transactionMgr.SignTransaction(messageHash, signature)
-}
+	// 创建交易
+	tx := types.NewTransaction(
+		nonce,
+		toAddr,
+		value,
+		gasLimit,
+		gasPrice,
+		nil,
+	)
 
-// SendTransaction 发送已签名的交易
-func (s *EthService) SendTransaction(txID uint) (*model.Transaction, error) {
-	return s.transactionMgr.SendTransaction(txID)
-}
+	// 获取签名哈希
+	signer := types.NewEIP155Signer(s.client.GetChainID())
+	hash := signer.Hash(tx)
 
-// GetTransactionStatus 获取交易状态
-func (s *EthService) GetTransactionStatus(txID uint) (*model.Transaction, error) {
-	return s.transactionMgr.GetTransactionStatus(txID)
-}
-
-// GetTransactionByMessageHash 通过消息哈希获取交易
-func (s *EthService) GetTransactionByMessageHash(messageHash string) (*model.Transaction, error) {
-	return s.transactionMgr.GetTransactionByMessageHash(messageHash)
-}
-
-// GetUserTransactions 获取用户的交易历史
-func (s *EthService) GetUserTransactions(address string) ([]model.Transaction, error) {
-	return s.transactionMgr.GetUserTransactions(address)
-}
-
-// CheckPendingTransactions 检查所有待处理的交易
-func (s *EthService) CheckPendingTransactions() error {
-	return s.transactionMgr.CheckPendingTransactions()
-}
-
-// Close 关闭以太坊服务
-func (s *EthService) Close() {
+	// 存储交易信息以供后续使用
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.txData[hex.EncodeToString(hash[:])] = txPackage{
+		nonce:    nonce,
+		to:       toAddr,
+		value:    value,
+		gasLimit: gasLimit,
+		gasPrice: gasPrice,
+		data:     nil,
+		from:     fromAddr,
+	}
+	s.mu.Unlock()
 
+	return hex.EncodeToString(hash[:]), nil
+}
+
+// SignAndSendTransaction 使用签名发送交易
+func (s *Service) SignAndSendTransaction(messageHash string, signature string) (string, error) {
+	// 检查交易数据是否存在
+	s.mu.RLock()
+	txPkg, exists := s.txData[messageHash]
+	s.mu.RUnlock()
+
+	if !exists {
+		return "", errors.New("未找到对应的交易数据，请先准备交易")
+	}
+
+	// 解码消息哈希
+	hashBytes, err := hex.DecodeString(messageHash)
+	if err != nil {
+		return "", fmt.Errorf("解码消息哈希失败: %w", err)
+	}
+
+	// 解码签名
+	sig, err := hexutil.Decode("0x" + signature)
+	if err != nil {
+		return "", fmt.Errorf("解码签名失败: %w", err)
+	}
+
+	// 恢复公钥
+	pubKeyBytes, err := crypto.Ecrecover(hashBytes, sig)
+	if err != nil {
+		return "", fmt.Errorf("恢复公钥失败: %w", err)
+	}
+
+	pubKey, err := crypto.UnmarshalPubkey(pubKeyBytes)
+	if err != nil {
+		return "", fmt.Errorf("解析公钥失败: %w", err)
+	}
+
+	// 从公钥获取地址
+	recoveredAddr := crypto.PubkeyToAddress(*pubKey)
+
+	// 验证签名者地址与交易发送者地址是否匹配
+	if recoveredAddr != txPkg.from {
+		return "", errors.New("签名者地址与交易发送者地址不匹配")
+	}
+
+	// 重建交易
+	tx := types.NewTransaction(
+		txPkg.nonce,
+		txPkg.to,
+		txPkg.value,
+		txPkg.gasLimit,
+		txPkg.gasPrice,
+		txPkg.data,
+	)
+
+	// 应用签名
+	signer := types.NewEIP155Signer(s.client.GetChainID())
+	signedTx, err := tx.WithSignature(signer, sig)
+	if err != nil {
+		return "", fmt.Errorf("应用签名失败: %w", err)
+	}
+
+	// 发送交易
+	err = s.client.SendTransaction(signedTx)
+	if err != nil {
+		return "", fmt.Errorf("发送交易失败: %w", err)
+	}
+
+	// 返回交易哈希
+	return signedTx.Hash().Hex(), nil
+}
+
+// Close 关闭服务
+func (s *Service) Close() {
 	if s.client != nil {
 		s.client.Close()
 	}

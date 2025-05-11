@@ -2,9 +2,7 @@ package main
 
 import (
 	"log"
-	"online-server/ethereum"
 	"online-server/routes"
-	"online-server/servers"
 	"online-server/utils"
 
 	"github.com/gin-gonic/gin"
@@ -12,22 +10,11 @@ import (
 
 func main() {
 	// 初始化数据库
-	utils.InitDB()
+	err := utils.InitDB()
+	if err != nil {
+		log.Fatalf("数据库初始化失败: %v", err)
+	}
 	defer utils.CloseDB()
-
-	// 初始化以太坊服务
-	ethService, err := ethereum.GetInstance()
-	if err != nil {
-		log.Printf("警告: 以太坊服务初始化失败: %v", err)
-	} else {
-		defer ethService.Close()
-	}
-
-	// 初始化以太坊交易服务
-	err = servers.InitEthService()
-	if err != nil {
-		log.Printf("警告: 以太坊交易服务初始化失败: %v", err)
-	}
 
 	// 创建 Gin 路由
 	r := gin.Default()
@@ -50,5 +37,8 @@ func main() {
 	routes.EthereumRoutes(r)
 
 	// 启动服务器
-	r.Run(":8080")
+	log.Println("服务器启动在 :8080 端口")
+	if err := r.Run(":8080"); err != nil {
+		log.Fatalf("服务器启动失败: %v", err)
+	}
 }
