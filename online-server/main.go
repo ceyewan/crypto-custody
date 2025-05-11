@@ -48,7 +48,6 @@ func main() {
 	routes.UserRoutes(r)
 	routes.AccountRoutes(r)
 	routes.EthereumRoutes(r)
-	routes.RoleRoutes(r)
 
 	// 启动服务器
 	r.Run(":8080")

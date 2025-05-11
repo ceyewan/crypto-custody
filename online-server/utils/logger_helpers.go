@@ -7,12 +7,6 @@ import (
 	"time"
 
 	"github.com/ceyewan/clog"
-	"go.uber.org/zap"
-)
-
-// 增加 clog 没有的类型处理函数
-var (
-	Uint = zap.Uint // 创建无符号整数类型的日志字段
 )
 
 // GormLogWriter 实现了 io.Writer 和 logger.Writer 接口，用于将 GORM 日志重定向到 clog
