@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"online-server/model"
 	"online-server/service"
+	"online-server/utils"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -332,5 +333,93 @@ func DeleteUser(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"code":    200,
 		"message": "用户删除成功",
+	})
+}
+
+// CheckAuth 验证Token是否有效
+func CheckAuth(c *gin.Context) {
+	var tokenData struct {
+		Token string `json:"token" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&tokenData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "请求参数不正确"})
+		return
+	}
+
+	valid, username, role := utils.CheckAuth(tokenData.Token)
+
+	if !valid {
+		c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "令牌无效", "valid": false})
+		return
+	}
+
+	userService, err := service.GetUserServiceInstance()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "系统错误"})
+		return
+	}
+
+	user, err := userService.GetUserByUsername(username)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "用户不存在", "valid": false})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "令牌有效",
+		"valid":   true,
+		"data": gin.H{
+			"user": gin.H{
+				"id":       user.ID,
+				"username": user.Username,
+				"email":    user.Email,
+				"role":     role,
+			},
+		},
+	})
+}
+
+// UpdateUserID 管理员更新用户名（仅限管理员修改非管理员用户）
+func UpdateUserID(c *gin.Context) {
+	// 检查权限
+	role, exists := c.Get("Role")
+	if !exists || role.(string) != string(model.RoleAdmin) {
+		c.JSON(http.StatusForbidden, gin.H{"code": 403, "message": "权限不足"})
+		return
+	}
+
+	// 获取用户ID参数
+	userID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "无效的用户ID"})
+		return
+	}
+
+	var usernameData struct {
+		Username string `json:"username" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&usernameData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "请求参数不正确"})
+		return
+	}
+
+	userService, err := service.GetUserServiceInstance()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "系统错误"})
+		return
+	}
+
+	err = userService.UpdateUserID(uint(userID), usernameData.Username)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "用户名更新成功",
 	})
 }

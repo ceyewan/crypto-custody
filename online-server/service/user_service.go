@@ -120,6 +120,18 @@ func (s *UserService) GetUserByUsername(username string) (*model.User, error) {
 
 // UpdateUserRole 更新用户角色
 func (s *UserService) UpdateUserRole(userID uint, role model.Role) error {
+	// 首先检查目标用户是否为管理员
+	var targetUser model.User
+	if err := utils.GetDB().First(&targetUser, userID).Error; err != nil {
+		return fmt.Errorf("查询用户失败: %w", err)
+	}
+
+	// 不允许修改管理员用户的角色
+	if targetUser.Role == model.RoleAdmin {
+		return errors.New("不允许修改管理员用户的角色")
+	}
+
+	// 更新角色
 	if err := utils.GetDB().Model(&model.User{}).Where("id = ?", userID).Update("role", role).Error; err != nil {
 		return fmt.Errorf("更新用户角色失败: %w", err)
 	}
@@ -158,5 +170,34 @@ func (s *UserService) DeleteUser(userID uint) error {
 	if err := utils.GetDB().Delete(&model.User{}, userID).Error; err != nil {
 		return fmt.Errorf("删除用户失败: %w", err)
 	}
+	return nil
+}
+
+// UpdateUserID 更新用户名（用户ID）
+// 注意：此方法仅允许管理员修改非管理员用户的用户名
+func (s *UserService) UpdateUserID(userID uint, newUsername string) error {
+	// 首先检查目标用户是否为管理员
+	var targetUser model.User
+	if err := utils.GetDB().First(&targetUser, userID).Error; err != nil {
+		return fmt.Errorf("查询用户失败: %w", err)
+	}
+
+	// 不允许修改管理员用户
+	if targetUser.Role == model.RoleAdmin {
+		return errors.New("不允许修改管理员用户的用户名")
+	}
+
+	// 检查新用户名是否已被使用
+	var count int64
+	utils.GetDB().Model(&model.User{}).Where("username = ? AND id != ?", newUsername, userID).Count(&count)
+	if count > 0 {
+		return errors.New("用户名已被使用")
+	}
+
+	// 更新用户名
+	if err := utils.GetDB().Model(&model.User{}).Where("id = ?", userID).Update("username", newUsername).Error; err != nil {
+		return fmt.Errorf("更新用户名失败: %w", err)
+	}
+
 	return nil
 }

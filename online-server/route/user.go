@@ -14,6 +14,7 @@ func UserRoutes(r *gin.Engine) {
 	{
 		public.POST("/login", handler.Login)
 		public.POST("/register", handler.Register)
+		public.POST("/check-auth", handler.CheckAuth) // 验证Token是否有效
 	}
 
 	// 用户路由（需认证）
@@ -29,10 +30,11 @@ func UserRoutes(r *gin.Engine) {
 		admin := users.Group("/admin")
 		admin.Use(utils.AdminRequired())
 		{
-			admin.GET("/users", handler.GetUsers)                // 获取所有用户
-			admin.GET("/users/:id", handler.GetUserByID)         // 获取指定用户信息
-			admin.PUT("/users/:id/role", handler.UpdateUserRole) // 更新用户角色
-			admin.DELETE("/users/:id", handler.DeleteUser)       // 删除用户
+			admin.GET("/users", handler.GetUsers)                    // 获取所有用户
+			admin.GET("/users/:id", handler.GetUserByID)             // 获取指定用户信息
+			admin.PUT("/users/:id/role", handler.UpdateUserRole)     // 更新用户角色
+			admin.PUT("/users/:id/username", handler.UpdateUserID)   // 更新用户名
+			admin.DELETE("/users/:id", handler.DeleteUser)           // 删除用户
 		}
 	}
 }

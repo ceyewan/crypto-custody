@@ -2,7 +2,7 @@ package main
 
 import (
 	"log"
-	"online-server/routes"
+	"online-server/route"
 	"online-server/utils"
 
 	"github.com/gin-gonic/gin"
@@ -32,9 +32,9 @@ func main() {
 	})
 
 	// 注册路由
-	routes.UserRoutes(r)
-	routes.AccountRoutes(r)
-	routes.EthereumRoutes(r)
+	route.UserRoutes(r)
+	route.AccountRoutes(r)
+	route.EthereumRoutes(r)
 
 	// 启动服务器
 	log.Println("服务器启动在 :8080 端口")
