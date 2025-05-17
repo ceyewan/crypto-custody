@@ -205,3 +205,27 @@ func SetJWTKey(key []byte) {
 		logger.Warn("尝试设置空的JWT密钥，操作被忽略")
 	}
 }
+
+// CheckAuth 检查Token是否有效
+//
+// 参数:
+//   - tokenString: 要验证的令牌字符串
+//
+// 返回:
+//   - bool: 令牌是否有效
+//   - string: 用户名，如果验证失败则为空字符串
+//   - string: 用户角色，如果验证失败则为空字符串
+func CheckAuth(tokenString string) (bool, string, string) {
+	logger := clog.Module("jwt")
+	
+	// 验证令牌
+	username, role, err := ValidateToken(tokenString)
+	if err != nil {
+		logger.Warn("令牌验证失败", 
+			clog.Err(err), 
+			clog.String("token_prefix", tokenString[:10]+"..."))
+		return false, "", ""
+	}
+	
+	return true, username, role
+}

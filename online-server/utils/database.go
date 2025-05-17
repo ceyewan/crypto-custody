@@ -180,6 +180,18 @@ func GetDB() *gorm.DB {
 	return instance
 }
 
+// SetDB 设置数据库连接实例
+// 主要用于测试环境中设置测试数据库
+//
+// 参数：
+//   - db: 要设置的数据库连接实例
+func SetDB(db *gorm.DB) {
+	dbLogger := clog.Module("database")
+	dbLogger.Info("手动设置数据库连接")
+	instance = db
+	DB = db
+}
+
 // ensureAdminUser 确保管理员用户存在
 // 如果不存在则创建默认的管理员用户
 //
