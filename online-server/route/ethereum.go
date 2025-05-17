@@ -1,7 +1,7 @@
-package routes
+package route
 
 import (
-	"online-server/handlers"
+	"online-server/handler"
 	"online-server/utils"
 
 	"github.com/gin-gonic/gin"
@@ -12,7 +12,7 @@ func EthereumRoutes(r *gin.Engine) {
 	ethereum := r.Group("/api/ethereum")
 	{
 		// 公开访问的API
-		ethereum.GET("/balance/:address", handlers.GetBalance) // 查询以太坊余额
+		ethereum.GET("/balance/:address", handler.GetBalance) // 查询以太坊余额
 
 		// 需要身份验证的API
 		authenticated := ethereum.Group("/")
@@ -22,8 +22,8 @@ func EthereumRoutes(r *gin.Engine) {
 			officer := authenticated.Group("/tx")
 			officer.Use(utils.OfficerRequired())
 			{
-				officer.POST("/prepare", handlers.PrepareTransaction)       // 准备交易
-				officer.POST("/sign-send", handlers.SignAndSendTransaction) // 签名并发送交易
+				officer.POST("/prepare", handler.PrepareTransaction)       // 准备交易
+				officer.POST("/sign-send", handler.SignAndSendTransaction) // 签名并发送交易
 			}
 		}
 	}
