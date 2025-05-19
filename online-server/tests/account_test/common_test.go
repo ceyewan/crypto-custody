@@ -9,30 +9,6 @@ import (
 	"time"
 )
 
-// 自定义解码响应函数，处理服务端可能返回的数字类型数据
-func decodeResponse(data []byte, target interface{}) error {
-	// 首先检查数据是否为空
-	if len(data) == 0 {
-		return nil
-	}
-
-	// 尝试将JSON数据解码为目标结构
-	err := json.Unmarshal(data, target)
-	if err == nil {
-		return nil
-	}
-
-	// 如果解码失败，检查是否因为服务端返回的是数字而不是对象或数组
-	var number json.Number
-	if err := json.Unmarshal(data, &number); err == nil {
-		// 对于不需要实际处理数字值的情况，忽略错误，返回空
-		return nil
-	}
-
-	// 其他类型的解码错误
-	return err
-}
-
 const (
 	// 基础URL
 	BaseURL = "http://localhost:8080/api"
@@ -45,17 +21,13 @@ const (
 	// 管理员数据
 	AdminUsername = "admin"
 	AdminEmail    = "admin@example.com"
-
-	// 测试账户数据
-	TestEthAddress  = "0x742d35Cc6634C0532925a3b844Bc454e4438f44e"
-	TestEthAddress2 = "0x8B3392483BA26D65E331dB86D4F430aE37546f4e"
 )
 
 // 应用返回的通用响应结构
 type CommonResponse struct {
 	Code    int             `json:"code"`
 	Message string          `json:"message"`
-	Data    json.RawMessage `json:"data,omitempty"`
+	Data    json.RawMessage `json:"data"`
 }
 
 // 用户信息结构
@@ -77,7 +49,6 @@ type LoginResponseData struct {
 type AccountInfo struct {
 	Address     string `json:"address"`
 	CoinType    string `json:"coinType"`
-	Balance     string `json:"balance"`
 	ImportedBy  string `json:"importedBy"`
 	Description string `json:"description"`
 }
@@ -95,6 +66,19 @@ func GenerateRandomEmail() string {
 // 生成随机地址描述
 func GenerateRandomDescription() string {
 	return fmt.Sprintf("Test Account %d", time.Now().UnixNano())
+}
+
+// 生成随机ETH地址
+func GenerateRandomEthAddress() string {
+	// ETH地址格式：0x + 40个十六进制字符
+	const chars = "0123456789abcdef"
+	addr := "0x"
+	for i := 0; i < 40; i++ {
+		addr += string(chars[time.Now().UnixNano()%int64(len(chars))])
+		// 添加一点延迟确保每个字符都是不同的
+		time.Sleep(time.Nanosecond)
+	}
+	return addr
 }
 
 // 执行登录并返回令牌
@@ -123,7 +107,7 @@ func LoginUser(username, password string) (string, error) {
 	}
 
 	var loginData LoginResponseData
-	if err := decodeResponse(response.Data, &loginData); err != nil {
+	if err := json.Unmarshal(response.Data, &loginData); err != nil {
 		return "", err
 	}
 
@@ -185,19 +169,70 @@ func RegisterNewUser(username, email, password string) (*UserInfo, error) {
 	}
 
 	var user UserInfo
-	if err := decodeResponse(response.Data, &user); err != nil {
+	if err := json.Unmarshal(response.Data, &user); err != nil {
 		return nil, err
 	}
 
 	return &user, nil
 }
 
-// 导入账户
-func ImportAccount(token, address, coinType, description string) (*AccountInfo, error) {
+// 创建账户
+func CreateAccount(token, address, coinType, description string) (*AccountInfo, error) {
 	reqBody, err := json.Marshal(map[string]string{
 		"address":     address,
 		"coinType":    coinType,
 		"description": description,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := SendAuthenticatedRequest("POST", BaseURL+"/accounts/create", token, reqBody)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var response CommonResponse
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return nil, err
+	}
+
+	if response.Code != 200 {
+		return nil, fmt.Errorf("account creation failed: %s", response.Message)
+	}
+
+	// 创建成功后通过地址查询账户信息
+	return GetAccountByAddress(address)
+}
+
+// 导入账户
+func ImportAccount(token, address, coinType, description string) (*AccountInfo, error) {
+	// 构建批量导入请求的数据结构
+	accounts := []map[string]string{
+		{
+			"address":     address,
+			"coinType":    coinType,
+			"description": description,
+		},
+	}
+
+	importedAccounts, err := BatchImportAccounts(token, accounts)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(importedAccounts) == 0 {
+		return nil, fmt.Errorf("no account imported")
+	}
+
+	return &importedAccounts[0], nil
+}
+
+// 批量导入账户
+func BatchImportAccounts(token string, accounts []map[string]string) ([]AccountInfo, error) {
+	reqBody, err := json.Marshal(map[string]interface{}{
+		"accounts": accounts,
 	})
 	if err != nil {
 		return nil, err
@@ -215,27 +250,41 @@ func ImportAccount(token, address, coinType, description string) (*AccountInfo, 
 	}
 
 	if response.Code != 200 {
-		return nil, fmt.Errorf("account import failed: %s", response.Message)
+		return nil, fmt.Errorf("batch import failed: %s", response.Message)
+	}
+
+	// 导入成功后获取所有账户并返回
+	return GetAccounts(token)
+}
+
+// 获取账户通过地址
+func GetAccountByAddress(address string) (*AccountInfo, error) {
+	resp, err := http.Get(fmt.Sprintf("%s/accounts/address/%s", BaseURL, address))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var response CommonResponse
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return nil, err
+	}
+
+	if response.Code != 200 {
+		return nil, fmt.Errorf("get account failed: %s", response.Message)
 	}
 
 	var account AccountInfo
-	if err := decodeResponse(response.Data, &account); err != nil {
+	if err := json.Unmarshal(response.Data, &account); err != nil {
 		return nil, err
 	}
 
 	return &account, nil
 }
 
-// 批量导入账户
-func BatchImportAccounts(token string, accounts []map[string]string) ([]AccountInfo, error) {
-	reqBody, err := json.Marshal(map[string]interface{}{
-		"accounts": accounts,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := SendAuthenticatedRequest("POST", BaseURL+"/accounts/batch-import", token, reqBody)
+// 获取所有账户
+func GetAccounts(token string) ([]AccountInfo, error) {
+	resp, err := SendAuthenticatedRequest("GET", BaseURL+"/accounts", token, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -247,41 +296,41 @@ func BatchImportAccounts(token string, accounts []map[string]string) ([]AccountI
 	}
 
 	if response.Code != 200 {
-		return nil, fmt.Errorf("batch import failed: %s", response.Message)
+		return nil, fmt.Errorf("get accounts failed: %s", response.Message)
 	}
 
-	var imported []AccountInfo
-	if err := decodeResponse(response.Data, &imported); err != nil {
+	var accounts []AccountInfo
+	if err := json.Unmarshal(response.Data, &accounts); err != nil {
 		return nil, err
 	}
 
-	return imported, nil
+	return accounts, nil
 }
 
-// 获取账户余额
-func GetAccountBalance(address string) (string, error) {
-	resp, err := http.Get(fmt.Sprintf("%s/transaction/balance/%s", BaseURL, address))
+// 获取所有账户(管理员)
+func GetAllAccounts(token string) ([]AccountInfo, error) {
+	resp, err := SendAuthenticatedRequest("GET", BaseURL+"/accounts/admin/all", token, nil)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	var response CommonResponse
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return "", err
+		return nil, err
 	}
 
 	if response.Code != 200 {
-		return "", fmt.Errorf("get balance failed: %s", response.Message)
+		return nil, fmt.Errorf("get all accounts failed: %s", response.Message)
 	}
 
-	var balanceResp struct {
-		Address string `json:"address"`
-		Balance string `json:"balance"`
+	var result struct {
+		Accounts []AccountInfo `json:"accounts"`
+		Total    int           `json:"total"`
 	}
-	if err := json.Unmarshal(response.Data, &balanceResp); err != nil {
-		return "", err
+	if err := json.Unmarshal(response.Data, &result); err != nil {
+		return nil, err
 	}
 
-	return balanceResp.Balance, nil
+	return result.Accounts, nil
 }

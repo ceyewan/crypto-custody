@@ -2,6 +2,8 @@ package handler
 
 import (
 	"net/http"
+	"online-server/dto"
+	"online-server/model"
 	"online-server/service"
 	"online-server/utils"
 
@@ -106,4 +108,80 @@ func GetAllAccounts(c *gin.Context) {
 
 	// 返回所有账户信息
 	utils.ResponseWithData(c, "查询所有账户成功", responseData)
+}
+
+// CreateAccount 创建新账户
+//
+// 需要JWT认证，从请求体中获取账户信息，创建新账户并返回结果
+//
+// 路由: POST /api/accounts/create
+func CreateAccount(c *gin.Context) {
+	// 从请求中获取账户信息
+	var accountInfo dto.AccountRequest
+	if err := c.ShouldBindJSON(&accountInfo); err != nil {
+		utils.ResponseWithError(c, http.StatusBadRequest, "请求参数错误: "+err.Error())
+		return
+	}
+
+	// 获取账户服务实例
+	accountService, err := service.GetAccountServiceInstance()
+	if utils.HandleServiceInitError(c, err) {
+		return
+	}
+
+	modelAccount := model.Account{
+		Address:     accountInfo.Address,
+		CoinType:    accountInfo.CoinType,
+		Description: accountInfo.Description,
+		ImportedBy:  c.GetString("Username"),
+	}
+
+	// 创建新账户
+	if err := accountService.CreateAccount(&modelAccount); err != nil {
+		utils.ResponseWithError(c, http.StatusInternalServerError, "创建账户失败: "+err.Error())
+		return
+	}
+
+	// 返回成功响应
+	utils.ResponseWithData(c, "创建账户成功", nil)
+}
+
+// BatchImportAccounts 批量导入账户
+//
+// 需要JWT认证，从请求体中获取批量导入的账户信息，创建新账户并返回结果
+//
+// 路由: POST /api/accounts/import
+func BatchImportAccounts(c *gin.Context) {
+	// 从请求中获取批量导入的账户信息
+	var batchImportRequest dto.BatchImportRequest
+	if err := c.ShouldBindJSON(&batchImportRequest); err != nil {
+		utils.ResponseWithError(c, http.StatusBadRequest, "请求参数错误: "+err.Error())
+		return
+	}
+
+	// 获取账户服务实例
+	accountService, err := service.GetAccountServiceInstance()
+	if utils.HandleServiceInitError(c, err) {
+		return
+	}
+
+	var accounts []model.Account
+	for _, accountInfo := range batchImportRequest.Accounts {
+		modelAccount := model.Account{
+			Address:     accountInfo.Address,
+			CoinType:    accountInfo.CoinType,
+			Description: accountInfo.Description,
+			ImportedBy:  c.GetString("Username"),
+		}
+		accounts = append(accounts, modelAccount)
+	}
+
+	// 批量导入账户
+	if err := accountService.BatchCreateAccounts(accounts); err != nil {
+		utils.ResponseWithError(c, http.StatusInternalServerError, "批量导入账户失败: "+err.Error())
+		return
+	}
+
+	// 返回成功响应
+	utils.ResponseWithData(c, "批量导入账户成功", nil)
 }
