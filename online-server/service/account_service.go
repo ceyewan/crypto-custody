@@ -1,9 +1,11 @@
 package service
 
 import (
-	"online-server/dto"
+	"errors"
+	"fmt"
+	"online-server/model"
+	"online-server/utils"
 	"sync"
-	"time"
 )
 
 var (
@@ -11,110 +13,144 @@ var (
 	accountServiceInstanceOnce sync.Once
 )
 
-// TransactionStatus 交易状态
-type TransactionStatus string
-
-const (
-	// StatusPending 待处理状态
-	StatusPending TransactionStatus = "pending"
-	// StatusSigned 已签名状态
-	StatusSigned TransactionStatus = "signed"
-	// StatusSubmitted 已提交状态
-	StatusSubmitted TransactionStatus = "submitted"
-	// StatusConfirmed 已确认状态
-	StatusConfirmed TransactionStatus = "confirmed"
-	// StatusFailed 失败状态
-	StatusFailed TransactionStatus = "failed"
-)
-
-// AccountService 账户相关服务
+// AccountService 提供账户管理相关的服务
 type AccountService struct {
-	mu sync.RWMutex
+	db *utils.Database
 }
 
 // GetAccountServiceInstance 获取账户服务实例
 func GetAccountServiceInstance() (*AccountService, error) {
+	var initErr error
+
 	accountServiceInstanceOnce.Do(func() {
-		accountServiceInstance = &AccountService{}
+		db, err := utils.GetDBInstance()
+		if err != nil {
+			initErr = fmt.Errorf("初始化数据库失败: %w", err)
+			return
+		}
+
+		accountServiceInstance = &AccountService{
+			db: db,
+		}
 	})
+
+	if initErr != nil {
+		return nil, initErr
+	}
+
 	return accountServiceInstance, nil
 }
 
-// SaveTransaction 保存交易到数据库
-func (s *AccountService) SaveTransaction(fromAddress, toAddress string, amount float64, messageHash string) (uint, error) {
-	// 这里应该是实际的数据库操作，为了示例，我们只返回一个模拟的ID
-	// 在实际实现中，您需要与数据库进行交互
-
-	// 模拟的ID生成
-	id := uint(time.Now().Unix())
-
-	return id, nil
+// GetAccounts 获取所有账户列表
+func (s *AccountService) GetAccounts() ([]model.Account, error) {
+	var accounts []model.Account
+	result := s.db.Find(&accounts)
+	if result.Error != nil {
+		return nil, fmt.Errorf("获取账户列表失败: %w", result.Error)
+	}
+	return accounts, nil
 }
 
-// UpdateTransactionStatus 更新交易状态
-func (s *AccountService) UpdateTransactionStatus(txID uint, status TransactionStatus, txHash string) error {
-	// 这里应该是实际的数据库操作，为了示例，我们只返回成功
-	// 在实际实现中，您需要与数据库进行交互
+// GetAccountsByUserID 获取指定用户ID的账户列表
+func (s *AccountService) GetAccountsByUserID(userID uint) ([]model.Account, error) {
+	var accounts []model.Account
+	result := s.db.Where("user_id = ?", userID).Find(&accounts)
+	if result.Error != nil {
+		return nil, fmt.Errorf("获取用户账户列表失败: %w", result.Error)
+	}
+	return accounts, nil
+}
+
+// GetAccountByID 通过ID获取账户
+func (s *AccountService) GetAccountByID(id uint) (*model.Account, error) {
+	var account model.Account
+	result := s.db.First(&account, id)
+	if result.Error != nil {
+		return nil, fmt.Errorf("获取账户失败: %w", result.Error)
+	}
+	return &account, nil
+}
+
+// GetAccountByAddress 通过地址获取账户
+func (s *AccountService) GetAccountByAddress(address string) (*model.Account, error) {
+	var account model.Account
+	result := s.db.Where("address = ?", address).First(&account)
+	if result.Error != nil {
+		return nil, fmt.Errorf("获取账户失败: %w", result.Error)
+	}
+	return &account, nil
+}
+
+// CreateAccount 创建新账户
+func (s *AccountService) CreateAccount(account *model.Account) error {
+	// 检查地址是否已存在
+	var existingAccount model.Account
+	result := s.db.Where("address = ?", account.Address).First(&existingAccount)
+	if result.Error == nil {
+		return errors.New("账户地址已存在")
+	}
+
+	// 创建账户
+	result = s.db.Create(account)
+	if result.Error != nil {
+		return fmt.Errorf("创建账户失败: %w", result.Error)
+	}
 	return nil
 }
 
-// GetTransaction 获取交易详情
-func (s *AccountService) GetTransaction(txID uint) (*dto.TransactionResponse, error) {
-	// 这里应该是实际的数据库操作，为了示例，我们返回一个模拟数据
-	// 在实际实现中，您需要从数据库中查询
-
-	return &dto.TransactionResponse{
-		ID:          txID,
-		FromAddress: "0xSenderAddress",
-		ToAddress:   "0xReceiverAddress",
-		Amount:      "1.0",
-		Status:      string(StatusPending),
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
-	}, nil
+// UpdateAccount 更新账户信息
+func (s *AccountService) UpdateAccount(account *model.Account) error {
+	result := s.db.Save(account)
+	if result.Error != nil {
+		return fmt.Errorf("更新账户失败: %w", result.Error)
+	}
+	return nil
 }
 
-// GetTransactionByMessageHash 通过消息哈希获取交易
-func (s *AccountService) GetTransactionByMessageHash(messageHash string) (*dto.TransactionResponse, error) {
-	// 这里应该是实际的数据库操作，为了示例，我们返回一个模拟数据
-	// 在实际实现中，您需要从数据库中查询
-
-	return &dto.TransactionResponse{
-		ID:          123,
-		MessageHash: messageHash,
-		FromAddress: "0xSenderAddress",
-		ToAddress:   "0xReceiverAddress",
-		Amount:      "1.0",
-		Status:      string(StatusPending),
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
-	}, nil
+// UpdateAccountBalance 更新账户余额
+func (s *AccountService) UpdateAccountBalance(id uint, newBalance string) error {
+	result := s.db.Model(&model.Account{}).Where("id = ?", id).Update("balance", newBalance)
+	if result.Error != nil {
+		return fmt.Errorf("更新账户余额失败: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return errors.New("未找到指定的账户")
+	}
+	return nil
 }
 
-// GetUserTransactions 获取用户的交易历史
-func (s *AccountService) GetUserTransactions(address string) ([]dto.TransactionResponse, error) {
-	// 这里应该是实际的数据库操作，为了示例，我们返回一个模拟数据
-	// 在实际实现中，您需要从数据库中查询
+// DeleteAccount 删除账户
+func (s *AccountService) DeleteAccount(id uint) error {
+	result := s.db.Delete(&model.Account{}, id)
+	if result.Error != nil {
+		return fmt.Errorf("删除账户失败: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return errors.New("未找到指定的账户")
+	}
+	return nil
+}
 
-	return []dto.TransactionResponse{
-		{
-			ID:          123,
-			FromAddress: address,
-			ToAddress:   "0xReceiverAddress1",
-			Amount:      "1.0",
-			Status:      string(StatusConfirmed),
-			TxHash:      "0xTransactionHash1",
-			CreatedAt:   time.Now().Add(-24 * time.Hour),
-			UpdatedAt:   time.Now().Add(-23 * time.Hour),
-		},
-		{
-			ID:          124,
-			FromAddress: address,
-			ToAddress:   "0xReceiverAddress2",
-			Amount:      "2.0",
-			Status:      string(StatusPending),
-			CreatedAt:   time.Now().Add(-1 * time.Hour),
-			UpdatedAt:   time.Now().Add(-1 * time.Hour),
-		},
-	}, nil
+// BatchCreateAccounts 批量创建账户
+func (s *AccountService) BatchCreateAccounts(accounts []model.Account) error {
+	// 使用事务确保批量操作的原子性
+	tx := s.db.Begin()
+
+	for _, account := range accounts {
+		// 检查地址是否已存在
+		var existingAccount model.Account
+		result := tx.Where("address = ?", account.Address).First(&existingAccount)
+		if result.Error == nil {
+			tx.Rollback()
+			return fmt.Errorf("账户地址已存在: %s", account.Address)
+		}
+
+		// 创建账户
+		if err := tx.Create(&account).Error; err != nil {
+			tx.Rollback()
+			return fmt.Errorf("批量创建账户失败: %w", err)
+		}
+	}
+
+	return tx.Commit().Error
 }
