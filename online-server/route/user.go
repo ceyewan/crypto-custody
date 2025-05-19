@@ -2,12 +2,12 @@ package route
 
 import (
 	"online-server/handler"
-
-	"online-server/utils"
+	"online-server/middleware"
 
 	"github.com/gin-gonic/gin"
 )
 
+// UserRoutes 设置用户相关路由（保持向下兼容）
 func UserRoutes(r *gin.Engine) {
 	// 公开路由（无需认证）
 	public := r.Group("/api")
@@ -19,7 +19,7 @@ func UserRoutes(r *gin.Engine) {
 
 	// 用户路由（需认证）
 	users := r.Group("/api/users")
-	users.Use(utils.JWTAuth())
+	users.Use(middleware.JWTAuth())
 	{
 		// 用户管理 - 所有认证用户
 		users.GET("/profile", handler.GetCurrentUser)          // 获取当前登录用户信息
@@ -28,13 +28,13 @@ func UserRoutes(r *gin.Engine) {
 
 		// 用户列表 - 管理员功能
 		admin := users.Group("/admin")
-		admin.Use(utils.AdminRequired())
+		admin.Use(middleware.AdminRequired())
 		{
-			admin.GET("/users", handler.GetUsers)                    // 获取所有用户
-			admin.GET("/users/:id", handler.GetUserByID)             // 获取指定用户信息
-			admin.PUT("/users/:id/role", handler.UpdateUserRole)     // 更新用户角色
-			admin.PUT("/users/:id/username", handler.UpdateUserID)   // 更新用户名
-			admin.DELETE("/users/:id", handler.DeleteUser)           // 删除用户
+			admin.GET("/users", handler.GetUsers)                  // 获取所有用户
+			admin.GET("/users/:id", handler.GetUserByID)           // 获取指定用户信息
+			admin.PUT("/users/:id/role", handler.UpdateUserRole)   // 更新用户角色
+			admin.PUT("/users/:id/username", handler.UpdateUserID) // 更新用户名
+			admin.DELETE("/users/:id", handler.DeleteUser)         // 删除用户
 		}
 	}
 }

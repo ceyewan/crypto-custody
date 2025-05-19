@@ -16,25 +16,11 @@ func main() {
 	}
 	defer utils.CloseDB()
 
-	// 创建 Gin 路由
-	r := gin.Default()
+	// 创建 Gin 路由器（没有默认中间件）
+	r := gin.New()
 
-	// 添加 CORS 中间件
-	r.Use(func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization")
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(204)
-			return
-		}
-		c.Next()
-	})
-
-	// 注册路由
-	route.UserRoutes(r)
-	route.AccountRoutes(r)
-	route.EthereumRoutes(r)
+	// 设置路由和中间件
+	route.Setup(r)
 
 	// 启动服务器
 	log.Println("服务器启动在 :8080 端口")

@@ -2,11 +2,12 @@ package route
 
 import (
 	"online-server/handler"
-	"online-server/utils"
+	"online-server/middleware"
 
 	"github.com/gin-gonic/gin"
 )
 
+// EthereumRoutes 设置以太坊相关路由（保持向下兼容）
 func EthereumRoutes(r *gin.Engine) {
 	// 以太坊API路由组
 	ethereum := r.Group("/api/ethereum")
@@ -16,11 +17,11 @@ func EthereumRoutes(r *gin.Engine) {
 
 		// 需要身份验证的API
 		authenticated := ethereum.Group("/")
-		authenticated.Use(utils.JWTAuth())
+		authenticated.Use(middleware.JWTAuth())
 		{
 			// 交易相关API，需要警员或管理员权限
 			officer := authenticated.Group("/tx")
-			officer.Use(utils.OfficerRequired())
+			officer.Use(middleware.OfficerRequired())
 			{
 				officer.POST("/prepare", handler.PrepareTransaction)       // 准备交易
 				officer.POST("/sign-send", handler.SignAndSendTransaction) // 签名并发送交易

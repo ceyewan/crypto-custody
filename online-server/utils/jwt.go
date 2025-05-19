@@ -17,8 +17,8 @@ var (
 	// blacklist 存储已撤销的令牌
 	blacklist = make(map[string]time.Time)
 
-	// blacklistMutex 保护黑名单的并发访问
-	blacklistMutex sync.Mutex
+	// blacklistMutex 保护黑名单的并发访问，使用读写锁提高并发性能
+	blacklistMutex sync.RWMutex
 )
 
 // Claims 定义JWT令牌中包含的声明
@@ -73,9 +73,6 @@ func GenerateToken(userName string, role string, expiration time.Duration) (stri
 func RevokeToken(tokenString string, expiration time.Duration) {
 	logger := clog.Module("jwt")
 	
-	blacklistMutex.Lock()
-	defer blacklistMutex.Unlock()
-
 	// 尝试解析令牌以获取用户信息（不验证有效性）
 	token, _ := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
 		return jwtKey, nil
@@ -92,7 +89,11 @@ func RevokeToken(tokenString string, expiration time.Duration) {
 
 	// 存储令牌及其过期时间
 	expiryTime := time.Now().Add(expiration)
+	
+	// 使用写锁添加令牌到黑名单
+	blacklistMutex.Lock()
 	blacklist[tokenString] = expiryTime
+	blacklistMutex.Unlock()
 	
 	if username != "" {
 		logger.Info("令牌已撤销", 
@@ -102,28 +103,46 @@ func RevokeToken(tokenString string, expiration time.Duration) {
 		logger.Info("令牌已撤销", clog.String("token_prefix", tokenString[:10]+"..."))
 	}
 
-	// 清理已过期的黑名单条目
-	cleanBlacklist()
+	// 异步清理已过期的黑名单条目，避免阻塞当前请求
+	go cleanExpiredTokens()
 }
 
-// cleanBlacklist 清理黑名单中已过期的令牌
-// 此函数应该在持有blacklistMutex锁的情况下调用
-func cleanBlacklist() {
+// cleanExpiredTokens 清理黑名单中已过期的令牌
+// 独立的函数，可以异步调用以减少锁持有时间
+func cleanExpiredTokens() {
 	logger := clog.Module("jwt")
 	now := time.Now()
 	
-	count := 0
+	// 创建过期令牌列表，先读取后批量删除，减少锁竞争
+	var expiredTokens []string
+	
+	// 使用读锁识别过期令牌
+	blacklistMutex.RLock()
 	for token, expiry := range blacklist {
 		if now.After(expiry) {
-			delete(blacklist, token)
-			count++
+			expiredTokens = append(expiredTokens, token)
 		}
 	}
+	blacklistMutex.RUnlock()
 	
+	// 如果有过期令牌，使用写锁删除
+	count := len(expiredTokens)
 	if count > 0 {
+		blacklistMutex.Lock()
+		for _, token := range expiredTokens {
+			// 再次检查过期时间，以防在获取写锁期间被其他协程修改
+			if expiry, exists := blacklist[token]; exists && now.After(expiry) {
+				delete(blacklist, token)
+			} else {
+				count-- // 如果令牌不存在或已更新，则调整计数
+			}
+		}
+		remaining := len(blacklist)
+		blacklistMutex.Unlock()
+		
 		logger.Info("清理过期的黑名单令牌", 
 			clog.Int("cleaned", count), 
-			clog.Int("remaining", len(blacklist)))
+			clog.Int("remaining", remaining))
 	}
 }
 
@@ -139,20 +158,28 @@ func cleanBlacklist() {
 func ValidateToken(tokenString string) (string, string, error) {
 	logger := clog.Module("jwt")
 	
-	// 检查令牌是否在黑名单中
-	blacklistMutex.Lock()
-	if expiry, found := blacklist[tokenString]; found {
+	// 检查令牌是否在黑名单中（使用读锁提高并发性能）
+	now := time.Now()
+	blacklistMutex.RLock()
+	expiry, found := blacklist[tokenString]
+	blacklistMutex.RUnlock()
+	
+	if found {
 		// 如果令牌已过期，从黑名单中移除
-		if time.Now().After(expiry) {
-			delete(blacklist, tokenString)
-			logger.Info("从黑名单中移除过期令牌")
-		} else {
+		if now.After(expiry) {
+			// 使用写锁删除过期令牌
+			blacklistMutex.Lock()
+			// 双重检查，确保令牌仍在黑名单中且仍然过期
+			if currentExpiry, stillExists := blacklist[tokenString]; stillExists && now.After(currentExpiry) {
+				delete(blacklist, tokenString)
+				logger.Info("从黑名单中移除过期令牌")
+			}
 			blacklistMutex.Unlock()
+		} else {
 			logger.Warn("尝试使用已撤销的令牌", clog.String("token_prefix", tokenString[:10]+"..."))
 			return "", "", fmt.Errorf("令牌已被撤销")
 		}
 	}
-	blacklistMutex.Unlock()
 
 	// 解析和验证令牌
 	claims := &Claims{}
@@ -180,6 +207,11 @@ func ValidateToken(tokenString string) (string, string, error) {
 		if remaining < 10*time.Minute {
 			logger.Warn("令牌即将过期", 
 				clog.String("username", claims.UserName), 
+				clog.Duration("remaining", remaining))
+		} else if remaining < 30*time.Minute && remaining > 10*time.Minute {
+			// 当令牌剩余时间在10-30分钟之间时，仅记录信息级别日志
+			logger.Info("令牌将在不久后过期",
+				clog.String("username", claims.UserName),
 				clog.Duration("remaining", remaining))
 		}
 	}

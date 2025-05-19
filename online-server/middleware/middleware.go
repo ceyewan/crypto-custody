@@ -1,22 +1,47 @@
-package utils
+package middleware
 
 import (
 	"net/http"
 	"online-server/model"
+	"online-server/utils"
 	"time"
 
 	"github.com/ceyewan/clog"
 	"github.com/gin-gonic/gin"
 )
 
+// Setup 设置全局中间件
+func Setup(r *gin.Engine) {
+	// 注册日志中间件
+	r.Use(LoggerMiddleware())
+	// 注册恢复中间件
+	r.Use(RecoveryMiddleware())
+	// 注册CORS中间件
+	r.Use(CORSMiddleware())
+}
+
+// CORSMiddleware CORS中间件
+func CORSMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization")
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
+			return
+		}
+		c.Next()
+	}
+}
+
 // JWTAuth JWT认证中间件
 func JWTAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		logger := clog.Module("middleware")
-		
+
 		authorization := c.Request.Header.Get("Authorization")
 		if authorization == "" {
-			logger.Warn("访问需要认证的API但未提供令牌", 
+			logger.Warn("访问需要认证的API但未提供令牌",
 				clog.String("path", c.Request.URL.Path),
 				clog.String("ip", c.ClientIP()))
 			c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "需要登录"})
@@ -24,11 +49,11 @@ func JWTAuth() gin.HandlerFunc {
 			return
 		}
 
-		userName, role, err := ValidateToken(authorization)
+		userName, role, err := utils.ValidateToken(authorization)
 		if err != nil {
-			logger.Warn("令牌验证失败", 
-				clog.Err(err), 
-				clog.String("token_prefix", authorization[:10]+"..."), 
+			logger.Warn("令牌验证失败",
+				clog.Err(err),
+				clog.String("token_prefix", authorization[:10]+"..."),
 				clog.String("ip", c.ClientIP()),
 				clog.String("path", c.Request.URL.Path))
 			c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "令牌无效"})
@@ -36,8 +61,8 @@ func JWTAuth() gin.HandlerFunc {
 			return
 		}
 
-		logger.Info("用户认证成功", 
-			clog.String("username", userName), 
+		logger.Info("用户认证成功",
+			clog.String("username", userName),
 			clog.String("role", role),
 			clog.String("path", c.Request.URL.Path))
 
@@ -53,10 +78,10 @@ func JWTAuth() gin.HandlerFunc {
 func AdminRequired() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		logger := clog.Module("middleware")
-		
+
 		role, exists := c.Get("Role")
 		if !exists {
-			logger.Warn("访问管理员资源但未提供认证信息", 
+			logger.Warn("访问管理员资源但未提供认证信息",
 				clog.String("path", c.Request.URL.Path),
 				clog.String("ip", c.ClientIP()))
 			c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "需要登录"})
@@ -66,8 +91,8 @@ func AdminRequired() gin.HandlerFunc {
 
 		// 检查是否为管理员
 		if role.(string) != string(model.RoleAdmin) {
-			logger.Warn("非管理员尝试访问管理员资源", 
-				clog.String("username", c.GetString("Username")), 
+			logger.Warn("非管理员尝试访问管理员资源",
+				clog.String("username", c.GetString("Username")),
 				clog.String("role", role.(string)),
 				clog.String("path", c.Request.URL.Path),
 				clog.String("ip", c.ClientIP()))
@@ -76,7 +101,7 @@ func AdminRequired() gin.HandlerFunc {
 			return
 		}
 
-		logger.Info("管理员权限验证通过", 
+		logger.Info("管理员权限验证通过",
 			clog.String("username", c.GetString("Username")),
 			clog.String("path", c.Request.URL.Path))
 		c.Next()
@@ -87,10 +112,10 @@ func AdminRequired() gin.HandlerFunc {
 func OfficerRequired() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		logger := clog.Module("middleware")
-		
+
 		role, exists := c.Get("Role")
 		if !exists {
-			logger.Warn("访问警员资源但未提供认证信息", 
+			logger.Warn("访问警员资源但未提供认证信息",
 				clog.String("path", c.Request.URL.Path),
 				clog.String("ip", c.ClientIP()))
 			c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "需要登录"})
@@ -100,8 +125,8 @@ func OfficerRequired() gin.HandlerFunc {
 
 		// 检查是否为管理员或警员
 		if role.(string) != string(model.RoleAdmin) && role.(string) != string(model.RoleOfficer) {
-			logger.Warn("游客尝试访问警员资源", 
-				clog.String("username", c.GetString("Username")), 
+			logger.Warn("游客尝试访问警员资源",
+				clog.String("username", c.GetString("Username")),
 				clog.String("role", role.(string)),
 				clog.String("path", c.Request.URL.Path),
 				clog.String("ip", c.ClientIP()))
@@ -110,7 +135,7 @@ func OfficerRequired() gin.HandlerFunc {
 			return
 		}
 
-		logger.Info("警员权限验证通过", 
+		logger.Info("警员权限验证通过",
 			clog.String("username", c.GetString("Username")),
 			clog.String("role", role.(string)),
 			clog.String("path", c.Request.URL.Path))
@@ -122,7 +147,7 @@ func OfficerRequired() gin.HandlerFunc {
 func LoggerMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		logger := clog.Module("http")
-		
+
 		// 开始时间
 		startTime := time.Now()
 
@@ -178,14 +203,14 @@ func RecoveryMiddleware() gin.HandlerFunc {
 					clog.String("ip", c.ClientIP()),
 					clog.String("user_agent", c.Request.UserAgent()),
 				)
-				
+
 				// 获取用户信息（如果有）
 				if username, exists := c.Get("Username"); exists {
-					logger.Error("异常用户信息", 
+					logger.Error("异常用户信息",
 						clog.String("username", username.(string)),
 						clog.String("path", c.Request.URL.Path))
 				}
-				
+
 				c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "服务器内部错误"})
 			}
 		}()
