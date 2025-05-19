@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"online-server/model"
 	"online-server/service"
 	"online-server/utils"
 
@@ -79,7 +80,7 @@ func GetUserAccounts(c *gin.Context) {
 		return
 	}
 
-	username := userClaims.Username
+	username := userClaims.UserName
 
 	// 获取账户服务实例
 	accountService, err := service.GetAccountServiceInstance()
@@ -137,7 +138,7 @@ func GetAllAccounts(c *gin.Context) {
 	}
 
 	// 检查是否为管理员
-	if !userClaims.IsAdmin {
+	if userClaims.Role != string(model.RoleAdmin) {
 		c.JSON(http.StatusForbidden, gin.H{
 			"code":    403,
 			"message": "权限不足，只有管理员可以访问所有账户信息",
