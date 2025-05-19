@@ -97,8 +97,8 @@ func TestCreateInvalidAccount(t *testing.T) {
 		"description": description,
 	})
 
-	// 发送请求
-	resp, err := SendAuthenticatedRequest("POST", BaseURL+"/accounts/create", adminToken, reqBody)
+	// 修正API路径：/accounts/officer/create
+	resp, err := SendAuthenticatedRequest("POST", BaseURL+"/accounts/officer/create", adminToken, reqBody)
 	if err != nil {
 		t.Fatalf("创建账户请求失败: %v", err)
 	}

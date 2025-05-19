@@ -22,9 +22,9 @@ func AccountRoutes(r *gin.Engine) {
 			officer := authenticated.Group("/officer")
 			officer.Use(middleware.OfficerRequired())
 			{
-				authenticated.GET("/", handler.GetUserAccounts)            // 获取用户的账户信息
-				authenticated.POST("/create", handler.CreateAccount)       // 创建账户
-				authenticated.POST("/import", handler.BatchImportAccounts) // 批量导入账户
+				officer.GET("/", handler.GetUserAccounts)            // 获取用户的账户信息
+				officer.POST("/create", handler.CreateAccount)       // 创建账户
+				officer.POST("/import", handler.BatchImportAccounts) // 批量导入账户
 			}
 
 			// 管理员专用API

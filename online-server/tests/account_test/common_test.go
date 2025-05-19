@@ -187,7 +187,8 @@ func CreateAccount(token, address, coinType, description string) (*AccountInfo, 
 		return nil, err
 	}
 
-	resp, err := SendAuthenticatedRequest("POST", BaseURL+"/accounts/create", token, reqBody)
+	// 修正API路径：/accounts/officer/create
+	resp, err := SendAuthenticatedRequest("POST", BaseURL+"/accounts/officer/create", token, reqBody)
 	if err != nil {
 		return nil, err
 	}
@@ -231,14 +232,21 @@ func ImportAccount(token, address, coinType, description string) (*AccountInfo, 
 
 // 批量导入账户
 func BatchImportAccounts(token string, accounts []map[string]string) ([]AccountInfo, error) {
+	// 修正请求格式，按照DTO结构组织
+	accountsDTO := make([]map[string]string, len(accounts))
+	for i, account := range accounts {
+		accountsDTO[i] = account
+	}
+
 	reqBody, err := json.Marshal(map[string]interface{}{
-		"accounts": accounts,
+		"accounts": accountsDTO,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := SendAuthenticatedRequest("POST", BaseURL+"/accounts/import", token, reqBody)
+	// 修正API路径：/accounts/officer/import
+	resp, err := SendAuthenticatedRequest("POST", BaseURL+"/accounts/officer/import", token, reqBody)
 	if err != nil {
 		return nil, err
 	}
@@ -284,7 +292,7 @@ func GetAccountByAddress(address string) (*AccountInfo, error) {
 
 // 获取所有账户
 func GetAccounts(token string) ([]AccountInfo, error) {
-	resp, err := SendAuthenticatedRequest("GET", BaseURL+"/accounts", token, nil)
+	resp, err := SendAuthenticatedRequest("GET", BaseURL+"/accounts/officer", token, nil)
 	if err != nil {
 		return nil, err
 	}

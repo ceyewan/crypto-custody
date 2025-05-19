@@ -99,7 +99,7 @@ func TestImportInvalidEthAddress(t *testing.T) {
 	invalidAddress := "0xinvalid"
 	description := GenerateRandomDescription()
 
-	// 构建请求体
+	// 构建请求体 - 修正为符合DTO结构的格式
 	reqBody, _ := json.Marshal(map[string]interface{}{
 		"accounts": []map[string]string{
 			{
@@ -110,8 +110,8 @@ func TestImportInvalidEthAddress(t *testing.T) {
 		},
 	})
 
-	// 发送请求
-	resp, err := SendAuthenticatedRequest("POST", BaseURL+"/accounts/import", adminToken, reqBody)
+	// 修正API路径：/accounts/officer/import
+	resp, err := SendAuthenticatedRequest("POST", BaseURL+"/accounts/officer/import", adminToken, reqBody)
 	if err != nil {
 		t.Fatalf("导入账户请求失败: %v", err)
 	}
