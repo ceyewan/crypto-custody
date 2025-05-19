@@ -5,9 +5,9 @@
 ## 文件结构
 
 - `common_test.go` - 通用测试辅助工具和函数
-- `account_test.go` - 账户创建和查询测试
-- `import_test.go` - 账户导入测试
-- `balance_test.go` - 账户余额测试
+- `account_test.go` - 账户查询测试
+- `create_account_test.go` - 账户创建测试
+- `import_account_test.go` - 账户导入测试
 
 ## 运行前准备
 
@@ -17,8 +17,6 @@
 ```bash
 export DEFAULT_ADMIN_PASSWORD="your_admin_password"
 ```
-
-3. 准备好离线签名工具
 
 ## 运行测试
 
@@ -33,8 +31,8 @@ go test -v
 
 ```bash
 go test -v account_test.go common_test.go
-go test -v import_test.go common_test.go
-go test -v balance_test.go common_test.go
+go test -v create_account_test.go common_test.go
+go test -v import_account_test.go common_test.go
 ```
 
 运行特定测试函数：
@@ -45,15 +43,22 @@ go test -v -run TestGetAccountByAddress
 
 ## 测试内容概述
 
-### 账户基础测试
-- 测试创建账户
-- 测试批量导入账户
-- 测试查询账户
-- 测试获取账户余额
+### 账户查询测试
+- 测试通过地址查询账户
+- 测试获取用户账户列表
+- 测试非管理员获取所有账户
+- 测试获取不存在的账户
 
-### 管理员功能测试
-- 测试获取所有账户
-- 测试非管理员尝试获取所有账户
+### 账户创建测试
+- 测试创建新账户
+- 测试普通用户创建账户
+- 测试创建无效账户
+
+### 账户导入测试
+- 测试导入单个账户
+- 测试批量导入账户
+- 测试导入无效账户
+- 测试普通用户导入账户
 
 ## 注意事项
 
