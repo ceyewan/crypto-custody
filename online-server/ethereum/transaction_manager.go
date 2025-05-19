@@ -1,3 +1,5 @@
+// Package ethereum 提供与以太坊区块链交互的功能，实现了交易准备、签名和发送的完整流程。
+// 该包支持在线-离线分离的交易模式，提高了私钥管理的安全性。
 package ethereum
 
 import (
@@ -17,21 +19,32 @@ import (
 )
 
 var (
+	// ErrTransactionNotFound 交易记录在数据库中不存在
 	ErrTransactionNotFound    = errors.New("交易未找到")
+	// ErrTransactionAlreadySent 交易已经发送过无法重新处理
 	ErrTransactionAlreadySent = errors.New("交易已发送")
+	// ErrInvalidSignature 提供的签名无效或与发送者不匹配
 	ErrInvalidSignature       = errors.New("无效的签名")
+	// ErrTransactionInProgress 用户已有正在处理中的交易
 	ErrTransactionInProgress  = errors.New("交易正在处理中")
 )
 
-// TransactionManager 处理以太坊交易的管理器
+// TransactionManager 管理以太坊交易的全生命周期
+// 负责交易的创建、签名验证、发送和状态监控，同时维护交易在数据库中的记录
 type TransactionManager struct {
-	client  *Client
-	txMutex sync.RWMutex                  // 用于保护交易映射
+	client  *Client                      // 以太坊客户端
+	txMutex sync.RWMutex                 // 用于保护交易映射的读写锁
 	txCache map[string]*types.Transaction // 临时缓存待处理的交易，key是消息哈希
-	signers map[string]types.Signer       // 临时缓存每个交易对应的签名者，key是消息哈希
+	signers map[string]types.Signer      // 临时缓存每个交易对应的签名者，key是消息哈希
 }
 
-// NewTransactionManager 创建一个新的交易管理器
+// NewTransactionManager 创建一个新的交易管理器实例
+//
+// 参数:
+//   - client: 已初始化的以太坊客户端
+//
+// 返回:
+//   - *TransactionManager: 初始化的交易管理器
 func NewTransactionManager(client *Client) *TransactionManager {
 	return &TransactionManager{
 		client:  client,
@@ -40,7 +53,17 @@ func NewTransactionManager(client *Client) *TransactionManager {
 	}
 }
 
-// CreateTransaction 创建一个新的转账交易并存储到数据库
+// CreateTransaction 创建一个新的ETH转账交易并存储到数据库
+//
+// 参数:
+//   - fromAddress: 发送方地址（十六进制字符串）
+//   - toAddress: 接收方地址（十六进制字符串）
+//   - amount: 转账金额，以ETH为单位
+//
+// 返回:
+//   - *model.Transaction: 创建的交易记录
+//   - string: 消息哈希，用于签名
+//   - error: 创建过程中的错误
 func (tm *TransactionManager) CreateTransaction(fromAddress, toAddress string, amount *big.Float) (*model.Transaction, string, error) {
 	// 1. 获取必要的交易参数
 	nonce, err := tm.client.GetNonce(fromAddress)
@@ -126,6 +149,14 @@ func (tm *TransactionManager) CreateTransaction(fromAddress, toAddress string, a
 }
 
 // SignTransaction 使用提供的签名处理交易
+//
+// 参数:
+//   - messageHash: 交易的消息哈希（十六进制字符串，不含0x前缀）
+//   - signature: 对消息哈希的签名（十六进制字符串，不含0x前缀）
+//
+// 返回:
+//   - *model.Transaction: 更新后的交易记录
+//   - error: 签名处理过程中的错误
 func (tm *TransactionManager) SignTransaction(messageHash string, signature string) (*model.Transaction, error) {
 	// 1. 查找交易记录
 	var tx model.Transaction
@@ -193,7 +224,14 @@ func (tm *TransactionManager) SignTransaction(messageHash string, signature stri
 	return &tx, nil
 }
 
-// SendTransaction 发送已签名的交易到网络
+// SendTransaction 将已签名的交易发送到以太坊网络
+//
+// 参数:
+//   - txID: 交易记录的数据库ID
+//
+// 返回:
+//   - *model.Transaction: 更新后的交易记录
+//   - error: 发送过程中的错误
 func (tm *TransactionManager) SendTransaction(txID uint) (*model.Transaction, error) {
 	// 1. 查找交易记录
 	var tx model.Transaction
@@ -254,7 +292,14 @@ func (tm *TransactionManager) SendTransaction(txID uint) (*model.Transaction, er
 	return &tx, nil
 }
 
-// GetTransactionStatus 获取交易状态
+// GetTransactionStatus 获取指定ID交易的最新状态
+//
+// 参数:
+//   - txID: 交易记录的数据库ID
+//
+// 返回:
+//   - *model.Transaction: 交易记录，包含当前状态
+//   - error: 查询过程中的错误
 func (tm *TransactionManager) GetTransactionStatus(txID uint) (*model.Transaction, error) {
 	var tx model.Transaction
 	result := utils.GetDB().First(&tx, txID)
@@ -264,7 +309,14 @@ func (tm *TransactionManager) GetTransactionStatus(txID uint) (*model.Transactio
 	return &tx, nil
 }
 
-// GetTransactionByMessageHash 通过消息哈希获取交易
+// GetTransactionByMessageHash 通过消息哈希查询交易记录
+//
+// 参数:
+//   - messageHash: 交易的消息哈希（十六进制字符串）
+//
+// 返回:
+//   - *model.Transaction: 匹配的交易记录
+//   - error: 查询过程中的错误
 func (tm *TransactionManager) GetTransactionByMessageHash(messageHash string) (*model.Transaction, error) {
 	var tx model.Transaction
 	result := utils.GetDB().Where("message_hash = ?", messageHash).First(&tx)
@@ -274,7 +326,11 @@ func (tm *TransactionManager) GetTransactionByMessageHash(messageHash string) (*
 	return &tx, nil
 }
 
-// GetPendingTransactions 获取所有待处理的交易
+// GetPendingTransactions 获取所有未完成状态的交易
+//
+// 返回:
+//   - []model.Transaction: 所有待处理的交易记录列表
+//   - error: 查询过程中的错误
 func (tm *TransactionManager) GetPendingTransactions() ([]model.Transaction, error) {
 	var txs []model.Transaction
 	result := utils.GetDB().Where("status IN (?)", []model.TransactionStatus{
@@ -286,7 +342,14 @@ func (tm *TransactionManager) GetPendingTransactions() ([]model.Transaction, err
 	return txs, nil
 }
 
-// GetUserTransactions 获取用户的所有交易
+// GetUserTransactions 获取指定用户参与的所有交易
+//
+// 参数:
+//   - address: 用户的以太坊地址
+//
+// 返回:
+//   - []model.Transaction: 用户相关的交易记录列表
+//   - error: 查询过程中的错误
 func (tm *TransactionManager) GetUserTransactions(address string) ([]model.Transaction, error) {
 	var txs []model.Transaction
 	result := utils.GetDB().Where("from_address = ? OR to_address = ?", address, address).
@@ -297,7 +360,11 @@ func (tm *TransactionManager) GetUserTransactions(address string) ([]model.Trans
 	return txs, nil
 }
 
-// monitorTransaction 监控交易确认状态
+// monitorTransaction 持续监控交易的确认状态并更新数据库
+//
+// 参数:
+//   - txHash: 交易哈希
+//   - txID: 交易记录的数据库ID
 func (tm *TransactionManager) monitorTransaction(txHash common.Hash, txID uint) {
 	// 重试逻辑
 	for i := 0; i < 3; i++ {
@@ -353,7 +420,15 @@ func (tm *TransactionManager) monitorTransaction(txHash common.Hash, txID uint) 
 	utils.GetDB().Save(&tx)
 }
 
-// reconstructTransaction 从数据库记录重构交易对象
+// reconstructTransaction 从数据库存储的记录重构交易对象
+//
+// 参数:
+//   - tx: 数据库中的交易记录
+//
+// 返回:
+//   - *types.Transaction: 重构的交易对象
+//   - types.Signer: 适用于该交易的签名者
+//   - error: 重构过程中的错误
 func (tm *TransactionManager) reconstructTransaction(tx *model.Transaction) (*types.Transaction, types.Signer, error) {
 	// 解析存储的交易数据
 	var txData struct {
@@ -396,7 +471,11 @@ func (tm *TransactionManager) reconstructTransaction(tx *model.Transaction) (*ty
 	return rawTx, signer, nil
 }
 
-// CheckPendingTransactions 检查所有待处理交易的状态
+// CheckPendingTransactions 检查所有已提交但未确认交易的状态
+// 该方法通常由定时任务调用，确保长时间未确认的交易得到处理
+//
+// 返回:
+//   - error: 检查过程中的错误
 func (tm *TransactionManager) CheckPendingTransactions() error {
 	var txs []model.Transaction
 	// 查找所有已提交但未确认的交易
@@ -451,6 +530,14 @@ func (tm *TransactionManager) CheckPendingTransactions() error {
 }
 
 // IsTransactionInProgress 检查用户是否有正在处理中的交易
+// 用于防止用户同时发起多笔待处理的交易
+//
+// 参数:
+//   - fromAddress: 用户的以太坊地址
+//
+// 返回:
+//   - bool: 是否存在处理中的交易
+//   - error: 查询过程中的错误
 func (tm *TransactionManager) IsTransactionInProgress(fromAddress string) (bool, error) {
 	var count int64
 	result := utils.GetDB().Model(&model.Transaction{}).

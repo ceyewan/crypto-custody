@@ -1,3 +1,5 @@
+// Package ethereum 提供与以太坊区块链交互的功能，实现了交易准备、签名和发送的完整流程。
+// 该包支持在线-离线分离的交易模式，提高了私钥管理的安全性。
 package ethereum
 
 import (
@@ -14,29 +16,36 @@ import (
 )
 
 var (
+	// serviceInstance 存储Service的单例实例
 	serviceInstance     *Service
+	// serviceInstanceOnce 确保Service只被初始化一次
 	serviceInstanceOnce sync.Once
 )
 
-// Service 以太坊服务，提供交易相关功能
+// Service 实现以太坊服务层，提供交易相关功能
+// 该服务负责管理交易准备、签名验证和交易发送的完整流程
 type Service struct {
-	client *Client
-	mu     sync.RWMutex
+	client *Client         // 与以太坊网络交互的客户端
+	mu     sync.RWMutex    // 用于保护并发访问的读写锁
 	txData map[string]txPackage // 存储消息哈希到交易信息的映射
 }
 
-// txPackage 存储交易相关数据
+// txPackage 存储交易相关数据，用于临时保存待签名的交易信息
 type txPackage struct {
-	nonce    uint64
-	to       common.Address
-	value    *big.Int
-	gasLimit uint64
-	gasPrice *big.Int
-	data     []byte
-	from     common.Address
+	nonce    uint64          // 交易序号
+	to       common.Address  // 接收方地址
+	value    *big.Int        // 交易金额(Wei)
+	gasLimit uint64          // 交易的gas上限
+	gasPrice *big.Int        // gas价格(Wei)
+	data     []byte          // 交易数据
+	from     common.Address  // 发送方地址
 }
 
-// GetInstance 获取以太坊服务实例
+// GetInstance 获取以太坊服务的单例实例，确保全局只有一个服务实例
+//
+// 返回:
+//   - *Service: 服务实例
+//   - error: 初始化过程中的错误
 func GetInstance() (*Service, error) {
 	var initErr error
 
@@ -60,12 +69,28 @@ func GetInstance() (*Service, error) {
 	return serviceInstance, nil
 }
 
-// GetBalance 获取指定地址的余额
+// GetBalance 获取指定以太坊地址的ETH余额
+//
+// 参数:
+//   - address: 以太坊地址（十六进制字符串）
+//
+// 返回:
+//   - *big.Float: 以ETH为单位的余额
+//   - error: 查询过程中的错误
 func (s *Service) GetBalance(address string) (*big.Float, error) {
 	return s.client.GetBalance(address)
 }
 
-// PrepareTransaction 准备交易数据
+// PrepareTransaction 准备以太坊交易数据，生成待签名的消息哈希
+//
+// 参数:
+//   - from: 发送方地址（十六进制字符串）
+//   - to: 接收方地址（十六进制字符串）
+//   - amount: 交易金额，以ETH为单位
+//
+// 返回:
+//   - string: 消息哈希的十六进制字符串，用于签名
+//   - error: 准备过程中的错误
 func (s *Service) PrepareTransaction(from, to string, amount *big.Float) (string, error) {
 	// 验证地址格式
 	if !common.IsHexAddress(from) || !common.IsHexAddress(to) {
@@ -125,7 +150,15 @@ func (s *Service) PrepareTransaction(from, to string, amount *big.Float) (string
 	return hex.EncodeToString(hash[:]), nil
 }
 
-// SignAndSendTransaction 使用签名发送交易
+// SignAndSendTransaction 使用签名发送之前准备的交易
+//
+// 参数:
+//   - messageHash: 之前通过PrepareTransaction生成的消息哈希
+//   - signature: 消息哈希对应的签名（十六进制字符串，不含0x前缀）
+//
+// 返回:
+//   - string: 交易哈希（含0x前缀）
+//   - error: 签名验证或交易发送过程中的错误
 func (s *Service) SignAndSendTransaction(messageHash string, signature string) (string, error) {
 	// 检查交易数据是否存在
 	s.mu.RLock()
@@ -194,7 +227,8 @@ func (s *Service) SignAndSendTransaction(messageHash string, signature string) (
 	return signedTx.Hash().Hex(), nil
 }
 
-// Close 关闭服务
+// Close 关闭服务并释放相关资源
+// 应在应用程序退出前调用此方法以确保资源被正确释放
 func (s *Service) Close() {
 	if s.client != nil {
 		s.client.Close()
