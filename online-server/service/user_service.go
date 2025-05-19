@@ -246,6 +246,37 @@ func (s *UserService) ChangePassword(userID uint, oldPassword, newPassword strin
 	return nil
 }
 
+// AdminChangePassword 管理员直接修改用户密码
+//
+// 管理员直接更新用户的密码，无需验证旧密码
+//
+// 参数：
+// - userID：更改密码的用户ID
+// - newPassword：要设置的新密码
+//
+// 返回：
+// - error：密码更新过程中发生的错误（如有）
+func (s *UserService) AdminChangePassword(userID uint, newPassword string) error {
+	// 获取用户
+	var user model.User
+	if err := utils.GetDB().First(&user, userID).Error; err != nil {
+		return errors.New("用户不存在")
+	}
+
+	// 哈希处理新密码
+	hashedPassword, err := utils.HashPassword(newPassword)
+	if err != nil {
+		return fmt.Errorf("密码加密失败: %w", err)
+	}
+
+	// 更新密码
+	if err := utils.GetDB().Model(&user).Update("password", hashedPassword).Error; err != nil {
+		return fmt.Errorf("更新密码失败: %w", err)
+	}
+
+	return nil
+}
+
 // DeleteUser 删除用户
 //
 // 通过ID从数据库中删除用户
