@@ -3,8 +3,8 @@
 package ethereum
 
 import (
+	"context"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"online-server/model"
-	"online-server/utils"
+	"online-server/service"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -20,22 +20,35 @@ import (
 
 var (
 	// ErrTransactionNotFound 交易记录在数据库中不存在
-	ErrTransactionNotFound    = errors.New("交易未找到")
+	ErrTransactionNotFound = errors.New("交易未找到")
 	// ErrTransactionAlreadySent 交易已经发送过无法重新处理
 	ErrTransactionAlreadySent = errors.New("交易已发送")
 	// ErrInvalidSignature 提供的签名无效或与发送者不匹配
-	ErrInvalidSignature       = errors.New("无效的签名")
+	ErrInvalidSignature = errors.New("无效的签名")
 	// ErrTransactionInProgress 用户已有正在处理中的交易
-	ErrTransactionInProgress  = errors.New("交易正在处理中")
+	ErrTransactionInProgress = errors.New("交易正在处理中")
+	// errReceiptNotAvailable 交易收据暂时不可用
+	errReceiptNotAvailable = errors.New("交易收据暂不可用")
 )
 
 // TransactionManager 管理以太坊交易的全生命周期
-// 负责交易的创建、签名验证、发送和状态监控，同时维护交易在数据库中的记录
+// 负责交易的创建、签名验证、发送和状态监控，同时协调与TransactionService的交互
 type TransactionManager struct {
-	client  *Client                      // 以太坊客户端
-	txMutex sync.RWMutex                 // 用于保护交易映射的读写锁
-	txCache map[string]*types.Transaction // 临时缓存待处理的交易，key是消息哈希
-	signers map[string]types.Signer      // 临时缓存每个交易对应的签名者，key是消息哈希
+	client      *Client                       // 以太坊客户端
+	txService   *service.TransactionService   // 交易服务，用于持久化存储
+	txMutex     sync.RWMutex                  // 用于保护交易映射的读写锁
+	txCache     map[string]*types.Transaction // 临时缓存待处理的交易，key是消息哈希
+	signers     map[string]types.Signer       // 临时缓存每个交易对应的签名者，key是消息哈希
+	messageData map[string]MessageData        // 存储交易相关的额外数据，key是消息哈希
+}
+
+// MessageData 存储与交易消息相关的额外数据
+type MessageData struct {
+	FromAddress string   // 发送方地址
+	ToAddress   string   // 接收方地址
+	Value       *big.Int // 交易金额（以Wei为单位）
+	Nonce       uint64   // 交易序号
+	TransID     uint     // 数据库中的交易ID
 }
 
 // NewTransactionManager 创建一个新的交易管理器实例
@@ -47,10 +60,26 @@ type TransactionManager struct {
 //   - *TransactionManager: 初始化的交易管理器
 func NewTransactionManager(client *Client) *TransactionManager {
 	return &TransactionManager{
-		client:  client,
-		txCache: make(map[string]*types.Transaction),
-		signers: make(map[string]types.Signer),
+		client:      client,
+		txService:   service.GetTransactionInstance(),
+		txCache:     make(map[string]*types.Transaction),
+		signers:     make(map[string]types.Signer),
+		messageData: make(map[string]MessageData),
 	}
+}
+
+// GetTransactionManagerInstance 获取交易管理器的单例实例
+//
+// 返回:
+//   - *TransactionManager: 交易管理器实例
+//   - error: 初始化过程中的错误
+func GetTransactionManagerInstance() (*TransactionManager, error) {
+	client, err := GetClientInstance()
+	if err != nil {
+		return nil, fmt.Errorf("获取以太坊客户端失败: %w", err)
+	}
+
+	return NewTransactionManager(client), nil
 }
 
 // CreateTransaction 创建一个新的ETH转账交易并存储到数据库
@@ -61,29 +90,39 @@ func NewTransactionManager(client *Client) *TransactionManager {
 //   - amount: 转账金额，以ETH为单位
 //
 // 返回:
-//   - *model.Transaction: 创建的交易记录
+//   - uint: 创建的交易记录ID
 //   - string: 消息哈希，用于签名
 //   - error: 创建过程中的错误
-func (tm *TransactionManager) CreateTransaction(fromAddress, toAddress string, amount *big.Float) (*model.Transaction, string, error) {
-	// 1. 获取必要的交易参数
+func (tm *TransactionManager) CreateTransaction(fromAddress, toAddress string, amount *big.Float) (uint, string, error) {
+	// 1. 检查用户是否有正在进行的交易
+	inProgress, err := tm.IsTransactionInProgress(fromAddress)
+	if err != nil {
+		return 0, "", fmt.Errorf("检查交易状态失败: %w", err)
+	}
+
+	if inProgress {
+		return 0, "", ErrTransactionInProgress
+	}
+
+	// 2. 获取必要的交易参数
 	nonce, err := tm.client.GetNonce(fromAddress)
 	if err != nil {
-		return nil, "", fmt.Errorf("获取 nonce 失败: %w", err)
+		return 0, "", fmt.Errorf("获取 nonce 失败: %w", err)
 	}
 
 	gasPrice, err := tm.client.SuggestGasPrice()
 	if err != nil {
-		return nil, "", fmt.Errorf("获取 gas 价格失败: %w", err)
+		return 0, "", fmt.Errorf("获取 gas 价格失败: %w", err)
 	}
 
-	// 转换 ETH 金额为 wei (1 ETH = 10^18 wei)
+	// 3. 转换 ETH 金额为 wei (1 ETH = 10^18 wei)
 	value := new(big.Int)
 	amountInWei := new(big.Float).Mul(amount, big.NewFloat(1e18))
 	amountInWei.Int(value)
 
 	gasLimit := uint64(21000) // 标准 ETH 转账的 gas 限制
 
-	// 2. 创建交易对象
+	// 4. 创建交易对象
 	tx := types.NewTransaction(
 		nonce,
 		common.HexToAddress(toAddress),
@@ -93,59 +132,39 @@ func (tm *TransactionManager) CreateTransaction(fromAddress, toAddress string, a
 		nil, // 无数据
 	)
 
-	// 3. 计算交易哈希（用于签名）
+	// 5. 计算交易哈希（用于签名）
 	signer := types.NewEIP155Signer(tm.client.GetChainID())
 	hash := signer.Hash(tx)
 	messageHash := hex.EncodeToString(hash[:])
 
-	// 4. 序列化交易用于存储
-	txJSON, err := json.Marshal(struct {
-		Nonce    uint64
-		To       string
-		Value    string
-		GasLimit uint64
-		GasPrice string
-		Data     []byte
-		ChainID  string
-	}{
-		Nonce:    tx.Nonce(),
-		To:       tx.To().Hex(),
-		Value:    tx.Value().String(),
-		GasLimit: tx.Gas(),
-		GasPrice: tx.GasPrice().String(),
-		Data:     tx.Data(),
-		ChainID:  tm.client.GetChainID().String(),
-	})
+	// 6. 创建交易记录
+	amountEth := new(big.Float).SetInt(value)
+	amountEth.Quo(amountEth, big.NewFloat(1e18))
+
+	txRecord, err := tm.txService.CreateTransaction(
+		fromAddress,
+		toAddress,
+		fmt.Sprintf("%s ETH", amountEth.Text('f', 18)),
+		messageHash,
+	)
 	if err != nil {
-		return nil, "", fmt.Errorf("序列化交易失败: %w", err)
-	}
-
-	// 5. 创建交易记录
-	txRecord := &model.Transaction{
-		FromAddress:     fromAddress,
-		ToAddress:       toAddress,
-		Value:           amount.String() + " ETH",
-		Nonce:           nonce,
-		GasLimit:        gasLimit,
-		GasPrice:        gasPrice.String(),
-		Status:          model.StatusPending,
-		MessageHash:     messageHash,
-		TransactionJSON: txJSON,
-	}
-
-	// 6. 存储交易记录到数据库
-	result := utils.GetDB().Create(txRecord)
-	if result.Error != nil {
-		return nil, "", fmt.Errorf("存储交易记录失败: %w", result.Error)
+		return 0, "", fmt.Errorf("存储交易记录失败: %w", err)
 	}
 
 	// 7. 缓存交易对象和签名者，以便后续使用
 	tm.txMutex.Lock()
 	tm.txCache[messageHash] = tx
 	tm.signers[messageHash] = signer
+	tm.messageData[messageHash] = MessageData{
+		FromAddress: fromAddress,
+		ToAddress:   toAddress,
+		Value:       value,
+		Nonce:       nonce,
+		TransID:     txRecord.ID,
+	}
 	tm.txMutex.Unlock()
 
-	return txRecord, messageHash, nil
+	return txRecord.ID, messageHash, nil
 }
 
 // SignTransaction 使用提供的签名处理交易
@@ -155,209 +174,155 @@ func (tm *TransactionManager) CreateTransaction(fromAddress, toAddress string, a
 //   - signature: 对消息哈希的签名（十六进制字符串，不含0x前缀）
 //
 // 返回:
-//   - *model.Transaction: 更新后的交易记录
+//   - uint: 更新后的交易记录ID
 //   - error: 签名处理过程中的错误
-func (tm *TransactionManager) SignTransaction(messageHash string, signature string) (*model.Transaction, error) {
-	// 1. 查找交易记录
-	var tx model.Transaction
-	result := utils.GetDB().Where("message_hash = ?", messageHash).First(&tx)
-	if result.Error != nil {
-		return nil, ErrTransactionNotFound
-	}
-
-	// 2. 检查交易状态
-	if tx.Status != model.StatusPending {
-		return nil, ErrTransactionAlreadySent
-	}
-
-	// 3. 解码签名
-	signatureBytes, err := hex.DecodeString(signature)
-	if err != nil {
-		return nil, fmt.Errorf("解码签名失败: %w", err)
-	}
-
-	// 4. 获取缓存的交易和签名者
+func (tm *TransactionManager) SignTransaction(messageHash string, signature string) (uint, error) {
+	// 1. 获取消息数据
 	tm.txMutex.RLock()
-	rawTx, ok := tm.txCache[messageHash]
+	messageData, ok := tm.messageData[messageHash]
+	rawTx, txOk := tm.txCache[messageHash]
 	signer, signerOk := tm.signers[messageHash]
 	tm.txMutex.RUnlock()
 
-	// 如果缓存中没有找到交易，则尝试从数据库中重构
-	if !ok || !signerOk {
-		var err error
-		rawTx, signer, err = tm.reconstructTransaction(&tx)
-		if err != nil {
-			return nil, fmt.Errorf("重构交易失败: %w", err)
-		}
+	if !ok || !txOk || !signerOk {
+		return 0, ErrTransactionNotFound
 	}
 
-	// 5. 为交易附加签名
+	// 2. 解码签名
+	signatureBytes, err := hex.DecodeString(signature)
+	if err != nil {
+		return 0, fmt.Errorf("解码签名失败: %w", err)
+	}
+
+	// 3. 为交易附加签名
 	signedTx, err := rawTx.WithSignature(signer, signatureBytes)
 	if err != nil {
-		return nil, fmt.Errorf("附加签名失败: %w", err)
+		return 0, fmt.Errorf("附加签名失败: %w", err)
 	}
 
-	// 6. 验证签名有效性
+	// 4. 验证签名有效性
 	sender, err := types.Sender(signer, signedTx)
 	if err != nil {
-		return nil, fmt.Errorf("验证签名失败: %w", err)
+		return 0, fmt.Errorf("验证签名失败: %w", err)
 	}
 
-	if sender.Hex() != tx.FromAddress {
-		return nil, ErrInvalidSignature
+	if sender.Hex() != messageData.FromAddress {
+		return 0, ErrInvalidSignature
 	}
 
-	// 7. 更新交易记录
-	tx.Status = model.StatusSigned
-	tx.Signature = signatureBytes
-	tx.TxHash = signedTx.Hash().Hex()
-	result = utils.GetDB().Save(&tx)
-	if result.Error != nil {
-		return nil, fmt.Errorf("更新交易记录失败: %w", result.Error)
+	// 5. 更新交易记录
+	txID := messageData.TransID
+	_, err = tm.txService.SignTransaction(txID, signatureBytes)
+	if err != nil {
+		return 0, fmt.Errorf("更新交易签名失败: %w", err)
 	}
 
-	// 8. 更新缓存
+	// 6. 更新缓存
 	tm.txMutex.Lock()
 	tm.txCache[messageHash] = signedTx
 	tm.txMutex.Unlock()
 
-	return &tx, nil
+	return txID, nil
 }
 
 // SendTransaction 将已签名的交易发送到以太坊网络
 //
 // 参数:
-//   - txID: 交易记录的数据库ID
+//   - messageHash: 交易的消息哈希（十六进制字符串，不含0x前缀）
 //
 // 返回:
-//   - *model.Transaction: 更新后的交易记录
+//   - uint: 已发送的交易记录ID
+//   - string: 区块链网络返回的交易哈希
 //   - error: 发送过程中的错误
-func (tm *TransactionManager) SendTransaction(txID uint) (*model.Transaction, error) {
-	// 1. 查找交易记录
-	var tx model.Transaction
-	result := utils.GetDB().First(&tx, txID)
-	if result.Error != nil {
-		return nil, ErrTransactionNotFound
-	}
-
-	// 2. 检查交易状态
-	if tx.Status != model.StatusSigned {
-		return nil, fmt.Errorf("交易状态不正确: %d", tx.Status)
-	}
-
-	// 3. 获取缓存的交易
+func (tm *TransactionManager) SendTransaction(messageHash string) (uint, string, error) {
+	// 1. 获取交易数据
 	tm.txMutex.RLock()
-	signedTx, ok := tm.txCache[tx.MessageHash]
+	messageData, ok := tm.messageData[messageHash]
+	signedTx, txOk := tm.txCache[messageHash]
 	tm.txMutex.RUnlock()
 
-	// 如果缓存中没有找到交易，则尝试从数据库中重构
-	if !ok {
-		var err error
-		var signer types.Signer
-		signedTx, signer, err = tm.reconstructTransaction(&tx)
-		if err != nil {
-			return nil, fmt.Errorf("重构交易失败: %w", err)
-		}
-
-		// 附加签名
-		signedTx, err = signedTx.WithSignature(signer, tx.Signature)
-		if err != nil {
-			return nil, fmt.Errorf("附加签名失败: %w", err)
-		}
+	if !ok || !txOk {
+		return 0, "", ErrTransactionNotFound
 	}
 
-	// 4. 发送交易到网络
-	now := time.Now()
+	// 2. 发送交易到网络
 	err := tm.client.SendTransaction(signedTx)
 	if err != nil {
-		// 如果是因为 nonce 太低导致的错误，可以增加 nonce 并重建交易
-		// 这里简化处理，仅记录错误
-		tx.Status = model.StatusFailed
-		tx.Error = err.Error()
-		utils.GetDB().Save(&tx)
-		return nil, fmt.Errorf("发送交易失败: %w", err)
+		return 0, "", fmt.Errorf("发送交易失败: %w", err)
 	}
 
-	// 5. 更新交易记录
-	tx.Status = model.StatusSubmitted
-	tx.SubmittedAt = &now
-	result = utils.GetDB().Save(&tx)
-	if result.Error != nil {
-		return nil, fmt.Errorf("更新交易记录失败: %w", result.Error)
+	txHash := signedTx.Hash().Hex()
+
+	// 3. 更新交易记录
+	txID := messageData.TransID
+	_, err = tm.txService.SubmitTransaction(txID, txHash)
+	if err != nil {
+		return 0, "", fmt.Errorf("更新交易状态失败: %w", err)
 	}
 
-	// 6. 启动一个 goroutine 来监控交易状态
-	go tm.monitorTransaction(signedTx.Hash(), tx.ID)
+	// 4. 启动一个 goroutine 来监控交易状态
+	go tm.monitorTransaction(signedTx.Hash(), txID)
 
-	return &tx, nil
+	return txID, txHash, nil
 }
 
-// GetTransactionStatus 获取指定ID交易的最新状态
+// GetTransactionStatus 获取指定消息哈希交易的最新状态
 //
 // 参数:
-//   - txID: 交易记录的数据库ID
+//   - messageHash: 交易的消息哈希
 //
 // 返回:
-//   - *model.Transaction: 交易记录，包含当前状态
+//   - model.TransactionStatus: 交易当前状态
 //   - error: 查询过程中的错误
-func (tm *TransactionManager) GetTransactionStatus(txID uint) (*model.Transaction, error) {
-	var tx model.Transaction
-	result := utils.GetDB().First(&tx, txID)
-	if result.Error != nil {
-		return nil, ErrTransactionNotFound
+func (tm *TransactionManager) GetTransactionStatus(messageHash string) (model.TransactionStatus, error) {
+	tm.txMutex.RLock()
+	messageData, ok := tm.messageData[messageHash]
+	tm.txMutex.RUnlock()
+
+	if !ok {
+		return 0, ErrTransactionNotFound
 	}
-	return &tx, nil
+
+	txID := messageData.TransID
+	tx, err := tm.txService.GetTransactionByID(txID)
+	if err != nil {
+		return 0, err
+	}
+
+	return tx.Status, nil
 }
 
-// GetTransactionByMessageHash 通过消息哈希查询交易记录
+// GetTransactionByID 通过ID获取交易记录
 //
 // 参数:
-//   - messageHash: 交易的消息哈希（十六进制字符串）
+//   - id: 交易记录ID
 //
 // 返回:
-//   - *model.Transaction: 匹配的交易记录
+//   - *model.Transaction: 获取到的交易记录
 //   - error: 查询过程中的错误
-func (tm *TransactionManager) GetTransactionByMessageHash(messageHash string) (*model.Transaction, error) {
-	var tx model.Transaction
-	result := utils.GetDB().Where("message_hash = ?", messageHash).First(&tx)
-	if result.Error != nil {
-		return nil, ErrTransactionNotFound
-	}
-	return &tx, nil
+func (tm *TransactionManager) GetTransactionByID(id uint) (*model.Transaction, error) {
+	return tm.txService.GetTransactionByID(id)
 }
 
-// GetPendingTransactions 获取所有未完成状态的交易
-//
-// 返回:
-//   - []model.Transaction: 所有待处理的交易记录列表
-//   - error: 查询过程中的错误
-func (tm *TransactionManager) GetPendingTransactions() ([]model.Transaction, error) {
-	var txs []model.Transaction
-	result := utils.GetDB().Where("status IN (?)", []model.TransactionStatus{
-		model.StatusPending, model.StatusSigned, model.StatusSubmitted,
-	}).Find(&txs)
-	if result.Error != nil {
-		return nil, result.Error
-	}
-	return txs, nil
-}
-
-// GetUserTransactions 获取指定用户参与的所有交易
+// GetMessageHashByID 通过交易ID获取消息哈希
 //
 // 参数:
-//   - address: 用户的以太坊地址
+//   - id: 交易记录ID
 //
 // 返回:
-//   - []model.Transaction: 用户相关的交易记录列表
+//   - string: 消息哈希
 //   - error: 查询过程中的错误
-func (tm *TransactionManager) GetUserTransactions(address string) ([]model.Transaction, error) {
-	var txs []model.Transaction
-	result := utils.GetDB().Where("from_address = ? OR to_address = ?", address, address).
-		Order("created_at DESC").Find(&txs)
-	if result.Error != nil {
-		return nil, result.Error
+func (tm *TransactionManager) GetMessageHashByID(id uint) (string, error) {
+	tm.txMutex.RLock()
+	defer tm.txMutex.RUnlock()
+
+	for hash, data := range tm.messageData {
+		if data.TransID == id {
+			return hash, nil
+		}
 	}
-	return txs, nil
+
+	return "", ErrTransactionNotFound
 }
 
 // monitorTransaction 持续监控交易的确认状态并更新数据库
@@ -367,166 +332,32 @@ func (tm *TransactionManager) GetUserTransactions(address string) ([]model.Trans
 //   - txID: 交易记录的数据库ID
 func (tm *TransactionManager) monitorTransaction(txHash common.Hash, txID uint) {
 	// 重试逻辑
-	for i := 0; i < 3; i++ {
+	for i := 0; i < 12; i++ {
 		// 等待一段时间后检查
-		time.Sleep(tm.client.config.ConfirmTime)
+		time.Sleep(60 * time.Second)
 
 		// 获取交易收据
 		receipt, err := tm.client.GetTransactionReceipt(txHash)
 		if err != nil {
 			// 如果错误不是"未找到"，记录错误但继续重试
 			if err.Error() != "not found" {
-				fmt.Printf("获取交易收据失败: %v\n", err)
+				fmt.Printf("Error checking transaction receipt: %v\n", err)
 			}
 			continue
 		}
 
 		// 交易已确认
 		if receipt != nil {
-			var tx model.Transaction
-			result := utils.GetDB().First(&tx, txID)
-			if result.Error != nil {
-				fmt.Printf("获取交易记录失败: %v\n", result.Error)
-				return
+			// 更新交易收据信息
+			_, err := tm.txService.UpdateTransactionReceipt(txID, receipt)
+			if err != nil {
+				fmt.Printf("Error updating transaction receipt: %v\n", err)
 			}
-
-			now := time.Now()
-			tx.ConfirmedAt = &now
-			tx.BlockNumber = receipt.BlockNumber.Uint64()
-			tx.BlockHash = receipt.BlockHash.Hex()
-
-			if receipt.Status == types.ReceiptStatusSuccessful {
-				tx.Status = model.StatusConfirmed
-			} else {
-				tx.Status = model.StatusFailed
-				tx.Error = "交易执行失败"
-			}
-
-			utils.GetDB().Save(&tx)
 			return
 		}
 	}
 
-	// 达到最大重试次数但仍未确认，标记为未确认状态
-	var tx model.Transaction
-	result := utils.GetDB().First(&tx, txID)
-	if result.Error != nil {
-		fmt.Printf("获取交易记录失败: %v\n", result.Error)
-		return
-	}
-
-	// 虽然网络未确认，但仍保持已提交状态，后续可以手动检查
-	tx.Error = "交易未在指定时间内确认，但可能稍后会被确认"
-	utils.GetDB().Save(&tx)
-}
-
-// reconstructTransaction 从数据库存储的记录重构交易对象
-//
-// 参数:
-//   - tx: 数据库中的交易记录
-//
-// 返回:
-//   - *types.Transaction: 重构的交易对象
-//   - types.Signer: 适用于该交易的签名者
-//   - error: 重构过程中的错误
-func (tm *TransactionManager) reconstructTransaction(tx *model.Transaction) (*types.Transaction, types.Signer, error) {
-	// 解析存储的交易数据
-	var txData struct {
-		Nonce    uint64
-		To       string
-		Value    string
-		GasLimit uint64
-		GasPrice string
-		Data     []byte
-		ChainID  string
-	}
-
-	if err := json.Unmarshal(tx.TransactionJSON, &txData); err != nil {
-		return nil, nil, fmt.Errorf("解析交易JSON失败: %w", err)
-	}
-
-	// 恢复 big.Int 值
-	value := new(big.Int)
-	value.SetString(txData.Value, 10)
-
-	gasPrice := new(big.Int)
-	gasPrice.SetString(txData.GasPrice, 10)
-
-	chainID := new(big.Int)
-	chainID.SetString(txData.ChainID, 10)
-
-	// 重建交易
-	rawTx := types.NewTransaction(
-		txData.Nonce,
-		common.HexToAddress(txData.To),
-		value,
-		txData.GasLimit,
-		gasPrice,
-		txData.Data,
-	)
-
-	// 创建签名者
-	signer := types.NewEIP155Signer(chainID)
-
-	return rawTx, signer, nil
-}
-
-// CheckPendingTransactions 检查所有已提交但未确认交易的状态
-// 该方法通常由定时任务调用，确保长时间未确认的交易得到处理
-//
-// 返回:
-//   - error: 检查过程中的错误
-func (tm *TransactionManager) CheckPendingTransactions() error {
-	var txs []model.Transaction
-	// 查找所有已提交但未确认的交易
-	result := utils.GetDB().Where("status = ?", model.StatusSubmitted).Find(&txs)
-	if result.Error != nil {
-		return result.Error
-	}
-
-	for _, tx := range txs {
-		// 跳过没有交易哈希的记录
-		if tx.TxHash == "" {
-			continue
-		}
-
-		// 检查交易状态
-		txHash := common.HexToHash(tx.TxHash)
-		receipt, err := tm.client.GetTransactionReceipt(txHash)
-		if err != nil {
-			// 如果错误不是"未找到"，记录错误但继续处理下一个交易
-			if err.Error() != "not found" {
-				fmt.Printf("获取交易收据失败: %v\n", err)
-			}
-			continue
-		}
-
-		// 交易已确认
-		if receipt != nil {
-			now := time.Now()
-			tx.ConfirmedAt = &now
-			tx.LastCheckedAt = &now
-			tx.BlockNumber = receipt.BlockNumber.Uint64()
-			tx.BlockHash = receipt.BlockHash.Hex()
-
-			if receipt.Status == types.ReceiptStatusSuccessful {
-				tx.Status = model.StatusConfirmed
-			} else {
-				tx.Status = model.StatusFailed
-				tx.Error = "交易执行失败"
-			}
-
-			utils.GetDB().Save(&tx)
-		} else {
-			// 交易未确认，更新最后检查时间
-			now := time.Now()
-			tx.LastCheckedAt = &now
-			tx.RetryCount++
-			utils.GetDB().Save(&tx)
-		}
-	}
-
-	return nil
+	fmt.Printf("Transaction %s not confirmed after maximum retry attempts\n", txHash.Hex())
 }
 
 // IsTransactionInProgress 检查用户是否有正在处理中的交易
@@ -539,16 +370,125 @@ func (tm *TransactionManager) CheckPendingTransactions() error {
 //   - bool: 是否存在处理中的交易
 //   - error: 查询过程中的错误
 func (tm *TransactionManager) IsTransactionInProgress(fromAddress string) (bool, error) {
-	var count int64
-	result := utils.GetDB().Model(&model.Transaction{}).
-		Where("from_address = ? AND status IN (?)",
-			fromAddress,
-			[]model.TransactionStatus{model.StatusPending, model.StatusSigned, model.StatusSubmitted}).
-		Count(&count)
+	// 检查内存中是否有正在处理的交易
+	tm.txMutex.RLock()
+	for _, data := range tm.messageData {
+		if data.FromAddress == fromAddress {
+			// 查询交易状态
+			tx, err := tm.txService.GetTransactionByID(data.TransID)
+			if err != nil {
+				tm.txMutex.RUnlock()
+				return false, err
+			}
 
-	if result.Error != nil {
-		return false, result.Error
+			// 如果不是已确认或失败状态，则认为正在处理
+			if tx.Status != model.StatusConfirmed && tx.Status != model.StatusFailed {
+				tm.txMutex.RUnlock()
+				return true, nil
+			}
+		}
+	}
+	tm.txMutex.RUnlock()
+
+	// 查询数据库中的交易状态
+	txs, err := tm.txService.GetPendingTransactions(1, 0)
+	if err != nil {
+		return false, err
 	}
 
-	return count > 0, nil
+	for _, tx := range txs {
+		if tx.FromAddress == fromAddress {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// CheckPendingTransactions 检查所有未确认交易的状态
+// 该方法通常由定时任务调用，确保长时间未确认的交易得到处理
+//
+// 返回:
+//   - error: 检查过程中的错误
+func (tm *TransactionManager) CheckPendingTransactions() error {
+	txs, err := tm.txService.GetPendingTransactions(100, 0)
+	if err != nil {
+		return fmt.Errorf("获取待处理交易失败: %w", err)
+	}
+
+	for _, tx := range txs {
+		if tx.Status != model.StatusSubmitted || tx.TxHash == "" {
+			continue
+		}
+
+		txHash := common.HexToHash(tx.TxHash)
+		receipt, err := tm.client.GetTransactionReceipt(txHash)
+		if err != nil {
+			if err.Error() != "not found" {
+				fmt.Printf("Error checking receipt for tx %s: %v\n", tx.TxHash, err)
+			}
+			continue
+		}
+
+		if receipt != nil {
+			_, err := tm.txService.UpdateTransactionReceipt(tx.ID, receipt)
+			if err != nil {
+				fmt.Printf("Error updating receipt for tx %s: %v\n", tx.TxHash, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// ClearCompletedTransactions 清理已完成的交易缓存
+// 该方法应定期调用以释放内存
+func (tm *TransactionManager) ClearCompletedTransactions() {
+	tm.txMutex.Lock()
+	defer tm.txMutex.Unlock()
+
+	for hash, data := range tm.messageData {
+		tx, err := tm.txService.GetTransactionByID(data.TransID)
+		if err != nil {
+			continue
+		}
+
+		// 如果交易已确认或失败，从缓存中移除
+		if tx.Status == model.StatusConfirmed || tx.Status == model.StatusFailed {
+			delete(tm.txCache, hash)
+			delete(tm.signers, hash)
+			delete(tm.messageData, hash)
+		}
+	}
+}
+
+// GetTransactionCount 获取用户交易总数
+//
+// 参数:
+//   - address: 用户地址
+//
+// 返回:
+//   - int64: 交易总数
+//   - error: 查询过程中的错误
+func (tm *TransactionManager) GetTransactionCount(address string) (int64, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// 获取当前区块高度的nonce（表示已确认交易数）
+	confirmedCount, err := tm.client.client.NonceAt(ctx, common.HexToAddress(address), nil)
+	if err != nil {
+		return 0, fmt.Errorf("获取已确认交易数失败: %w", err)
+	}
+
+	// 获取待处理交易数（包括内存池中的交易）
+	pendingCount, err := tm.client.client.PendingNonceAt(ctx, common.HexToAddress(address))
+	if err != nil {
+		return 0, fmt.Errorf("获取待处理交易数失败: %w", err)
+	}
+
+	// 返回较大的值，通常是待处理交易数
+	if pendingCount > confirmedCount {
+		return int64(pendingCount), nil
+	}
+	return int64(confirmedCount), nil
 }
