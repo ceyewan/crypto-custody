@@ -19,8 +19,14 @@ func AccountRoutes(r *gin.Engine) {
 		authenticated := accounts.Group("/")
 		authenticated.Use(middleware.JWTAuth())
 		{
-			authenticated.GET("", handler.GetUserAccounts)    // 获取用户的账户信息
-			authenticated.GET("/all", handler.GetAllAccounts) // 获取所有账户信息（仅管理员）
+			authenticated.GET("", handler.GetUserAccounts) // 获取用户的账户信息
+
+			// 管理员专用API
+			admin := authenticated.Group("/admin")
+			admin.Use(middleware.AdminRequired())
+			{
+				admin.GET("/all", handler.GetAllAccounts) // 获取所有账户信息（仅管理员）
+			}
 		}
 	}
 }

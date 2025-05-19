@@ -255,23 +255,16 @@ func ChangePassword(c *gin.Context) {
 // - 200 OK：成功获取用户信息
 // - 500 Internal Server Error：服务器内部错误
 func GetCurrentUser(c *gin.Context) {
-	username := c.GetString("Username")
-
-	userService, err := service.GetUserServiceInstance()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, dto.StandardResponse{
-			Code:    500,
-			Message: "系统错误",
-		})
+	// 从中间件中获取用户信息
+	userObj, exists := c.Get("user")
+	if !exists {
+		utils.ResponseWithError(c, http.StatusUnauthorized, utils.ErrorUserNotFound)
 		return
 	}
 
-	user, err := userService.GetUserByUsername(username)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, dto.StandardResponse{
-			Code:    500,
-			Message: "系统错误",
-		})
+	user, ok := userObj.(*model.User)
+	if !ok {
+		utils.ResponseWithError(c, http.StatusInternalServerError, "用户信息类型错误")
 		return
 	}
 
@@ -283,11 +276,7 @@ func GetCurrentUser(c *gin.Context) {
 		Role:     string(user.Role),
 	}
 
-	c.JSON(http.StatusOK, dto.StandardResponse{
-		Code:    200,
-		Message: "获取当前用户信息成功",
-		Data:    userResp,
-	})
+	utils.ResponseWithData(c, "获取当前用户信息成功", userResp)
 }
 
 // UpdateUserRole 更新用户角色
@@ -303,33 +292,21 @@ func GetCurrentUser(c *gin.Context) {
 // - 403 Forbidden：当前用户无管理员权限或尝试修改管理员角色
 // - 500 Internal Server Error：服务器内部错误
 func UpdateUserRole(c *gin.Context) {
-	// 检查权限
-	role, exists := c.Get("Role")
-	if !exists || role.(string) != string(model.RoleAdmin) {
-		c.JSON(http.StatusForbidden, dto.StandardResponse{
-			Code:    403,
-			Message: "权限不足",
-		})
+	// 检查管理员权限
+	if !utils.CheckAdminRole(c) {
 		return
 	}
 
 	// 获取用户ID参数
 	userID, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, dto.StandardResponse{
-			Code:    400,
-			Message: "无效的用户ID",
-		})
+		utils.ResponseWithError(c, http.StatusBadRequest, utils.ErrorInvalidID)
 		return
 	}
 
 	var roleReq dto.UpdateRoleRequest
 
-	if err := c.ShouldBindJSON(&roleReq); err != nil {
-		c.JSON(http.StatusBadRequest, dto.StandardResponse{
-			Code:    400,
-			Message: "请求参数不正确",
-		})
+	if !utils.BindJSON(c, &roleReq) {
 		return
 	}
 
@@ -339,35 +316,22 @@ func UpdateUserRole(c *gin.Context) {
 	case model.RoleAdmin, model.RoleOfficer, model.RoleGuest:
 		newRole = model.Role(roleReq.Role)
 	default:
-		c.JSON(http.StatusBadRequest, dto.StandardResponse{
-			Code:    400,
-			Message: "无效的角色值",
-		})
+		utils.ResponseWithError(c, http.StatusBadRequest, "无效的角色值")
 		return
 	}
 
 	userService, err := service.GetUserServiceInstance()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, dto.StandardResponse{
-			Code:    500,
-			Message: "系统错误",
-		})
+	if utils.HandleServiceInitError(c, err) {
 		return
 	}
 
 	err = userService.UpdateUserRole(uint(userID), newRole)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, dto.StandardResponse{
-			Code:    400,
-			Message: err.Error(),
-		})
+		utils.ResponseWithError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, dto.StandardResponse{
-		Code:    200,
-		Message: "用户角色更新成功",
-	})
+	utils.ResponseWithSuccess(c, "用户角色更新成功")
 }
 
 // DeleteUser 删除用户
@@ -383,48 +347,30 @@ func UpdateUserRole(c *gin.Context) {
 // - 403 Forbidden：当前用户无管理员权限
 // - 500 Internal Server Error：服务器内部错误
 func DeleteUser(c *gin.Context) {
-	// 检查权限
-	role, exists := c.Get("Role")
-	if !exists || role.(string) != string(model.RoleAdmin) {
-		c.JSON(http.StatusForbidden, dto.StandardResponse{
-			Code:    403,
-			Message: "权限不足",
-		})
+	// 检查管理员权限
+	if !utils.CheckAdminRole(c) {
 		return
 	}
 
 	// 获取用户ID参数
 	userID, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, dto.StandardResponse{
-			Code:    400,
-			Message: "无效的用户ID",
-		})
+		utils.ResponseWithError(c, http.StatusBadRequest, utils.ErrorInvalidID)
 		return
 	}
 
 	userService, err := service.GetUserServiceInstance()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, dto.StandardResponse{
-			Code:    500,
-			Message: "系统错误",
-		})
+	if utils.HandleServiceInitError(c, err) {
 		return
 	}
 
 	err = userService.DeleteUser(uint(userID))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, dto.StandardResponse{
-			Code:    500,
-			Message: "删除用户失败",
-		})
+		utils.ResponseWithError(c, http.StatusInternalServerError, "删除用户失败: "+err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, dto.StandardResponse{
-		Code:    200,
-		Message: "用户删除成功",
-	})
+	utils.ResponseWithSuccess(c, "用户删除成功")
 }
 
 // CheckAuth 验证Token是否有效
@@ -442,11 +388,12 @@ func DeleteUser(c *gin.Context) {
 func CheckAuth(c *gin.Context) {
 	var authReq dto.CheckAuthRequest
 
-	if err := c.ShouldBindJSON(&authReq); err != nil {
+	if !utils.BindJSON(c, &authReq) {
+		// 这个特殊情况，我们需要构造一个 AuthResponse
 		c.JSON(http.StatusBadRequest, dto.AuthResponse{
 			StandardResponse: dto.StandardResponse{
-				Code:    400,
-				Message: "请求参数不正确",
+				Code:    http.StatusBadRequest,
+				Message: utils.ErrorBadRequest,
 			},
 			Valid: false,
 		})
@@ -458,7 +405,7 @@ func CheckAuth(c *gin.Context) {
 	if !valid {
 		c.JSON(http.StatusUnauthorized, dto.AuthResponse{
 			StandardResponse: dto.StandardResponse{
-				Code:    401,
+				Code:    http.StatusUnauthorized,
 				Message: "令牌无效",
 			},
 			Valid: false,
@@ -470,8 +417,8 @@ func CheckAuth(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, dto.AuthResponse{
 			StandardResponse: dto.StandardResponse{
-				Code:    500,
-				Message: "系统错误",
+				Code:    http.StatusInternalServerError,
+				Message: utils.ErrorInternalServerError + ": " + err.Error(),
 			},
 			Valid: false,
 		})
@@ -482,8 +429,8 @@ func CheckAuth(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, dto.AuthResponse{
 			StandardResponse: dto.StandardResponse{
-				Code:    401,
-				Message: "用户不存在",
+				Code:    http.StatusUnauthorized,
+				Message: utils.ErrorUserNotFound,
 			},
 			Valid: false,
 		})
@@ -498,9 +445,10 @@ func CheckAuth(c *gin.Context) {
 		Role:     role,
 	}
 
+	// 注意：这里仍然使用 c.JSON，因为需要返回自定义的 AuthResponse 类型
 	c.JSON(http.StatusOK, dto.AuthResponse{
 		StandardResponse: dto.StandardResponse{
-			Code:    200,
+			Code:    http.StatusOK,
 			Message: "令牌有效",
 			Data:    map[string]interface{}{"user": userResp},
 		},
@@ -521,58 +469,36 @@ func CheckAuth(c *gin.Context) {
 // - 403 Forbidden：当前用户无管理员权限或尝试修改管理员用户名
 // - 500 Internal Server Error：服务器内部错误
 func UpdateUserID(c *gin.Context) {
-	// 检查权限
-	role, exists := c.Get("Role")
-	if !exists || role.(string) != string(model.RoleAdmin) {
-		c.JSON(http.StatusForbidden, dto.StandardResponse{
-			Code:    403,
-			Message: "权限不足",
-		})
+	// 检查管理员权限
+	if !utils.CheckAdminRole(c) {
 		return
 	}
 
 	// 获取用户ID参数
 	userID, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, dto.StandardResponse{
-			Code:    400,
-			Message: "无效的用户ID",
-		})
+		utils.ResponseWithError(c, http.StatusBadRequest, utils.ErrorInvalidID)
 		return
 	}
 
 	var usernameReq dto.UpdateUsernameRequest
 
-	if err := c.ShouldBindJSON(&usernameReq); err != nil {
-		c.JSON(http.StatusBadRequest, dto.StandardResponse{
-			Code:    400,
-			Message: "请求参数不正确",
-		})
+	if !utils.BindJSON(c, &usernameReq) {
 		return
 	}
 
 	userService, err := service.GetUserServiceInstance()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, dto.StandardResponse{
-			Code:    500,
-			Message: "系统错误",
-		})
+	if utils.HandleServiceInitError(c, err) {
 		return
 	}
 
 	err = userService.UpdateUserID(uint(userID), usernameReq.Username)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, dto.StandardResponse{
-			Code:    400,
-			Message: err.Error(),
-		})
+		utils.ResponseWithError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, dto.StandardResponse{
-		Code:    200,
-		Message: "用户名更新成功",
-	})
+	utils.ResponseWithSuccess(c, "用户名更新成功")
 }
 
 // AdminChangePassword 管理员修改用户密码
@@ -589,62 +515,37 @@ func UpdateUserID(c *gin.Context) {
 // - 404 Not Found：指定ID的用户不存在
 // - 500 Internal Server Error：服务器内部错误
 func AdminChangePassword(c *gin.Context) {
-	// 检查权限
-	role, exists := c.Get("Role")
-	if !exists || role.(string) != string(model.RoleAdmin) {
-		c.JSON(http.StatusForbidden, dto.StandardResponse{
-			Code:    403,
-			Message: "权限不足",
-		})
+	// 检查管理员权限
+	if !utils.CheckAdminRole(c) {
 		return
 	}
 
 	// 获取用户ID参数
 	userID, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, dto.StandardResponse{
-			Code:    400,
-			Message: "无效的用户ID",
-		})
+		utils.ResponseWithError(c, http.StatusBadRequest, utils.ErrorInvalidID)
 		return
 	}
 
 	var passwordReq dto.AdminChangePasswordRequest
-	if err := c.ShouldBindJSON(&passwordReq); err != nil {
-		c.JSON(http.StatusBadRequest, dto.StandardResponse{
-			Code:    400,
-			Message: "请求参数不正确",
-		})
+	if !utils.BindJSON(c, &passwordReq) {
 		return
 	}
 
 	userService, err := service.GetUserServiceInstance()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, dto.StandardResponse{
-			Code:    500,
-			Message: "系统错误",
-		})
+	if utils.HandleServiceInitError(c, err) {
 		return
 	}
 
 	err = userService.AdminChangePassword(uint(userID), passwordReq.NewPassword)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			c.JSON(http.StatusNotFound, dto.StandardResponse{
-				Code:    404,
-				Message: "用户不存在",
-			})
+			utils.ResponseWithError(c, http.StatusNotFound, utils.ErrorRecordNotFound)
 			return
 		}
-		c.JSON(http.StatusBadRequest, dto.StandardResponse{
-			Code:    400,
-			Message: err.Error(),
-		})
+		utils.ResponseWithError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, dto.StandardResponse{
-		Code:    200,
-		Message: "用户密码修改成功",
-	})
+	utils.ResponseWithSuccess(c, "用户密码修改成功")
 }
