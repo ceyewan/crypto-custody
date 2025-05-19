@@ -3,6 +3,7 @@ package middleware
 import (
 	"net/http"
 	"online-server/model"
+	"online-server/service"
 	"online-server/utils"
 	"time"
 
@@ -44,7 +45,7 @@ func JWTAuth() gin.HandlerFunc {
 			logger.Warn("访问需要认证的API但未提供令牌",
 				clog.String("path", c.Request.URL.Path),
 				clog.String("ip", c.ClientIP()))
-			c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "需要登录"})
+			utils.ResponseWithError(c, http.StatusUnauthorized, "需要登录")
 			c.Abort()
 			return
 		}
@@ -56,7 +57,7 @@ func JWTAuth() gin.HandlerFunc {
 				clog.String("token_prefix", authorization[:10]+"..."),
 				clog.String("ip", c.ClientIP()),
 				clog.String("path", c.Request.URL.Path))
-			c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "令牌无效"})
+			utils.ResponseWithError(c, http.StatusUnauthorized, "令牌无效")
 			c.Abort()
 			return
 		}
@@ -69,6 +70,16 @@ func JWTAuth() gin.HandlerFunc {
 		// 设置用户信息到上下文
 		c.Set("Username", userName)
 		c.Set("Role", role)
+
+		// 获取用户信息并设置到上下文
+		userService, err := service.GetUserServiceInstance()
+		if err == nil {
+			user, err := userService.GetUserByUsername(userName)
+			if err == nil {
+				// 设置完整的用户模型到上下文中
+				c.Set("user", user)
+			}
+		}
 
 		c.Next()
 	}
@@ -84,7 +95,7 @@ func AdminRequired() gin.HandlerFunc {
 			logger.Warn("访问管理员资源但未提供认证信息",
 				clog.String("path", c.Request.URL.Path),
 				clog.String("ip", c.ClientIP()))
-			c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "需要登录"})
+			utils.ResponseWithError(c, http.StatusUnauthorized, utils.ErrorUnauthorized)
 			c.Abort()
 			return
 		}
@@ -96,7 +107,7 @@ func AdminRequired() gin.HandlerFunc {
 				clog.String("role", role.(string)),
 				clog.String("path", c.Request.URL.Path),
 				clog.String("ip", c.ClientIP()))
-			c.JSON(http.StatusForbidden, gin.H{"code": 403, "message": "需要管理员权限"})
+			utils.ResponseWithError(c, http.StatusForbidden, utils.ErrorForbidden+", 需要管理员权限")
 			c.Abort()
 			return
 		}
@@ -118,7 +129,7 @@ func OfficerRequired() gin.HandlerFunc {
 			logger.Warn("访问警员资源但未提供认证信息",
 				clog.String("path", c.Request.URL.Path),
 				clog.String("ip", c.ClientIP()))
-			c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "需要登录"})
+			utils.ResponseWithError(c, http.StatusUnauthorized, utils.ErrorUnauthorized)
 			c.Abort()
 			return
 		}
@@ -130,7 +141,7 @@ func OfficerRequired() gin.HandlerFunc {
 				clog.String("role", role.(string)),
 				clog.String("path", c.Request.URL.Path),
 				clog.String("ip", c.ClientIP()))
-			c.JSON(http.StatusForbidden, gin.H{"code": 403, "message": "需要警员或管理员权限"})
+			utils.ResponseWithError(c, http.StatusForbidden, utils.ErrorForbidden+", 需要警员或管理员权限")
 			c.Abort()
 			return
 		}
@@ -211,7 +222,7 @@ func RecoveryMiddleware() gin.HandlerFunc {
 						clog.String("path", c.Request.URL.Path))
 				}
 
-				c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "服务器内部错误"})
+				utils.ResponseWithError(c, http.StatusInternalServerError, utils.ErrorInternalServerError)
 			}
 		}()
 		c.Next()
