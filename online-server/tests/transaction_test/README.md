@@ -1,69 +1,40 @@
-# 交易管理模块测试
+# 交易功能测试
 
-本项目包含对交易管理模块的详细客户端测试，测试会向本地启动的服务（端口8080）发送请求。
+本测试套件用于测试加密货币托管系统的交易功能，包括准备交易、签名并发送交易以及查询账户余额。
 
-## 文件结构
+## 准备工作
 
-- `common_test.go` - 通用测试辅助工具和函数
-- `prepare_test.go` - 交易准备测试
-- `sign_test.go` - 交易签名测试
-- `send_test.go` - 交易发送测试
+在运行测试前，您需要进行以下准备工作：
 
-## 运行前准备
+1. 确保服务器已经启动并在 `http://localhost:8080` 上运行
+2. 在 `common_test.go` 文件中设置以下测试参数：
+   - `TestAccountA`: 发送方以太坊地址
+   - `TestAccountB`: 接收方以太坊地址
+   - `TestSignature`: 交易签名
 
-1. 确保服务端已经在本地8080端口启动
-2. 设置管理员密码环境变量（用于管理员功能测试）
+## 测试内容
 
-```bash
-export DEFAULT_ADMIN_PASSWORD="your_admin_password"
-```
+测试套件包含以下测试用例：
 
-3. 运行离线签名工具准备测试账户
-4. 在测试账户中准备足够的ETH余额
+1. `TestGetBalance`: 测试查询以太坊账户余额
+2. `TestEthTransfer`: 测试完整的转账流程，包括：
+   - 登录警员账号
+   - 准备交易
+   - 签名并发送交易
+   - 等待交易确认
+   - 检查接收方余额
 
 ## 运行测试
 
-运行所有测试：
+在项目根目录下执行以下命令运行测试：
 
 ```bash
-cd /Users/harrick/CodeField/crypto-custody/online-server/tests/transaction_test
+cd tests/transaction_test
 go test -v
 ```
 
-运行特定测试文件：
-
-```bash
-go test -v prepare_test.go common_test.go
-go test -v sign_test.go common_test.go
-go test -v send_test.go common_test.go
-```
-
-运行特定测试函数：
-
-```bash
-go test -v -run TestPrepareTransaction
-```
-
-## 测试内容概述
-
-### 交易准备测试
-- 测试准备交易
-- 测试准备无效交易
-- 测试余额不足情况
-
-### 交易签名测试
-- 测试有效签名
-- 测试无效签名
-- 测试签名验证
-
-### 交易发送测试
-- 测试交易发送
-- 测试交易状态查询
-- 测试交易确认
-
 ## 注意事项
 
-1. 测试会创建实际的以太坊交易，请在测试网络上进行测试
-2. 测试账户应当仅用于测试目的，不要在其中存放大量资金
-3. 账户功能测试需要预先导入测试账户
-4. 如果服务端未运行，测试将全部失败
+- 测试会真实发送交易到区块链，请确保使用测试网络账户进行测试
+- 交易需要经过区块链确认，因此测试会等待一段时间（约15秒）
+- 警员账号需要预先在系统中创建，并拥有交易权限
