@@ -32,13 +32,13 @@ func InitDB() error {
 		EnableCaller: true,
 	})
 	dbLogger.Info("开始初始化数据库")
-	
+
 	// 确保数据目录存在
-	if err := os.MkdirAll("data", 0755); err != nil {
+	if err := os.MkdirAll("database", 0755); err != nil {
 		dbLogger.Error("创建数据目录失败", clog.Err(err))
 		return fmt.Errorf("创建数据目录失败: %w", err)
 	}
-	
+
 	dbLogger.Info("数据目录创建成功")
 
 	// 配置GORM日志
@@ -52,8 +52,8 @@ func InitDB() error {
 	)
 
 	// 连接SQLite数据库
-	dbLogger.Info("连接SQLite数据库", clog.String("path", "data/crypto-custody.db"))
-	db, err := gorm.Open(sqlite.Open("data/crypto-custody.db"), &gorm.Config{
+	dbLogger.Info("连接SQLite数据库", clog.String("path", "database/crypto-custody.db"))
+	db, err := gorm.Open(sqlite.Open("database/crypto-custody.db"), &gorm.Config{
 		Logger: newLogger,
 	})
 	if err != nil {
@@ -73,9 +73,9 @@ func InitDB() error {
 	sqlDB.SetMaxIdleConns(10)
 	sqlDB.SetMaxOpenConns(100)
 	sqlDB.SetConnMaxLifetime(time.Hour)
-	dbLogger.Info("数据库连接池配置完成", 
-		clog.Int("max_idle", 10), 
-		clog.Int("max_open", 100), 
+	dbLogger.Info("数据库连接池配置完成",
+		clog.Int("max_idle", 10),
+		clog.Int("max_open", 100),
 		clog.Duration("lifetime", time.Hour))
 
 	// 保存实例
@@ -96,7 +96,7 @@ func InitDB() error {
 		dbLogger.Error("创建管理员用户失败", clog.Err(err))
 		return fmt.Errorf("创建管理员用户失败: %w", err)
 	}
-	
+
 	dbLogger.Info("数据库初始化完成")
 	return nil
 }
@@ -132,11 +132,11 @@ func autoMigrateModels() error {
 	}
 
 	// 迁移所有模型
-	dbLogger.Info("迁移数据模型", 
+	dbLogger.Info("迁移数据模型",
 		clog.String("model", "User"),
 		clog.String("model", "Account"),
 		clog.String("model", "Transaction"))
-		
+
 	return instance.AutoMigrate(
 		&model.User{},
 		&model.Account{},
@@ -199,7 +199,7 @@ func SetDB(db *gorm.DB) {
 //   - 如果创建过程中发生错误，则返回相应的错误信息
 func ensureAdminUser() error {
 	dbLogger := clog.Module("database")
-	
+
 	if instance == nil {
 		dbLogger.Error("数据库未初始化")
 		return fmt.Errorf("数据库未初始化")
@@ -237,8 +237,8 @@ func ensureAdminUser() error {
 			return fmt.Errorf("创建管理员用户失败: %w", err)
 		}
 
-		dbLogger.Info("默认管理员用户创建成功", 
-			clog.String("username", "admin"), 
+		dbLogger.Info("默认管理员用户创建成功",
+			clog.String("username", "admin"),
 			clog.String("password", "admin123"),
 			clog.String("role", string(model.RoleAdmin)))
 	} else {
