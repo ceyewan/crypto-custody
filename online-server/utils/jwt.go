@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"os"
+
 	"github.com/ceyewan/clog"
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -12,7 +14,7 @@ import (
 var (
 	// jwtKey 是用于签名和验证JWT令牌的密钥
 	// 注意: 在生产环境中，应该从环境变量或配置文件中加载此密钥
-	jwtKey = []byte("your-jwt-secret-key")
+	jwtKey = []byte(os.Getenv("JWT_SECRET_KEY"))
 
 	// blacklist 存储已撤销的令牌
 	blacklist = make(map[string]time.Time)
@@ -41,7 +43,7 @@ type Claims struct {
 func GenerateToken(userName string, role string, expiration time.Duration) (string, error) {
 	logger := clog.Module("jwt")
 	logger.Info("开始生成JWT令牌", clog.String("username", userName), clog.String("role", role))
-	
+
 	expirationTime := jwt.NewNumericDate(time.Now().Add(expiration))
 
 	claims := &Claims{
@@ -59,8 +61,8 @@ func GenerateToken(userName string, role string, expiration time.Duration) (stri
 		return "", fmt.Errorf("生成令牌签名失败: %w", err)
 	}
 
-	logger.Info("JWT令牌生成成功", 
-		clog.String("username", userName), 
+	logger.Info("JWT令牌生成成功",
+		clog.String("username", userName),
 		clog.String("expires", expirationTime.Time.Format(time.RFC3339)))
 	return tokenString, nil
 }
@@ -72,12 +74,12 @@ func GenerateToken(userName string, role string, expiration time.Duration) (stri
 //   - expiration: 黑名单中保存此令牌的时间（应与令牌过期时间一致）
 func RevokeToken(tokenString string, expiration time.Duration) {
 	logger := clog.Module("jwt")
-	
+
 	// 尝试解析令牌以获取用户信息（不验证有效性）
 	token, _ := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
 		return jwtKey, nil
 	})
-	
+
 	// 获取用户信息（如果能解析）
 	var username string
 	if token != nil {
@@ -89,14 +91,14 @@ func RevokeToken(tokenString string, expiration time.Duration) {
 
 	// 存储令牌及其过期时间
 	expiryTime := time.Now().Add(expiration)
-	
+
 	// 使用写锁添加令牌到黑名单
 	blacklistMutex.Lock()
 	blacklist[tokenString] = expiryTime
 	blacklistMutex.Unlock()
-	
+
 	if username != "" {
-		logger.Info("令牌已撤销", 
+		logger.Info("令牌已撤销",
 			clog.String("username", username),
 			clog.String("expiry", expiryTime.Format(time.RFC3339)))
 	} else {
@@ -112,10 +114,10 @@ func RevokeToken(tokenString string, expiration time.Duration) {
 func cleanExpiredTokens() {
 	logger := clog.Module("jwt")
 	now := time.Now()
-	
+
 	// 创建过期令牌列表，先读取后批量删除，减少锁竞争
 	var expiredTokens []string
-	
+
 	// 使用读锁识别过期令牌
 	blacklistMutex.RLock()
 	for token, expiry := range blacklist {
@@ -124,7 +126,7 @@ func cleanExpiredTokens() {
 		}
 	}
 	blacklistMutex.RUnlock()
-	
+
 	// 如果有过期令牌，使用写锁删除
 	count := len(expiredTokens)
 	if count > 0 {
@@ -139,9 +141,9 @@ func cleanExpiredTokens() {
 		}
 		remaining := len(blacklist)
 		blacklistMutex.Unlock()
-		
-		logger.Info("清理过期的黑名单令牌", 
-			clog.Int("cleaned", count), 
+
+		logger.Info("清理过期的黑名单令牌",
+			clog.Int("cleaned", count),
 			clog.Int("remaining", remaining))
 	}
 }
@@ -157,13 +159,13 @@ func cleanExpiredTokens() {
 //   - error: 如果验证过程中出现错误，返回相应错误；否则返回nil
 func ValidateToken(tokenString string) (string, string, error) {
 	logger := clog.Module("jwt")
-	
+
 	// 检查令牌是否在黑名单中（使用读锁提高并发性能）
 	now := time.Now()
 	blacklistMutex.RLock()
 	expiry, found := blacklist[tokenString]
 	blacklistMutex.RUnlock()
-	
+
 	if found {
 		// 如果令牌已过期，从黑名单中移除
 		if now.After(expiry) {
@@ -205,8 +207,8 @@ func ValidateToken(tokenString string) (string, string, error) {
 	if claims.ExpiresAt != nil {
 		remaining := time.Until(claims.ExpiresAt.Time)
 		if remaining < 10*time.Minute {
-			logger.Warn("令牌即将过期", 
-				clog.String("username", claims.UserName), 
+			logger.Warn("令牌即将过期",
+				clog.String("username", claims.UserName),
 				clog.Duration("remaining", remaining))
 		} else if remaining < 30*time.Minute && remaining > 10*time.Minute {
 			// 当令牌剩余时间在10-30分钟之间时，仅记录信息级别日志
@@ -216,8 +218,8 @@ func ValidateToken(tokenString string) (string, string, error) {
 		}
 	}
 
-	logger.Info("令牌验证成功", 
-		clog.String("username", claims.UserName), 
+	logger.Info("令牌验证成功",
+		clog.String("username", claims.UserName),
 		clog.String("role", claims.Role))
 	return claims.UserName, claims.Role, nil
 }
@@ -229,7 +231,7 @@ func ValidateToken(tokenString string) (string, string, error) {
 //   - key: 用于JWT签名和验证的密钥
 func SetJWTKey(key []byte) {
 	logger := clog.Module("jwt")
-	
+
 	if len(key) > 0 {
 		jwtKey = key
 		logger.Info("JWT密钥已更新", clog.Int("key_length", len(key)))
@@ -249,15 +251,15 @@ func SetJWTKey(key []byte) {
 //   - string: 用户角色，如果验证失败则为空字符串
 func CheckAuth(tokenString string) (bool, string, string) {
 	logger := clog.Module("jwt")
-	
+
 	// 验证令牌
 	username, role, err := ValidateToken(tokenString)
 	if err != nil {
-		logger.Warn("令牌验证失败", 
-			clog.Err(err), 
+		logger.Warn("令牌验证失败",
+			clog.Err(err),
 			clog.String("token_prefix", tokenString[:10]+"..."))
 		return false, "", ""
 	}
-	
+
 	return true, username, role
 }
