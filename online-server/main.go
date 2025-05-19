@@ -6,11 +6,17 @@ import (
 	"online-server/utils"
 
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	// 加载环境变量
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatalf("加载环境变量失败: %v", err)
+	}
 	// 初始化数据库
-	err := utils.InitDB()
+	err = utils.InitDB()
 	if err != nil {
 		log.Fatalf("数据库初始化失败: %v", err)
 	}

@@ -224,19 +224,22 @@ func ChangePassword(c *gin.Context) {
 		return
 	}
 
-	// 获取当前用户ID
-	userID, exists := c.Get("UserID")
-	if !exists {
-		utils.ResponseWithError(c, http.StatusUnauthorized, utils.ErrorUnauthorized)
-		return
-	}
+	// 获取当前用户名
+	userName := c.GetString("Username")
 
 	userService, err := service.GetUserServiceInstance()
 	if utils.HandleServiceInitError(c, err) {
 		return
 	}
 
-	if err := userService.ChangePassword(userID.(uint), changePasswordReq.OldPassword, changePasswordReq.NewPassword); err != nil {
+	// 获取当前用户ID
+	user, err := userService.GetUserByUsername(userName)
+	if err != nil {
+		utils.ResponseWithError(c, http.StatusUnauthorized, utils.ErrorUserNotFound)
+		return
+	}
+
+	if err := userService.ChangePassword(user.ID, changePasswordReq.OldPassword, changePasswordReq.NewPassword); err != nil {
 		utils.ResponseWithError(c, http.StatusBadRequest, err.Error())
 		return
 	}

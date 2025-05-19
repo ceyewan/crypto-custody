@@ -215,7 +215,7 @@ func ensureAdminUser() error {
 		dbLogger.Info("未检测到管理员用户，正在创建默认管理员...")
 
 		// 设置默认管理员密码
-		defaultPassword := "admin123"
+		defaultPassword := os.Getenv("DEFAULT_ADMIN_PASSWORD")
 
 		// 使用bcrypt生成密码哈希
 		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(defaultPassword), bcrypt.DefaultCost)

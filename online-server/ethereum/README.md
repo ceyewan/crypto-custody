@@ -1,8 +1,13 @@
 # 以太坊交易管理模块 (ethereum)
 
+![版本](https://img.shields.io/badge/版本-1.0.0-blue)
+![go-ethereum](https://img.shields.io/badge/go--ethereum-1.15.11-orange)
+
 ## 简介
 
 `ethereum` 包提供与以太坊区块链的完整交互功能，实现了交易准备、签名和发送的全流程。该模块采用在线-离线分离的安全架构，显著提高了私钥管理的安全性，适用于加密资产托管系统。
+
+本模块是整个交易管理系统的核心部分，负责处理与区块链的所有直接交互，包括连接节点、构建交易、验证签名、发送交易以及监控交易状态等。
 
 ## 主要特性
 
@@ -212,5 +217,23 @@ func main() {
 
 ## 依赖项
 
-- github.com/ethereum/go-ethereum: ^1.10.0
-- 内部依赖: online-server/model, online-server/service
+- github.com/ethereum/go-ethereum: v1.15.11
+- 内部依赖: 
+  - online-server/model
+  - online-server/service
+  - online-server/utils
+
+## 贡献
+
+如需对本模块贡献代码，请确保理解以太坊交易的完整生命周期，并确保所有更改都经过充分测试。由于本模块直接处理数字资产交易，安全性是首要考虑因素。
+
+## 版本历史
+
+- v1.0.0 (2025-05-19): 初始版本
+  - 实现基本交易功能
+  - 支持在线-离线分离架构
+  - 添加交易状态监控
+
+## 主要贡献者
+
+- [Your Name] - 模块设计与实现

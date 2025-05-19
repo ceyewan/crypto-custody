@@ -1,46 +1,88 @@
-# 以太坊交易管理系统
+# 以太坊交易管理系统 (Ethereum Transaction Management System)
 
-本系统提供基于RBAC（基于角色的访问控制）的用户管理和以太坊交易功能，支持用户注册、登录、权限管理以及区块链交易操作。系统采用Go语言开发，使用Gin框架提供Web API服务。
+![版本](https://img.shields.io/badge/版本-1.0.0-blue)
+![Go版本](https://img.shields.io/badge/Go-1.24.0-blue)
+![许可证](https://img.shields.io/badge/许可证-MIT-green)
+
+## 项目概述
+
+本项目是一个安全可靠的以太坊交易管理系统，专为需要安全管理加密资产的企业和组织设计。系统采用在线-离线分离的架构，确保私钥安全，同时提供完整的用户权限控制和交易生命周期管理。
+
+### 背景
+
+在加密货币托管服务中，安全性和可审计性至关重要。传统的热钱包方案存在私钥被盗风险，而纯冷钱包方案则操作不便。本系统结合两者优势，实现了高安全性与操作便捷性的平衡。
+
+### 目标用户
+
+- 加密货币托管服务提供商
+- 数字资产管理机构
+- 需要管理多个以太坊账户的企业
+- 对交易安全性有高要求的组织
+
+本系统提供基于RBAC（基于角色的访问控制）的用户管理和以太坊交易功能，支持用户注册、登录、权限管理以及区块链交易操作。系统采用Go语言开发，使用Gin框架提供Web API服务，能够安全高效地管理数字资产交易。
 
 ## 功能特性
 
-- **用户管理**：注册、登录、登出、密码修改
+- **用户管理**：注册、登录、登出、密码修改、角色管理
 - **角色权限控制**：支持管理员(admin)、警员(officer)和游客(guest)三种角色
-- **以太坊账户管理**：创建、查询账户
+- **以太坊账户管理**：创建、查询账户、余额查询
 - **交易管理**：预备交易、签名交易、发送交易、查询交易状态
 - **区块链集成**：连接以太坊网络，支持Sepolia测试网
+- **安全架构**：采用在线-离线分离的私钥管理方式，提高安全性
 
 ## 系统架构设计
 
 系统采用了清晰的分层架构设计，遵循关注点分离原则，确保每一层都有明确的职责：
 
 ```
-├── dto/            # 数据传输对象层
-│   └── transaction.go  # 交易相关的数据传输对象
-├── model/          # 数据模型层
-│   ├── accounts.go # 账户模型
-│   └── users.go    # 用户模型
-├── ethereum/       # 以太坊交互层
-│   ├── client.go   # 以太坊客户端(使用懒汉式加载)
-│   └── service.go  # 以太坊服务(封装区块链交互)
-├── service/        # 服务层
+online-server/
+├── dto/                    # 数据传输对象层
+│   ├── account_dto.go      # 账户相关的数据传输对象
+│   ├── transaction_dto.go  # 交易相关的数据传输对象
+│   └── user_dto.go         # 用户相关的数据传输对象
+├── model/                  # 数据模型层
+│   ├── account_model.go    # 账户模型
+│   ├── transaction_model.go # 交易模型
+│   └── user_model.go       # 用户模型
+├── ethereum/               # 以太坊交互层
+│   ├── client.go           # 以太坊客户端(使用懒汉式加载)
+│   ├── transaction_manager.go # 交易管理器
+│   └── README.md           # 以太坊模块文档
+├── service/                # 服务层
 │   ├── account_service.go  # 账户服务(处理数据库操作)
-│   ├── eth_service.go      # 以太坊服务(调用ethereum包)
+│   ├── transaction_service.go # 交易服务
 │   └── user_service.go     # 用户服务(处理用户相关逻辑)
-├── handlers/       # 处理器层
-│   ├── account.go  # 账户处理器(处理数据库查询)
-│   ├── ethereum.go # 以太坊处理器(处理区块链交互)
-│   └── user.go     # 用户处理器(处理用户管理)
-├── routes/         # 路由层
-│   ├── account.go  # 账户相关路由
-│   ├── ethereum.go # 以太坊相关路由
-│   └── user.go     # 用户相关路由
-├── utils/          # 工具层
-│   ├── database.go # 数据库操作
-│   ├── hash.go     # 密码哈希
-│   └── jwt.go      # JWT令牌认证
-├── main.go         # 应用入口
-└── go.mod          # Go模块定义
+├── handler/                # 处理器层
+│   ├── account_handler.go  # 账户处理器(处理数据库查询)
+│   ├── transaction_handler.go # 交易处理器(处理区块链交互)
+│   └── user_handler.go     # 用户处理器(处理用户管理)
+├── route/                  # 路由层
+│   ├── account_router.go   # 账户相关路由
+│   ├── transaction_router.go # 交易相关路由
+│   ├── user_router.go      # 用户相关路由
+│   └── router.go           # 主路由配置
+├── middleware/             # 中间件
+│   └── middleware.go       # 中间件定义
+├── utils/                  # 工具层
+│   ├── database.go         # 数据库操作
+│   ├── hash.go             # 密码哈希
+│   ├── jwt.go              # JWT令牌认证
+│   ├── logger.go           # 日志管理
+│   ├── logger_helpers.go   # 日志辅助函数
+│   └── response.go         # HTTP响应工具
+├── docs/                   # 文档
+│   ├── user_management_api.md      # 用户管理API文档
+│   ├── user_management_guide.md    # 用户管理开发指南
+│   ├── transaction_management_api.md     # 交易管理API文档
+│   └── transaction_management_guide.md   # 交易管理开发指南
+├── tests/                  # 测试
+│   ├── user_test.go        # 用户模块测试
+│   └── logs/               # 测试日志
+├── database/               # 数据库文件
+│   └── crypto-custody.db   # SQLite数据库
+├── logs/                   # 日志文件
+├── main.go                 # 应用入口
+└── go.mod                  # Go模块定义
 ```
 
 ### 分层详解
@@ -134,6 +176,7 @@
 - **GET /api/users/admin/users**：获取所有用户（仅管理员）
 - **GET /api/users/admin/users/:id**：获取特定用户（仅管理员）
 - **PUT /api/users/admin/users/:id/role**：更新用户角色（仅管理员）
+- **PUT /api/users/admin/users/:id/username**：更新用户名（仅管理员）
 - **DELETE /api/users/admin/users/:id**：删除用户（仅管理员）
 
 ### 账户与交易管理
@@ -141,24 +184,46 @@
 - **GET /api/accounts/transactions/:id**：获取交易详情
 - **GET /api/accounts/transactions/hash/:hash**：通过哈希获取交易
 - **GET /api/accounts/transactions/user/:address**：获取用户交易历史
+- **GET /api/accounts/transactions/status/:status**：获取指定状态的交易
 
 ### 以太坊交易
 
-- **GET /api/ethereum/balance/:address**：获取地址余额
-- **POST /api/ethereum/tx/prepare**：准备交易（警员或管理员）
-- **POST /api/ethereum/tx/sign-send**：签名并发送交易（警员或管理员）
+- **GET /api/transaction/balance/:address**：获取地址余额
+- **POST /api/transaction/tx/prepare**：准备交易（警员或管理员）
+- **POST /api/transaction/tx/sign-send**：签名并发送交易（警员或管理员）
+
+详细API文档请参考:
+- [用户管理API文档](docs/user_management_api.md)
+- [交易管理API文档](docs/transaction_management_api.md)
 
 ## 交易流程
 
-系统的交易过程分为两步：
+系统实现了安全的在线-离线分离交易流程：
 
-1. **准备交易**：
+1. **准备交易（在线系统）**：
    - 用户通过API提交发送方地址、接收方地址和金额
-   - 系统生成交易数据并返回消息哈希，等待签名
+   - 系统获取nonce和估算gas费用
+   - 系统生成交易数据和消息哈希
+   - 将交易记录保存到数据库，状态设为"Created"
+   - 返回消息哈希，等待签名
 
-2. **签名并发送交易**：
-   - 用户提供消息哈希和签名
-   - 系统验证签名并将交易提交到以太坊网络
+2. **离线签名（安全环境）**：
+   - 消息哈希传递到安全的离线环境
+   - 使用私钥对消息哈希进行签名
+   - 生成签名数据
+
+3. **签名验证并发送（在线系统）**：
+   - 用户提供消息哈希和签名数据
+   - 系统验证签名与发送方地址是否匹配
+   - 系统将交易提交到以太坊网络
+   - 更新交易状态为"Submitted"
+
+4. **交易监控与确认**：
+   - 系统自动监控交易状态
+   - 交易被确认后，更新状态为"Confirmed"
+   - 如果交易失败，更新状态为"Failed"
+
+整个流程确保了私钥永远不会暴露在在线环境中，显著提高了安全性。
 
 ## 懒汉式加载和Sync.Once
 
@@ -200,19 +265,50 @@ func GetInstance() (*Service, error) {
 
 ## 技术栈
 
-- Go 1.16+
-- Gin Web框架
-- GORM ORM库
-- SQLite数据库
-- go-ethereum (以太坊Go客户端)
-- JWT认证
+- **语言**: Go 1.16+ (项目已升级至 Go 1.24.0)
+- **Web框架**: Gin 1.10.0
+- **ORM库**: GORM 1.26.1
+- **数据库**: SQLite 3
+- **区块链客户端**: go-ethereum 1.15.11
+- **认证**: JWT (JSON Web Token)
+- **日志**: 自定义日志系统，基于ceyewan/clog 0.2.0
 
 ## 部署指南
 
+### 环境要求
+- Go 1.16+
+- SQLite 3
+- 以太坊节点访问（可使用Infura或其他服务）
+
+### 安装步骤
 1. 克隆代码库
-2. 安装依赖：`go mod tidy`
-3. 运行应用：`go run main.go`
-4. 默认服务运行在http://localhost:8080
+   ```bash
+   git clone https://github.com/your-username/crypto-custody.git
+   cd crypto-custody/online-server
+   ```
+
+2. 安装依赖
+   ```bash
+   go mod tidy
+   ```
+
+3. 配置环境变量（可选）
+   ```bash
+   export ETH_NODE_URL="https://sepolia.infura.io/v3/YOUR_API_KEY"  # 以太坊节点URL
+   export JWT_SECRET="your-secret-key"                              # JWT密钥
+   ```
+
+4. 构建应用
+   ```bash
+   go build -o online-server.bin
+   ```
+
+5. 运行应用
+   ```bash
+   ./online-server.bin
+   ```
+
+默认服务运行在 http://localhost:8080
 ## 改进小结
 
 在项目重构过程中，我们进行了以下主要改进：
@@ -220,25 +316,59 @@ func GetInstance() (*Service, error) {
 1. **添加DTO层**：创建了dto包，专门用于定义数据传输对象，使不同层之间的数据交换更加规范化。
 
 2. **服务层优化**：
-   - 设计了完整的服务层，包括EthService、AccountService和UserService
+   - 设计了完整的服务层，包括TransactionService、AccountService和UserService
    - 所有服务都采用懒汉式加载和sync.Once确保线程安全和资源高效利用
    - 明确定义了每个服务的职责边界
 
 3. **以太坊交互层重构**：
    - 优化client.go，使用懒汉式加载
-   - 重构service.go，简化交易处理流程
+   - 实现transaction_manager.go，完整管理交易生命周期
    - 移除了冗余代码和全局变量
+   - 添加了详细的错误处理和状态管理
 
 4. **处理器层职责划分**：
-   - ethereum.go：处理与区块链直接交互的请求
-   - account.go：处理与数据库交互的请求
-   - user.go：处理用户管理相关请求
+   - transaction_handler.go：处理与区块链直接交互的请求
+   - account_handler.go：处理与账户和交易记录相关的请求
+   - user_handler.go：处理用户管理相关请求
  
-5. **路由优化**：路由结构更加清晰，映射到相应的处理函数
+5. **路由与中间件优化**：
+   - 路由结构更加清晰，映射到相应的处理函数
+   - 增强中间件功能，包括认证、权限控制和日志记录
 
 6. **资源利用改进**：
    - 避免在应用启动时初始化所有资源
    - 通过懒汉式加载实现按需初始化
    - 使用sync.Once确保并发安全
 
-这些改进使系统架构更加清晰，代码组织更加规范，不仅提高了可维护性和可测试性，还优化了资源利用效率。
+7. **文档完善**：
+   - 添加了详细的API文档
+   - 提供了开发指南
+   - 包含了每个模块的README文件
+
+这些改进使系统架构更加清晰，代码组织更加规范，不仅提高了可维护性和可测试性，还优化了资源利用效率和系统安全性。
+
+## 贡献指南
+
+欢迎贡献代码、报告问题或提出新功能建议。请遵循以下步骤：
+
+1. Fork本项目
+2. 创建你的特性分支 (`git checkout -b feature/amazing-feature`)
+3. 提交你的更改 (`git commit -m '添加一些很棒的功能'`)
+4. 推送到分支 (`git push origin feature/amazing-feature`)
+5. 提交Pull Request
+
+### 代码风格
+
+- 遵循Go官方的代码风格指南
+- 所有公开函数和结构应有完整的注释
+- 单元测试覆盖率应达到70%以上
+
+## 许可证
+
+本项目采用MIT许可证 - 详情请参阅 LICENSE 文件
+
+## 联系方式
+
+项目维护者: [Your Name] - your.email@example.com
+
+项目链接: [https://github.com/your-username/crypto-custody](https://github.com/your-username/crypto-custody)
