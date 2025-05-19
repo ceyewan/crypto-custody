@@ -28,7 +28,7 @@ var (
 	// ErrTransactionInProgress 用户已有正在处理中的交易
 	ErrTransactionInProgress = errors.New("交易正在处理中")
 	// errReceiptNotAvailable 交易收据暂时不可用
-	errReceiptNotAvailable = errors.New("交易收据暂不可用")
+	ErrReceiptNotAvailable = errors.New("交易收据暂不可用")
 )
 
 // TransactionManager 管理以太坊交易的全生命周期

@@ -39,9 +39,9 @@ type ClientConfig struct {
 //   - ClientConfig: 包含默认参数的配置对象
 func DefaultConfig() ClientConfig {
 	return ClientConfig{
-		RPC:         os.Getenv("ETH_RPC"), // 从环境变量获取RPC地址
-		ChainID:     big.NewInt(11155111), // Sepolia 测试网
-		ConfirmTime: 60 * time.Second,     // 等待交易确认的默认时间
+		RPC:         "https://sepolia.infura.io/v3/" + os.Getenv("ETH_RPC"), // 从环境变量获取RPC地址
+		ChainID:     big.NewInt(11155111),                                   // Sepolia 测试网
+		ConfirmTime: 60 * time.Second,                                       // 等待交易确认的默认时间
 	}
 }
 
