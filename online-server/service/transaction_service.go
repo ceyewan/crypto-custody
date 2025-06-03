@@ -7,6 +7,7 @@ import (
 	"online-server/model"
 	"online-server/utils"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"gorm.io/gorm"
@@ -296,4 +297,168 @@ func (s *TransactionService) ParseTransactionReceipt(tx *model.Transaction) (*ty
 	}
 
 	return &receipt, nil
+}
+
+// GetTransactionsByMessageHash 通过消息哈希查询交易记录
+//
+// 参数:
+//   - messageHash: 消息哈希字符串
+//
+// 返回:
+//   - *model.Transaction: 获取到的交易记录
+//   - error: 查询过程中的错误
+func (s *TransactionService) GetTransactionsByMessageHash(messageHash string) (*model.Transaction, error) {
+	var tx model.Transaction
+	result := utils.GetDB().Where("message_hash = ?", messageHash).First(&tx)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil, errors.New("未找到对应消息哈希的交易")
+		}
+		return nil, fmt.Errorf("查询交易记录失败: %w", result.Error)
+	}
+
+	return &tx, nil
+}
+
+// GetTransactionsList 获取交易列表，支持分页和筛选
+//
+// 参数:
+//   - page: 页码（从1开始）
+//   - pageSize: 每页大小
+//   - status: 状态筛选（可选）
+//   - address: 地址筛选（可选，匹配发送方或接收方）
+//
+// 返回:
+//   - []model.Transaction: 交易记录列表
+//   - int64: 总记录数
+//   - error: 查询过程中的错误
+func (s *TransactionService) GetTransactionsList(page, pageSize int, status string, address string) ([]model.Transaction, int64, error) {
+	var txs []model.Transaction
+	var total int64
+
+	if page <= 0 {
+		page = 1
+	}
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+
+	// 构建查询条件
+	query := utils.GetDB().Model(&model.Transaction{})
+
+	// 状态筛选
+	if status != "" {
+		query = query.Where("status = ?", status)
+	}
+
+	// 地址筛选（匹配发送方或接收方）
+	if address != "" {
+		query = query.Where("from_address = ? OR to_address = ?", address, address)
+	}
+
+	// 获取总数
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("查询交易总数失败: %w", err)
+	}
+
+	// 分页查询
+	offset := (page - 1) * pageSize
+	if err := query.Order("created_at DESC").Limit(pageSize).Offset(offset).Find(&txs).Error; err != nil {
+		return nil, 0, fmt.Errorf("查询交易列表失败: %w", err)
+	}
+
+	return txs, total, nil
+}
+
+// GetTransactionStats 获取交易统计信息
+//
+// 返回:
+//   - map[string]interface{}: 包含各种统计数据的map
+//   - error: 查询过程中的错误
+func (s *TransactionService) GetTransactionStats() (map[string]interface{}, error) {
+	var stats map[string]interface{} = make(map[string]interface{})
+
+	// 总交易数
+	var totalCount int64
+	if err := utils.GetDB().Model(&model.Transaction{}).Count(&totalCount).Error; err != nil {
+		return nil, fmt.Errorf("查询总交易数失败: %w", err)
+	}
+	stats["totalCount"] = totalCount
+
+	// 各状态交易数
+	statusCounts := make(map[string]int64)
+	var results []struct {
+		Status int
+		Count  int64
+	}
+
+	if err := utils.GetDB().Model(&model.Transaction{}).
+		Select("status, count(*) as count").
+		Group("status").
+		Scan(&results).Error; err != nil {
+		return nil, fmt.Errorf("查询状态统计失败: %w", err)
+	}
+
+	// 初始化所有状态计数为0
+	statusCounts["pendingCount"] = 0
+	statusCounts["signedCount"] = 0
+	statusCounts["submittedCount"] = 0
+	statusCounts["confirmedCount"] = 0
+	statusCounts["failedCount"] = 0
+
+	// 填充实际统计数据
+	for _, result := range results {
+		switch model.TransactionStatus(result.Status) {
+		case model.StatusPending:
+			statusCounts["pendingCount"] = result.Count
+		case model.StatusSigned:
+			statusCounts["signedCount"] = result.Count
+		case model.StatusSubmitted:
+			statusCounts["submittedCount"] = result.Count
+		case model.StatusConfirmed:
+			statusCounts["confirmedCount"] = result.Count
+		case model.StatusFailed:
+			statusCounts["failedCount"] = result.Count
+		}
+	}
+
+	// 将状态统计添加到总统计中
+	for key, value := range statusCounts {
+		stats[key] = value
+	}
+
+	// 今日交易数
+	var todayCount int64
+	today := fmt.Sprintf("%s%%", time.Now().Format("2006-01-02"))
+	if err := utils.GetDB().Model(&model.Transaction{}).
+		Where("created_at LIKE ?", today).
+		Count(&todayCount).Error; err != nil {
+		return nil, fmt.Errorf("查询今日交易数失败: %w", err)
+	}
+	stats["todayCount"] = todayCount
+
+	// 本周交易数
+	var weekCount int64
+	weekStart := time.Now().AddDate(0, 0, -7)
+	if err := utils.GetDB().Model(&model.Transaction{}).
+		Where("created_at >= ?", weekStart).
+		Count(&weekCount).Error; err != nil {
+		return nil, fmt.Errorf("查询本周交易数失败: %w", err)
+	}
+	stats["weekCount"] = weekCount
+
+	// 本月交易数
+	var monthCount int64
+	monthStart := time.Now().AddDate(0, -1, 0)
+	if err := utils.GetDB().Model(&model.Transaction{}).
+		Where("created_at >= ?", monthStart).
+		Count(&monthCount).Error; err != nil {
+		return nil, fmt.Errorf("查询本月交易数失败: %w", err)
+	}
+	stats["monthCount"] = monthCount
+
+	// 总交易金额（仅计算已确认的交易）
+	stats["totalValue"] = "0" // 默认值，实际计算需要解析value字段
+
+	return stats, nil
 }

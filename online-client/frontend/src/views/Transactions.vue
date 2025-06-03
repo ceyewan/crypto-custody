@@ -117,7 +117,7 @@
                         v-model="createForm.amount"
                         :precision="6"
                         :step="0.001"
-                        :min="0.000001"
+                        :min="0.001"
                         style="width: 100%">
                     </el-input-number>
                     <span style="margin-left: 10px;">ETH</span>
