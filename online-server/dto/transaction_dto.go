@@ -41,16 +41,17 @@ type TransactionListRequest struct {
 
 // 交易详情响应
 type TransactionDetailResponse struct {
-	ID          uint   `json:"id"`
-	FromAddress string `json:"fromAddress"`
-	ToAddress   string `json:"toAddress"`
-	Value       string `json:"value"`
-	MessageHash string `json:"messageHash"`
-	TxHash      string `json:"txHash"`
-	Status      int    `json:"status"`
-	StatusText  string `json:"statusText"`
-	CreatedAt   string `json:"createdAt"`
-	UpdatedAt   string `json:"updatedAt"`
+	ID          uint        `json:"id"`
+	FromAddress string      `json:"fromAddress"`
+	ToAddress   string      `json:"toAddress"`
+	Value       string      `json:"value"`
+	Amount      string      `json:"amount"` // 前端期望的字段名
+	MessageHash string      `json:"messageHash"`
+	TxHash      string      `json:"txHash"`
+	Status      interface{} `json:"status"` // 支持字符串和数字
+	StatusText  string      `json:"statusText"`
+	CreatedAt   string      `json:"createdAt"`
+	UpdatedAt   string      `json:"updatedAt"`
 }
 
 // 交易列表响应

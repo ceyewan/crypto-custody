@@ -208,14 +208,16 @@ func GetTransactionList(c *gin.Context) {
 	var responseTransactions []dto.TransactionDetailResponse
 	for _, tx := range transactions {
 		statusText := getStatusText(tx.Status)
+		statusString := getStatusString(tx.Status)
 		responseTransactions = append(responseTransactions, dto.TransactionDetailResponse{
 			ID:          tx.ID,
 			FromAddress: tx.FromAddress,
 			ToAddress:   tx.ToAddress,
 			Value:       tx.Value,
+			Amount:      tx.Value, // 添加amount字段给前端使用
 			MessageHash: tx.MessageHash,
 			TxHash:      tx.TxHash,
-			Status:      int(tx.Status),
+			Status:      statusString, // 使用字符串状态
 			StatusText:  statusText,
 			CreatedAt:   tx.CreatedAt.Format("2006-01-02 15:04:05"),
 			UpdatedAt:   tx.UpdatedAt.Format("2006-01-02 15:04:05"),
@@ -266,14 +268,16 @@ func GetAllTransactions(c *gin.Context) {
 	var responseTransactions []dto.TransactionDetailResponse
 	for _, tx := range transactions {
 		statusText := getStatusText(tx.Status)
+		statusString := getStatusString(tx.Status)
 		responseTransactions = append(responseTransactions, dto.TransactionDetailResponse{
 			ID:          tx.ID,
 			FromAddress: tx.FromAddress,
 			ToAddress:   tx.ToAddress,
 			Value:       tx.Value,
+			Amount:      tx.Value, // 添加amount字段给前端使用
 			MessageHash: tx.MessageHash,
 			TxHash:      tx.TxHash,
-			Status:      int(tx.Status),
+			Status:      statusString, // 使用字符串状态
 			StatusText:  statusText,
 			CreatedAt:   tx.CreatedAt.Format("2006-01-02 15:04:05"),
 			UpdatedAt:   tx.UpdatedAt.Format("2006-01-02 15:04:05"),
@@ -310,14 +314,16 @@ func GetTransactionByID(c *gin.Context) {
 
 	// 转换为响应格式
 	statusText := getStatusText(transaction.Status)
+	statusString := getStatusString(transaction.Status)
 	responseTransaction := dto.TransactionDetailResponse{
 		ID:          transaction.ID,
 		FromAddress: transaction.FromAddress,
 		ToAddress:   transaction.ToAddress,
 		Value:       transaction.Value,
+		Amount:      transaction.Value, // 添加amount字段给前端使用
 		MessageHash: transaction.MessageHash,
 		TxHash:      transaction.TxHash,
-		Status:      int(transaction.Status),
+		Status:      statusString, // 使用字符串状态
 		StatusText:  statusText,
 		CreatedAt:   transaction.CreatedAt.Format("2006-01-02 15:04:05"),
 		UpdatedAt:   transaction.UpdatedAt.Format("2006-01-02 15:04:05"),
@@ -391,5 +397,23 @@ func getStatusText(status model.TransactionStatus) string {
 		return "失败"
 	default:
 		return "未知状态"
+	}
+}
+
+// getStatusString 获取状态的字符串表示（前端期望格式）
+func getStatusString(status model.TransactionStatus) string {
+	switch status {
+	case model.StatusPending:
+		return "prepared"
+	case model.StatusSigned:
+		return "signed"
+	case model.StatusSubmitted:
+		return "sent"
+	case model.StatusConfirmed:
+		return "confirmed"
+	case model.StatusFailed:
+		return "failed"
+	default:
+		return "unknown"
 	}
 }
