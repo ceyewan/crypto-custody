@@ -244,7 +244,28 @@ export default {
         }
 
         if (response.data.code === 200) {
-          this.userAccounts = response.data.data.accounts || response.data.data || []
+          const accountsData = response.data.data
+          let rawAccounts = []
+
+          if (Array.isArray(accountsData)) {
+            rawAccounts = accountsData
+          } else if (accountsData && Array.isArray(accountsData.accounts)) {
+            rawAccounts = accountsData.accounts
+          } else {
+            rawAccounts = []
+          }
+
+          // 转换属性名称为小写，匹配模板中的期望格式
+          this.userAccounts = rawAccounts.map(account => ({
+            id: account.ID,
+            address: account.Address,
+            coinType: account.CoinType,
+            balance: account.Balance,
+            importedBy: account.ImportedBy,
+            description: account.Description,
+            createdAt: account.CreatedAt,
+            updatedAt: account.UpdatedAt
+          }))
         }
       } catch (error) {
         console.error('获取账户列表失败:', error)
