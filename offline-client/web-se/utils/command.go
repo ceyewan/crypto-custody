@@ -5,6 +5,7 @@ import (
 	"context"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -16,6 +17,31 @@ import (
 const (
 	defaultTimeout = 60 * time.Second
 )
+
+// getOSBinDir 根据操作系统返回对应的二进制文件目录
+func getOSBinDir() string {
+	switch runtime.GOOS {
+	case "windows":
+		return "Windows"
+	case "linux":
+		return "Linux"
+	case "darwin":
+		return "MacOS"
+	default:
+		// 默认使用 Linux
+		return "Linux"
+	}
+}
+
+// buildCmdPath 构建跨平台的命令路径
+func buildCmdPath(cfg *config.Config, binName string) string {
+	osDir := getOSBinDir()
+	// 在 Windows 下添加 .exe 后缀
+	if runtime.GOOS == "windows" && !strings.HasSuffix(binName, ".exe") {
+		binName += ".exe"
+	}
+	return filepath.Join(cfg.BinDir, osDir, binName)
+}
 
 // ExecCommand 执行命令并返回输出
 func ExecCommand(ctx context.Context, cfg *config.Config, name string, args ...string) (string, error) {
@@ -49,12 +75,13 @@ func ExecCommand(ctx context.Context, cfg *config.Config, name string, args ...s
 
 // RunKeyGen 运行密钥生成命令
 func RunKeyGen(ctx context.Context, cfg *config.Config, t, n, i int, output string) error {
-	cmdPath := filepath.Join(cfg.BinDir, cfg.KeygenBin)
+	cmdPath := buildCmdPath(cfg, cfg.KeygenBin)
 
 	args := buildKeygenArgs(cfg, t, n, i, output)
 
 	clog.Info("开始密钥生成",
 		clog.String("command", cmdPath),
+		clog.String("os", runtime.GOOS),
 		clog.Int("threshold", t),
 		clog.Int("parties", n),
 		clog.Int("index", i),
@@ -72,12 +99,13 @@ func RunKeyGen(ctx context.Context, cfg *config.Config, t, n, i int, output stri
 
 // RunSigning 运行签名命令
 func RunSigning(ctx context.Context, cfg *config.Config, parties, data, localShare string) (string, error) {
-	cmdPath := filepath.Join(cfg.BinDir, cfg.SigningBin)
+	cmdPath := buildCmdPath(cfg, cfg.SigningBin)
 
 	args := buildSigningArgs(cfg, parties, data, localShare)
 
 	clog.Info("开始签名操作",
 		clog.String("command", cmdPath),
+		clog.String("os", runtime.GOOS),
 		clog.String("parties", parties),
 		clog.String("data", data),
 		clog.String("local_share", localShare))
