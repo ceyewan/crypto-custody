@@ -61,7 +61,7 @@ const routes = [
 ]
 
 const router = new VueRouter({
-    mode: 'history',
+    mode: 'hash', // Electron 环境下使用 hash 模式
     base: process.env.BASE_URL,
     routes
 })
@@ -89,4 +89,4 @@ router.beforeEach((to, from, next) => {
     }
 })
 
-export default router 
+export default router
