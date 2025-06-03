@@ -10,7 +10,8 @@
   },
   "dependencies": {
     "axios": "^0.24.0",
-    "element-ui": "^2.15.6",
+    "babel-loader": "^10.0.0",
+    "element-ui": "^2.15.14",
     "vue": "^2.6.14",
     "vue-router": "^3.5.1",
     "vuex": "^3.6.2"
