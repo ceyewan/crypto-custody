@@ -3,36 +3,21 @@
         <el-card>
             <div slot="header" class="clearfix">
                 <span>交易管理</span>
-                <el-button style="float: right; padding: 3px 0" type="primary" size="small" @click="showCreateTransactionDialog">
-                    发起交易
+                <el-button style="float: right; padding: 3px 0" type="text" @click="fetchTransactions">
+                    刷新
                 </el-button>
             </div>
 
-            <!-- 搜索区域 -->
-            <div class="search-area">
+            <!-- 发起交易区域 -->
+            <div class="action-area">
                 <el-row :gutter="20">
-                    <el-col :span="6">
-                        <el-input v-model="searchFromAddress" placeholder="发送方地址" clearable>
-                            <template slot="prepend">发送方</template>
-                        </el-input>
+                    <el-col :span="18">
+                        <span class="transaction-summary">共 {{ transactionList.length }} 笔交易</span>
                     </el-col>
-                    <el-col :span="6">
-                        <el-input v-model="searchToAddress" placeholder="接收方地址" clearable>
-                            <template slot="prepend">接收方</template>
-                        </el-input>
-                    </el-col>
-                    <el-col :span="4">
-                        <el-select v-model="statusFilter" placeholder="状态筛选" clearable>
-                            <el-option label="准备中" value="prepared"></el-option>
-                            <el-option label="已签名" value="signed"></el-option>
-                            <el-option label="已发送" value="sent"></el-option>
-                            <el-option label="已确认" value="confirmed"></el-option>
-                            <el-option label="失败" value="failed"></el-option>
-                        </el-select>
-                    </el-col>
-                    <el-col :span="4">
-                        <el-button type="primary" @click="searchTransactions">搜索</el-button>
-                        <el-button @click="resetSearch">重置</el-button>
+                    <el-col :span="6" style="text-align: right;">
+                        <el-button type="primary" @click="showCreateTransactionDialog">
+                            <i class="el-icon-plus"></i> 发起交易
+                        </el-button>
                     </el-col>
                 </el-row>
             </div>
@@ -52,7 +37,7 @@
                 </el-table-column>
                 <el-table-column prop="amount" label="金额" width="120">
                     <template slot-scope="scope">
-                        {{ scope.row.amount }} ETH
+                        {{ scope.row.amount }}
                     </template>
                 </el-table-column>
                 <el-table-column prop="status" label="状态" width="100">
@@ -71,13 +56,16 @@
                         {{ formatDateTime(scope.row.createdAt) }}
                     </template>
                 </el-table-column>
-                <el-table-column label="操作" width="160">
+                <el-table-column label="操作" width="220">
                     <template slot-scope="scope">
                         <el-button v-if="scope.row.status === 'prepared'" type="warning" size="mini" @click="signTransaction(scope.row)">
-                            签名发送
+                            操作
                         </el-button>
                         <el-button type="primary" size="mini" @click="viewTransactionDetail(scope.row)">
                             详情
+                        </el-button>
+                        <el-button type="danger" size="mini" @click="deleteTransaction(scope.row)" style="margin-left: 5px">
+                            删除
                         </el-button>
                     </template>
                 </el-table-column>
@@ -157,23 +145,63 @@
             <div v-if="selectedTransaction" class="transaction-detail">
                 <el-descriptions :column="1" border>
                     <el-descriptions-item label="交易ID">{{ selectedTransaction.id }}</el-descriptions-item>
-                    <el-descriptions-item label="发送方地址">{{ selectedTransaction.fromAddress }}</el-descriptions-item>
-                    <el-descriptions-item label="接收方地址">{{ selectedTransaction.toAddress }}</el-descriptions-item>
-                    <el-descriptions-item label="转账金额">{{ selectedTransaction.amount }} ETH</el-descriptions-item>
+                    <el-descriptions-item label="发送方地址">
+                        <div class="address-row">
+                            <span class="address-text">{{ selectedTransaction.fromAddress }}</span>
+                            <div class="address-actions">
+                                <el-button type="text" size="mini" @click="copyText(selectedTransaction.fromAddress)">
+                                    <i class="el-icon-document-copy"></i> 复制
+                                </el-button>
+                            </div>
+                        </div>
+                    </el-descriptions-item>
+                    <el-descriptions-item label="接收方地址">
+                        <div class="address-row">
+                            <span class="address-text">{{ selectedTransaction.toAddress }}</span>
+                            <div class="address-actions">
+                                <el-button type="text" size="mini" @click="copyText(selectedTransaction.toAddress)">
+                                    <i class="el-icon-document-copy"></i> 复制
+                                </el-button>
+                            </div>
+                        </div>
+                    </el-descriptions-item>
+                    <el-descriptions-item label="转账金额">{{ selectedTransaction.amount }}</el-descriptions-item>
                     <el-descriptions-item label="状态">
                         <el-tag :type="getStatusTagType(selectedTransaction.status)">{{ getStatusText(selectedTransaction.status) }}</el-tag>
                     </el-descriptions-item>
                     <el-descriptions-item label="消息哈希" v-if="selectedTransaction.messageHash">
-                        <span>{{ selectedTransaction.messageHash }}</span>
-                        <el-button type="text" size="mini" @click="copyText(selectedTransaction.messageHash)">复制</el-button>
+                        <div class="hash-row">
+                            <span class="hash-text">{{ selectedTransaction.messageHash }}</span>
+                            <div class="hash-actions">
+                                <el-button type="text" size="mini" @click="copyText(selectedTransaction.messageHash)">
+                                    <i class="el-icon-document-copy"></i> 复制
+                                </el-button>
+                            </div>
+                        </div>
                     </el-descriptions-item>
                     <el-descriptions-item label="交易哈希" v-if="selectedTransaction.txHash">
-                        <span>{{ selectedTransaction.txHash }}</span>
-                        <el-button type="text" size="mini" @click="copyText(selectedTransaction.txHash)">复制</el-button>
+                        <div class="hash-row">
+                            <span class="hash-text">{{ selectedTransaction.txHash }}</span>
+                            <div class="hash-actions">
+                                <el-button type="text" size="mini" @click="copyText(selectedTransaction.txHash)">
+                                    <i class="el-icon-document-copy"></i> 复制
+                                </el-button>
+                            </div>
+                        </div>
                     </el-descriptions-item>
                     <el-descriptions-item label="创建时间">{{ formatDateTime(selectedTransaction.createdAt) }}</el-descriptions-item>
                     <el-descriptions-item label="更新时间" v-if="selectedTransaction.updatedAt">{{ formatDateTime(selectedTransaction.updatedAt) }}</el-descriptions-item>
                 </el-descriptions>
+
+                <!-- 操作按钮区域 -->
+                <div class="detail-actions">
+                    <el-button type="primary" @click="downloadTransactionInfo">
+                        <i class="el-icon-download"></i> 下载交易信息
+                    </el-button>
+                    <el-button @click="copyAllTransactionInfo">
+                        <i class="el-icon-document-copy"></i> 复制全部信息
+                    </el-button>
+                </div>
             </div>
         </el-dialog>
     </div>
@@ -494,6 +522,95 @@ export default {
         failed: 'danger'
       }
       return typeMap[status] || 'info'
+    },
+
+    // 复制全部交易信息
+    copyAllTransactionInfo () {
+      if (!this.selectedTransaction) return
+
+      const info = this.formatTransactionInfo(this.selectedTransaction)
+      this.copyText(info)
+    },
+
+    // 下载交易信息
+    downloadTransactionInfo () {
+      if (!this.selectedTransaction) return
+
+      const info = this.formatTransactionInfo(this.selectedTransaction)
+      const filename = `transaction_${this.selectedTransaction.id}_${new Date().getTime()}.txt`
+
+      // 创建下载链接
+      const blob = new Blob([info], { type: 'text/plain;charset=utf-8' })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+
+      this.$message.success('交易信息已下载')
+    },
+
+    // 删除交易
+    async deleteTransaction (transaction) {
+      try {
+        const confirm = await this.$confirm(
+          `确定要删除交易 ID "${transaction.id}" 吗？此操作不可撤销。`,
+          '确认删除',
+          {
+            confirmButtonText: '确定',
+            cancelButtonText: '取消',
+            type: 'warning'
+          }
+        )
+
+        if (confirm) {
+          const response = await transactionApi.deleteTransaction(transaction.id)
+          if (response.data.code === 200) {
+            this.$message.success('交易删除成功')
+            this.fetchTransactions() // 刷新列表
+          } else {
+            throw new Error(response.data.message || '删除交易失败')
+          }
+        }
+      } catch (error) {
+        if (error !== 'cancel') {
+          console.error('删除交易失败:', error)
+          let errorMsg = '删除交易失败'
+          if (error.response && error.response.data) {
+            errorMsg = error.response.data.message || errorMsg
+          } else if (error.message) {
+            errorMsg = error.message
+          }
+          this.$message.error(errorMsg)
+        }
+      }
+    },
+
+    // 格式化交易信息
+    formatTransactionInfo (transaction) {
+      let info = '交易详情信息\n'
+      info += '================\n\n'
+      info += `交易ID: ${transaction.id}\n`
+      info += `发送方地址: ${transaction.fromAddress}\n`
+      info += `接收方地址: ${transaction.toAddress}\n`
+      info += `转账金额: ${transaction.amount}\n`
+      info += `状态: ${this.getStatusText(transaction.status)}\n`
+      if (transaction.messageHash) {
+        info += `消息哈希: ${transaction.messageHash}\n`
+      }
+      if (transaction.txHash) {
+        info += `交易哈希: ${transaction.txHash}\n`
+      }
+      info += `创建时间: ${this.formatDateTime(transaction.createdAt)}\n`
+      if (transaction.updatedAt) {
+        info += `更新时间: ${this.formatDateTime(transaction.updatedAt)}\n`
+      }
+      info += '\n生成时间: ' + new Date().toLocaleString('zh-CN')
+
+      return info
     }
   },
   watch: {
@@ -509,8 +626,15 @@ export default {
     padding: 20px;
 }
 
-.search-area {
+.action-area {
     margin-bottom: 20px;
+    padding: 15px 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.transaction-summary {
+    font-size: 14px;
+    color: #666;
 }
 
 .empty-state {
@@ -526,5 +650,38 @@ export default {
 .sign-transaction,
 .transaction-detail {
     padding: 10px 0;
+}
+
+.address-row,
+.hash-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.address-text,
+.hash-text {
+    flex: 1;
+    word-break: break-all;
+    margin-right: 10px;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+}
+
+.address-actions,
+.hash-actions {
+    flex-shrink: 0;
+}
+
+.detail-actions {
+    margin-top: 20px;
+    text-align: center;
+    padding-top: 15px;
+    border-top: 1px solid #f0f0f0;
+}
+
+.detail-actions .el-button {
+    margin: 0 10px;
 }
 </style>

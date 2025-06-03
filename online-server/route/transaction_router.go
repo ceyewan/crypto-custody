@@ -43,6 +43,7 @@ func TransactionRouter(r *gin.Engine) {
 			{
 				admin.GET("/all", handler.GetAllTransactions)       // 获取所有交易 (管理员)
 				admin.GET("/stats", handler.GetAllTransactionStats) // 获取所有交易统计 (管理员)
+				admin.DELETE("/:id", handler.DeleteTransaction)     // 删除交易 (管理员)
 			}
 		}
 	}

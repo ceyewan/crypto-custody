@@ -462,3 +462,21 @@ func (s *TransactionService) GetTransactionStats() (map[string]interface{}, erro
 
 	return stats, nil
 }
+
+// DeleteTransaction 删除交易记录
+//
+// 参数:
+//   - id: 要删除的交易记录ID
+//
+// 返回:
+//   - error: 删除过程中的错误
+func (s *TransactionService) DeleteTransaction(id uint) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := utils.GetDB().Delete(&model.Transaction{}, id).Error; err != nil {
+		return fmt.Errorf("删除交易记录失败: %w", err)
+	}
+
+	return nil
+}
