@@ -6,6 +6,7 @@ import (
 	"online-server/model"
 	"online-server/service"
 	"online-server/utils"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
@@ -184,4 +185,46 @@ func BatchImportAccounts(c *gin.Context) {
 
 	// 返回成功响应
 	utils.ResponseWithData(c, "批量导入账户成功", nil)
+}
+
+// DeleteAccount 删除账户(仅管理员)
+//
+// 需要JWT认证，且用户必须具有管理员权限
+// 通过URL参数获取账户ID，删除对应的账户
+//
+// 路由: DELETE /api/accounts/admin/:id
+func DeleteAccount(c *gin.Context) {
+	// 使用CheckAdminRole检查是否有管理员权限
+	if !utils.CheckAdminRole(c) {
+		return
+	}
+
+	// 获取URL中的ID参数
+	idStr := c.Param("id")
+	if idStr == "" {
+		utils.ResponseWithError(c, http.StatusBadRequest, "缺少账户ID参数")
+		return
+	}
+
+	// 转换ID为uint类型
+	accountID, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		utils.ResponseWithError(c, http.StatusBadRequest, "无效的账户ID格式")
+		return
+	}
+
+	// 获取账户服务实例
+	accountService, err := service.GetAccountServiceInstance()
+	if utils.HandleServiceInitError(c, err) {
+		return
+	}
+
+	// 删除账户
+	if err := accountService.DeleteAccount(uint(accountID)); err != nil {
+		utils.ResponseWithError(c, http.StatusInternalServerError, "删除账户失败: "+err.Error())
+		return
+	}
+
+	// 返回成功响应
+	utils.ResponseWithData(c, "删除账户成功", nil)
 }

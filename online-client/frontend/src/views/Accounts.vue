@@ -35,7 +35,8 @@
             </div>
 
             <el-table :data="filteredAccountList" v-loading="loading" style="width: 100%">
-                <el-table-column prop="address" label="地址" width="300">
+                <el-table-column prop="id" label="ID" width="80"></el-table-column>
+                <el-table-column prop="address" label="地址" width="280">
                     <template slot-scope="scope">
                         <span :title="scope.row.address">{{ formatAddress(scope.row.address) }}</span>
                         <el-button type="text" size="mini" @click="copyAddress(scope.row.address)">复制</el-button>
@@ -54,10 +55,13 @@
                 </el-table-column>
                 <el-table-column prop="importedBy" label="导入者" width="120"></el-table-column>
                 <el-table-column prop="description" label="描述" show-overflow-tooltip></el-table-column>
-                <el-table-column label="操作" width="120">
+                <el-table-column label="操作" width="160">
                     <template slot-scope="scope">
                         <el-button type="primary" size="mini" @click="viewAccountDetail(scope.row)">
                             详情
+                        </el-button>
+                        <el-button type="danger" size="mini" @click="deleteAccount(scope.row)" style="margin-left: 5px">
+                            删除
                         </el-button>
                     </template>
                 </el-table-column>
@@ -439,6 +443,41 @@ export default {
         this.$message.error('复制失败，请手动复制')
       }
       document.body.removeChild(textArea)
+    },
+
+    async deleteAccount (account) {
+      try {
+        const confirm = await this.$confirm(
+          `确定要删除账户 "${this.formatAddress(account.address)}" 吗？此操作不可撤销。`,
+          '确认删除',
+          {
+            confirmButtonText: '确定',
+            cancelButtonText: '取消',
+            type: 'warning'
+          }
+        )
+
+        if (confirm) {
+          const response = await accountApi.deleteAccount(account.id)
+          if (response.data.code === 200) {
+            this.$message.success('账户删除成功')
+            this.fetchAccountList() // 刷新列表
+          } else {
+            throw new Error(response.data.message || '删除账户失败')
+          }
+        }
+      } catch (error) {
+        if (error !== 'cancel') {
+          console.error('删除账户失败:', error)
+          let errorMsg = '删除账户失败'
+          if (error.response && error.response.data) {
+            errorMsg = error.response.data.message || errorMsg
+          } else if (error.message) {
+            errorMsg = error.message
+          }
+          this.$message.error(errorMsg)
+        }
+      }
     },
 
     refreshAccountList () {

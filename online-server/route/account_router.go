@@ -31,7 +31,8 @@ func AccountRoutes(r *gin.Engine) {
 			admin := authenticated.Group("/admin")
 			admin.Use(middleware.AdminRequired())
 			{
-				admin.GET("/all", handler.GetAllAccounts) // 获取所有账户信息（仅管理员）
+				admin.GET("/all", handler.GetAllAccounts)   // 获取所有账户信息（仅管理员）
+				admin.DELETE("/:id", handler.DeleteAccount) // 删除账户（仅管理员）
 			}
 		}
 	}

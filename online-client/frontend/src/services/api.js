@@ -146,6 +146,11 @@ export const accountApi = {
   // 获取所有账户 (管理员)
   getAllAccounts () {
     return apiClient.get('/api/accounts/admin/all')
+  },
+
+  // 删除账户 (管理员)
+  deleteAccount (id) {
+    return apiClient.delete(`/api/accounts/admin/${id}`)
   }
 }
 
@@ -189,6 +194,11 @@ export const transactionApi = {
   // 获取所有交易统计 (管理员)
   getAllTransactionStats () {
     return apiClient.get('/api/transaction/admin/stats')
+  },
+
+  // 删除交易 (管理员)
+  deleteTransaction (id) {
+    return apiClient.delete(`/api/transaction/admin/${id}`)
   }
 }
 
