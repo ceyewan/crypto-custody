@@ -11,3 +11,4 @@ offline-server/logs/*
 offline-server/data/crypto-custody.db
 **/node_modules
 online-server/tmp/*
+offline-server/bin/offline-server

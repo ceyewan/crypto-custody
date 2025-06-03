@@ -113,94 +113,94 @@ import { mapGetters } from 'vuex'
 import { userApi, accountApi } from '../services/api'
 
 export default {
-    name: 'Dashboard',
-    data() {
-        return {
-            activeMenu: this.$route.path,
-            accountCount: 0,
-            transactionCount: 0,
-            userCount: 0
-        }
-    },
-    computed: {
-        ...mapGetters([
-            'currentUser',
-            'isAdmin',
-            'isOfficer',
-            'isGuest'
-        ]),
-        user() {
-            return this.currentUser || {}
-        },
-        roleText() {
-            if (this.isAdmin) return '管理员'
-            if (this.isOfficer) return '警员'
-            return '访客'
-        }
-    },
-    created() {
-        this.loadDashboardStats()
-    },
-    methods: {
-        // 加载仪表板统计信息
-        async loadDashboardStats() {
-            try {
-                // 加载账户数量（如果是警员或管理员）
-                if (this.isOfficer) {
-                    const accountResponse = await accountApi.getUserAccounts()
-                    if (accountResponse.data.code === 200) {
-                        this.accountCount = accountResponse.data.data.length
-                    }
-                }
-
-                // 加载用户数量（如果是管理员）
-                if (this.isAdmin) {
-                    const userResponse = await userApi.getUsers()
-                    if (userResponse.data.code === 200) {
-                        this.userCount = userResponse.data.data.length
-                    }
-                }
-
-                // 模拟交易数量（实际应该从API获取）
-                this.transactionCount = Math.floor(Math.random() * 100)
-            } catch (error) {
-                console.error('Failed to load dashboard stats:', error)
-            }
-        },
-
-        // 处理下拉菜单命令
-        handleCommand(command) {
-            switch (command) {
-                case 'profile':
-                    this.$router.push('/profile')
-                    break
-                case 'logout':
-                    this.handleLogout()
-                    break
-            }
-        },
-
-        // 退出登录
-        async handleLogout() {
-            try {
-                // 调用登出API
-                await userApi.logout()
-            } catch (error) {
-                console.error('Logout API failed:', error)
-                // 即使API失败也继续登出流程
-            } finally {
-                this.$store.dispatch('logout')
-                this.$router.push('/login')
-                this.$message.success('已退出登录')
-            }
-        }
-    },
-    watch: {
-        // 路径变化时更新活动菜单
-        '$route.path'(newPath) {
-            this.activeMenu = newPath
-        }
+  name: 'Dashboard',
+  data () {
+    return {
+      activeMenu: this.$route.path,
+      accountCount: 0,
+      transactionCount: 0,
+      userCount: 0
     }
+  },
+  computed: {
+    ...mapGetters([
+      'currentUser',
+      'isAdmin',
+      'isOfficer',
+      'isGuest'
+    ]),
+    user () {
+      return this.currentUser || {}
+    },
+    roleText () {
+      if (this.isAdmin) return '管理员'
+      if (this.isOfficer) return '警员'
+      return '访客'
+    }
+  },
+  created () {
+    this.loadDashboardStats()
+  },
+  methods: {
+    // 加载仪表板统计信息
+    async loadDashboardStats () {
+      try {
+        // 加载账户数量（如果是警员或管理员）
+        if (this.isOfficer) {
+          const accountResponse = await accountApi.getUserAccounts()
+          if (accountResponse.data.code === 200) {
+            this.accountCount = accountResponse.data.data.length
+          }
+        }
+
+        // 加载用户数量（如果是管理员）
+        if (this.isAdmin) {
+          const userResponse = await userApi.getUsers()
+          if (userResponse.data.code === 200) {
+            this.userCount = userResponse.data.data.length
+          }
+        }
+
+        // 模拟交易数量（实际应该从API获取）
+        this.transactionCount = Math.floor(Math.random() * 100)
+      } catch (error) {
+        console.error('Failed to load dashboard stats:', error)
+      }
+    },
+
+    // 处理下拉菜单命令
+    handleCommand (command) {
+      switch (command) {
+        case 'profile':
+          this.$router.push('/profile')
+          break
+        case 'logout':
+          this.handleLogout()
+          break
+      }
+    },
+
+    // 退出登录
+    async handleLogout () {
+      try {
+        // 调用登出API
+        await userApi.logout()
+      } catch (error) {
+        console.error('Logout API failed:', error)
+        // 即使API失败也继续登出流程
+      } finally {
+        this.$store.dispatch('logout')
+        this.$router.push('/login')
+        this.$message.success('已退出登录')
+      }
+    }
+  },
+  watch: {
+    // 路径变化时更新活动菜单
+    '$route.path' (newPath) {
+      this.activeMenu = newPath
+    }
+  }
 }
 </script>
 

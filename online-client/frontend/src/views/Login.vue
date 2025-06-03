@@ -37,70 +37,70 @@
 import { userApi } from '../services/api'
 
 export default {
-    name: 'Login',
-    data() {
-        return {
-            loginForm: {
-                username: '',
-                password: ''
-            },
-            rules: {
-                username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
-                password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
-            },
-            loading: false
-        }
-    },
-    methods: {
-        handleLogin() {
-            this.$refs.loginForm.validate(async valid => {
-                if (!valid) {
-                    return false
-                }
-
-                this.loading = true
-
-                try {
-                    const response = await userApi.login({
-                        username: this.loginForm.username,
-                        password: this.loginForm.password
-                    })
-
-                    // 验证响应数据
-                    if (!response.data || response.data.code !== 200) {
-                        throw new Error(response.data?.message || '登录失败')
-                    }
-
-                    const userData = response.data.data
-                    
-                    // 保存用户信息和令牌
-                    this.$store.dispatch('login', {
-                        token: userData.token,
-                        user: userData.user
-                    })
-
-                    console.log('User login successful:', userData.user.username, userData.user.role)
-
-                    // 跳转到仪表板
-                    this.$router.push('/dashboard')
-                    this.$message.success('登录成功')
-                } catch (error) {
-                    console.error('Login failed:', error)
-                    let errorMsg = '登录失败，请检查用户名和密码'
-                    
-                    if (error.response && error.response.data) {
-                        errorMsg = error.response.data.message || errorMsg
-                    } else if (error.message) {
-                        errorMsg = error.message
-                    }
-                    
-                    this.$message.error(errorMsg)
-                } finally {
-                    this.loading = false
-                }
-            })
-        }
+  name: 'Login',
+  data () {
+    return {
+      loginForm: {
+        username: '',
+        password: ''
+      },
+      rules: {
+        username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
+        password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
+      },
+      loading: false
     }
+  },
+  methods: {
+    handleLogin () {
+      this.$refs.loginForm.validate(async valid => {
+        if (!valid) {
+          return false
+        }
+
+        this.loading = true
+
+        try {
+          const response = await userApi.login({
+            username: this.loginForm.username,
+            password: this.loginForm.password
+          })
+
+          // 验证响应数据
+          if (!response.data || response.data.code !== 200) {
+            throw new Error(response.data?.message || '登录失败')
+          }
+
+          const userData = response.data.data
+
+          // 保存用户信息和令牌
+          this.$store.dispatch('login', {
+            token: userData.token,
+            user: userData.user
+          })
+
+          console.log('User login successful:', userData.user.username, userData.user.role)
+
+          // 跳转到仪表板
+          this.$router.push('/dashboard')
+          this.$message.success('登录成功')
+        } catch (error) {
+          console.error('Login failed:', error)
+          let errorMsg = '登录失败，请检查用户名和密码'
+
+          if (error.response && error.response.data) {
+            errorMsg = error.response.data.message || errorMsg
+          } else if (error.message) {
+            errorMsg = error.message
+          }
+
+          this.$message.error(errorMsg)
+        } finally {
+          this.loading = false
+        }
+      })
+    }
+  }
 }
 </script>
 
