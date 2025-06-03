@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	serverBaseURL      = "http://localhost:8088"
+	serverBaseURL      = "http://localhost:23451"
 	keygenAPIEndpoint  = serverBaseURL + "/api/v1/mpc/keygen"
 	signAPIEndpoint    = serverBaseURL + "/api/v1/mpc/sign"
 	cplcAPIEndpoint    = serverBaseURL + "/api/v1/mpc/cplc"
