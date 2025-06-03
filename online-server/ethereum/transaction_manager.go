@@ -51,14 +51,14 @@ type MessageData struct {
 	TransID     uint     // 数据库中的交易ID
 }
 
-// NewTransactionManager 创建一个新的交易管理器实例
+// newTransactionManager 创建一个新的交易管理器实例
 //
 // 参数:
 //   - client: 已初始化的以太坊客户端
 //
 // 返回:
 //   - *TransactionManager: 初始化的交易管理器
-func NewTransactionManager(client *Client) *TransactionManager {
+func newTransactionManager(client *Client) *TransactionManager {
 	return &TransactionManager{
 		client:      client,
 		txService:   service.GetTransactionInstance(),
@@ -79,7 +79,7 @@ func GetTransactionManagerInstance() (*TransactionManager, error) {
 		return nil, fmt.Errorf("获取以太坊客户端失败: %w", err)
 	}
 
-	return NewTransactionManager(client), nil
+	return newTransactionManager(client), nil
 }
 
 // CreateTransaction 创建一个新的ETH转账交易并存储到数据库

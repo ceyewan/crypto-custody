@@ -21,7 +21,7 @@ type Transaction struct {
 	FromAddress string            `gorm:"index;not null"` // 发送方地址
 	ToAddress   string            `gorm:"index;not null"` // 接收方地址
 	Value       string            `gorm:"not null"`       // 交易金额 (例如 "1.5 ETH")
-	MessageHash string            `gorm:"index"`          // 消息哈希 (例如交易数据的哈希)
+	MessageHash string            `gorm:"index;unique"`   // 消息哈希 (例如交易数据的哈希)
 	TxHash      string            `gorm:"index;unique"`   // 交易哈希 (Transaction Hash)
 	Signature   []byte            `gorm:"type:blob"`      // 交易签名
 	Receipt     []byte            `gorm:"type:blob"`      // 交易回执 (例如 JSON 序列化后的回执)
