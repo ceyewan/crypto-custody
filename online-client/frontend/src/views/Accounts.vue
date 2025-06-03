@@ -185,7 +185,29 @@ export default {
         }
 
         if (response.data.code === 200) {
-          this.accountList = response.data.data.accounts || response.data.data || []
+          const accountsData = response.data.data
+          let rawAccounts = []
+
+          if (Array.isArray(accountsData)) {
+            rawAccounts = accountsData
+          } else if (accountsData && Array.isArray(accountsData.accounts)) {
+            rawAccounts = accountsData.accounts
+          } else {
+            rawAccounts = []
+          }
+
+          // 转换属性名称为小写，匹配模板中的期望格式
+          this.accountList = rawAccounts.map(account => ({
+            id: account.ID,
+            address: account.Address,
+            coinType: account.CoinType,
+            balance: account.Balance,
+            importedBy: account.ImportedBy,
+            description: account.Description,
+            createdAt: account.CreatedAt,
+            updatedAt: account.UpdatedAt
+          }))
+
           this.filteredAccountList = [...this.accountList]
         } else {
           throw new Error(response.data.message || '获取账户列表失败')
@@ -218,7 +240,19 @@ export default {
       try {
         const response = await accountApi.getAccountByAddress(address)
         if (response.data.code === 200) {
-          this.filteredAccountList = [response.data.data]
+          const account = response.data.data
+          // 转换属性名称为小写，匹配模板中的期望格式
+          const transformedAccount = {
+            id: account.ID,
+            address: account.Address,
+            coinType: account.CoinType,
+            balance: account.Balance,
+            importedBy: account.ImportedBy,
+            description: account.Description,
+            createdAt: account.CreatedAt,
+            updatedAt: account.UpdatedAt
+          }
+          this.filteredAccountList = [transformedAccount]
           this.$message.success('找到匹配的账户')
         } else {
           this.$message.warning('未找到该地址的账户')
