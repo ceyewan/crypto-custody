@@ -11,7 +11,7 @@
                         <div slot="header">
                             <span>基本信息</span>
                         </div>
-                        
+
                         <el-descriptions :column="1" border>
                             <el-descriptions-item label="用户ID">{{ user.id }}</el-descriptions-item>
                             <el-descriptions-item label="用户名">{{ user.username }}</el-descriptions-item>
@@ -28,7 +28,7 @@
                         <div slot="header">
                             <span>修改密码</span>
                         </div>
-                        
+
                         <el-form :model="passwordForm" :rules="passwordRules" ref="passwordForm" label-width="100px">
                             <el-form-item label="当前密码" prop="oldPassword">
                                 <el-input v-model="passwordForm.oldPassword" type="password" show-password></el-input>
@@ -55,7 +55,7 @@
                 <div slot="header">
                     <span>权限说明</span>
                 </div>
-                
+
                 <div class="permission-content">
                     <div v-if="isAdmin" class="permission-item">
                         <i class="el-icon-user-solid permission-icon admin"></i>
@@ -106,7 +106,7 @@
                 <div slot="header">
                     <span>操作统计</span>
                 </div>
-                
+
                 <el-row :gutter="20">
                     <el-col :span="8">
                         <div class="stat-item">
@@ -137,135 +137,135 @@ import { mapGetters } from 'vuex'
 import { userApi, accountApi } from '../services/api'
 
 export default {
-    name: 'Profile',
-    data() {
-        // 确认密码验证
-        const validateConfirmPassword = (rule, value, callback) => {
-            if (value !== this.passwordForm.newPassword) {
-                callback(new Error('两次输入的密码不一致'))
-            } else {
-                callback()
-            }
-        }
-
-        return {
-            passwordForm: {
-                oldPassword: '',
-                newPassword: '',
-                confirmPassword: ''
-            },
-            passwordRules: {
-                oldPassword: [
-                    { required: true, message: '请输入当前密码', trigger: 'blur' }
-                ],
-                newPassword: [
-                    { required: true, message: '请输入新密码', trigger: 'blur' },
-                    { min: 6, message: '新密码长度至少为6个字符', trigger: 'blur' }
-                ],
-                confirmPassword: [
-                    { required: true, message: '请确认新密码', trigger: 'blur' },
-                    { validator: validateConfirmPassword, trigger: 'blur' }
-                ]
-            },
-            passwordLoading: false,
-            accountCount: 0,
-            transactionCount: 0
-        }
-    },
-    computed: {
-        ...mapGetters([
-            'currentUser',
-            'isAdmin',
-            'isOfficer',
-            'isGuest'
-        ]),
-        user() {
-            return this.currentUser || {}
-        }
-    },
-    created() {
-        this.loadUserStats()
-    },
-    methods: {
-        async loadUserStats() {
-            if (this.isOfficer) {
-                try {
-                    // 获取账户数量
-                    const accountResponse = await accountApi.getUserAccounts()
-                    if (accountResponse.data.code === 200) {
-                        this.accountCount = accountResponse.data.data.length
-                    }
-
-                    // 模拟交易数量
-                    this.transactionCount = Math.floor(Math.random() * 50)
-                } catch (error) {
-                    console.error('加载用户统计失败:', error)
-                }
-            }
-        },
-
-        async handleChangePassword() {
-            this.$refs.passwordForm.validate(async valid => {
-                if (!valid) {
-                    return false
-                }
-
-                this.passwordLoading = true
-
-                try {
-                    const response = await userApi.changePassword({
-                        oldPassword: this.passwordForm.oldPassword,
-                        newPassword: this.passwordForm.newPassword
-                    })
-
-                    if (response.data.code === 200) {
-                        this.$message.success('密码修改成功')
-                        this.resetPasswordForm()
-                    } else {
-                        throw new Error(response.data.message || '密码修改失败')
-                    }
-                } catch (error) {
-                    console.error('修改密码失败:', error)
-                    let errorMsg = '密码修改失败'
-                    if (error.response && error.response.data) {
-                        errorMsg = error.response.data.message || errorMsg
-                    } else if (error.message) {
-                        errorMsg = error.message
-                    }
-                    this.$message.error(errorMsg)
-                } finally {
-                    this.passwordLoading = false
-                }
-            })
-        },
-
-        resetPasswordForm() {
-            this.passwordForm = {
-                oldPassword: '',
-                newPassword: '',
-                confirmPassword: ''
-            }
-            this.$refs.passwordForm && this.$refs.passwordForm.resetFields()
-        },
-
-        getRoleText(role) {
-            const roleMap = {
-                'admin': '管理员',
-                'officer': '警员', 
-                'guest': '访客'
-            }
-            return roleMap[role] || role
-        },
-
-        getRoleTagType(role) {
-            const typeMap = {
-                'admin': 'danger',
-                'officer': 'warning',
-                'guest': 'info'
-            }
-            return typeMap[role] || 'info'
-        }
+  name: 'Profile',
+  data () {
+    // 确认密码验证
+    const validateConfirmPassword = (rule, value, callback) => {
+      if (value !== this.passwordForm.newPassword) {
+        callback(new Error('两次输入的密码不一致'))
+      } else {
+        callback()
+      }
     }
+
+    return {
+      passwordForm: {
+        oldPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      },
+      passwordRules: {
+        oldPassword: [
+          { required: true, message: '请输入当前密码', trigger: 'blur' }
+        ],
+        newPassword: [
+          { required: true, message: '请输入新密码', trigger: 'blur' },
+          { min: 6, message: '新密码长度至少为6个字符', trigger: 'blur' }
+        ],
+        confirmPassword: [
+          { required: true, message: '请确认新密码', trigger: 'blur' },
+          { validator: validateConfirmPassword, trigger: 'blur' }
+        ]
+      },
+      passwordLoading: false,
+      accountCount: 0,
+      transactionCount: 0
+    }
+  },
+  computed: {
+    ...mapGetters([
+      'currentUser',
+      'isAdmin',
+      'isOfficer',
+      'isGuest'
+    ]),
+    user () {
+      return this.currentUser || {}
+    }
+  },
+  created () {
+    this.loadUserStats()
+  },
+  methods: {
+    async loadUserStats () {
+      if (this.isOfficer) {
+        try {
+          // 获取账户数量
+          const accountResponse = await accountApi.getUserAccounts()
+          if (accountResponse.data.code === 200) {
+            this.accountCount = accountResponse.data.data.length
+          }
+
+          // 模拟交易数量
+          this.transactionCount = Math.floor(Math.random() * 50)
+        } catch (error) {
+          console.error('加载用户统计失败:', error)
+        }
+      }
+    },
+
+    async handleChangePassword () {
+      this.$refs.passwordForm.validate(async valid => {
+        if (!valid) {
+          return false
+        }
+
+        this.passwordLoading = true
+
+        try {
+          const response = await userApi.changePassword({
+            oldPassword: this.passwordForm.oldPassword,
+            newPassword: this.passwordForm.newPassword
+          })
+
+          if (response.data.code === 200) {
+            this.$message.success('密码修改成功')
+            this.resetPasswordForm()
+          } else {
+            throw new Error(response.data.message || '密码修改失败')
+          }
+        } catch (error) {
+          console.error('修改密码失败:', error)
+          let errorMsg = '密码修改失败'
+          if (error.response && error.response.data) {
+            errorMsg = error.response.data.message || errorMsg
+          } else if (error.message) {
+            errorMsg = error.message
+          }
+          this.$message.error(errorMsg)
+        } finally {
+          this.passwordLoading = false
+        }
+      })
+    },
+
+    resetPasswordForm () {
+      this.passwordForm = {
+        oldPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      }
+      this.$refs.passwordForm && this.$refs.passwordForm.resetFields()
+    },
+
+    getRoleText (role) {
+      const roleMap = {
+        admin: '管理员',
+        officer: '警员',
+        guest: '访客'
+      }
+      return roleMap[role] || role
+    },
+
+    getRoleTagType (role) {
+      const typeMap = {
+        admin: 'danger',
+        officer: 'warning',
+        guest: 'info'
+      }
+      return typeMap[role] || 'info'
+    }
+  }
 }
 </script>
 
