@@ -9,5 +9,5 @@ offline-client/web-se/logs/app.log
 offline-server/private_keys/ec_private_key.pem
 offline-server/logs/*
 offline-server/data/crypto-custody.db
-offline-server/frontend/node_modules
+**/node_modules
 online-server/tmp/*
