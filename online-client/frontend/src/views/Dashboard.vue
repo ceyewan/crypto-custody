@@ -110,7 +110,7 @@
 
 <script>
 import { mapGetters } from 'vuex'
-import { userApi, accountApi } from '../services/api'
+import { userApi, accountApi, transactionApi } from '../services/api'
 
 export default {
   name: 'Dashboard',
@@ -161,8 +161,25 @@ export default {
           }
         }
 
-        // 模拟交易数量（实际应该从API获取）
-        this.transactionCount = Math.floor(Math.random() * 100)
+        // 加载交易统计（如果是警员或管理员）
+        if (this.isOfficer) {
+          try {
+            let transactionResponse
+            if (this.isAdmin) {
+              transactionResponse = await transactionApi.getAllTransactionStats()
+            } else {
+              transactionResponse = await transactionApi.getTransactionStats()
+            }
+
+            if (transactionResponse.data.code === 200) {
+              this.transactionCount = transactionResponse.data.data.count || 0
+            }
+          } catch (error) {
+            console.error('Failed to load transaction stats:', error)
+            // 如果API调用失败，设置为0
+            this.transactionCount = 0
+          }
+        }
       } catch (error) {
         console.error('Failed to load dashboard stats:', error)
       }

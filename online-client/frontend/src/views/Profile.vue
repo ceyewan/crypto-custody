@@ -120,12 +120,6 @@
                             <div class="stat-label">处理交易数</div>
                         </div>
                     </el-col>
-                    <el-col :span="8">
-                        <div class="stat-item">
-                            <div class="stat-number">{{ Math.floor(Math.random() * 30) + 1 }}</div>
-                            <div class="stat-label">在线天数</div>
-                        </div>
-                    </el-col>
                 </el-row>
             </el-card>
         </el-card>
@@ -134,7 +128,7 @@
 
 <script>
 import { mapGetters } from 'vuex'
-import { userApi, accountApi } from '../services/api'
+import { userApi, accountApi, transactionApi } from '../services/api'
 
 export default {
   name: 'Profile',
@@ -196,8 +190,16 @@ export default {
             this.accountCount = accountResponse.data.data.length
           }
 
-          // 模拟交易数量
-          this.transactionCount = Math.floor(Math.random() * 50)
+          // 获取交易统计
+          try {
+            const transactionResponse = await transactionApi.getTransactionStats()
+            if (transactionResponse.data.code === 200) {
+              this.transactionCount = transactionResponse.data.data.count || 0
+            }
+          } catch (error) {
+            console.error('加载交易统计失败:', error)
+            this.transactionCount = 0
+          }
         } catch (error) {
           console.error('加载用户统计失败:', error)
         }

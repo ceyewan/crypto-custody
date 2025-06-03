@@ -164,6 +164,31 @@ export const transactionApi = {
   // 签名并发送交易 (警员+)
   signAndSendTransaction (signData) {
     return apiClient.post('/api/transaction/tx/sign-send', signData)
+  },
+
+  // 获取交易列表 (警员+)
+  getTransactions (params = {}) {
+    return apiClient.get('/api/transaction/list', { params })
+  },
+
+  // 获取所有交易 (管理员)
+  getAllTransactions (params = {}) {
+    return apiClient.get('/api/transaction/admin/all', { params })
+  },
+
+  // 获取交易详情
+  getTransactionById (id) {
+    return apiClient.get(`/api/transaction/${id}`)
+  },
+
+  // 获取交易统计 (警员+)
+  getTransactionStats () {
+    return apiClient.get('/api/transaction/stats')
+  },
+
+  // 获取所有交易统计 (管理员)
+  getAllTransactionStats () {
+    return apiClient.get('/api/transaction/admin/stats')
   }
 }
 

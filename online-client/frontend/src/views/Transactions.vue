@@ -254,32 +254,43 @@ export default {
     async fetchTransactions () {
       this.loading = true
       try {
-        // 模拟交易数据，实际应该从API获取
-        this.transactionList = [
-          {
-            id: 1,
-            fromAddress: '0x1234567890abcdef1234567890abcdef12345678',
-            toAddress: '0xabcdef1234567890abcdef1234567890abcdef12',
-            amount: 1.5,
-            status: 'confirmed',
-            txHash: '0x9876543210fedcba9876543210fedcba98765432',
-            messageHash: '0xfedcba0987654321fedcba0987654321fedcba09',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          },
-          {
-            id: 2,
-            fromAddress: '0xabcdef1234567890abcdef1234567890abcdef12',
-            toAddress: '0x1234567890abcdef1234567890abcdef12345678',
-            amount: 0.5,
-            status: 'prepared',
-            messageHash: '0x1234567890abcdef1234567890abcdef12345678',
-            createdAt: new Date(Date.now() - 3600000).toISOString()
-          }
-        ]
+        // 构建查询参数
+        const params = {}
+        if (this.searchFromAddress.trim()) {
+          params.fromAddress = this.searchFromAddress.trim()
+        }
+        if (this.searchToAddress.trim()) {
+          params.toAddress = this.searchToAddress.trim()
+        }
+        if (this.statusFilter) {
+          params.status = this.statusFilter
+        }
+
+        let response
+
+        // 根据用户权限获取交易列表
+        if (this.$store.getters.isAdmin) {
+          response = await transactionApi.getAllTransactions(params)
+        } else {
+          response = await transactionApi.getTransactions(params)
+        }
+
+        if (response.data.code === 200) {
+          this.transactionList = response.data.data.transactions || response.data.data || []
+        } else {
+          throw new Error(response.data.message || '获取交易列表失败')
+        }
       } catch (error) {
         console.error('获取交易列表失败:', error)
-        this.$message.error('获取交易列表失败')
+        let errorMsg = '获取交易列表失败'
+        if (error.response && error.response.data) {
+          errorMsg = error.response.data.message || errorMsg
+        } else if (error.message) {
+          errorMsg = error.message
+        }
+        this.$message.error(errorMsg)
+        // 如果API调用失败，设置空列表
+        this.transactionList = []
       } finally {
         this.loading = false
       }
