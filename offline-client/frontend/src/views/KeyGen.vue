@@ -7,7 +7,7 @@
 
             <el-form :model="keygenForm" :rules="keygenRules" ref="keygenForm" label-width="120px">
                 <el-form-item label="门限值" prop="threshold">
-                    <el-input-number v-model="keygenForm.threshold" :min="2" :max="keygenForm.totalParts"
+                    <el-input-number v-model="keygenForm.threshold" :min="1" :max="keygenForm.totalParts"
                         @change="handleThresholdChange">
                     </el-input-number>
                 </el-form-item>
