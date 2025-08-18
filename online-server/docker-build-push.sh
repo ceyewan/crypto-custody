@@ -1,87 +1,97 @@
 #!/bin/bash
 
-# Docker build and push script for crypto-custody online-server
-# Usage: ./docker-build-push.sh [DOCKERHUB_USERNAME] [IMAGE_NAME] [TAG]
+# crypto-custody online-server 的 Docker 构建和推送脚本
+# 该脚本构建一个多平台 Docker 镜像并将其推送到镜像仓库。
+# 用法: ./docker-build-push.sh [DOCKERHUB_USERNAME] [IMAGE_NAME] [TAG]
 
 set -e
 
-# Default values
+# --- 配置 ---
+# Docker 镜像详情的默认值。
+# 这些值可以通过命令行参数覆盖。
 DEFAULT_USERNAME="ceyewan"
 DEFAULT_IMAGE_NAME="crypto-custody-online-server"
-DEFAULT_TAG="latest"
+DEFAULT_TAG="amd64"
+PLATFORM="linux/amd64"
 
-# Parse command line arguments
-DOCKERHUB_USERNAME=${1:-$DEFAULT_USERNAME}
-IMAGE_NAME=${2:-$DEFAULT_IMAGE_NAME}
-TAG=${3:-$DEFAULT_TAG}
+FULL_IMAGE_NAME="${DEFAULT_USERNAME}/${DEFAULT_IMAGE_NAME}:${DEFAULT_TAG}"
 
-# Full image name
-FULL_IMAGE_NAME="${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${TAG}"
-
+# --- 脚本标题 ---
 echo "======================================"
-echo "Docker Build and Push Script"
+echo "Docker 构建与推送脚本"
 echo "======================================"
-echo "Image: ${FULL_IMAGE_NAME}"
+echo "镜像: ${FULL_IMAGE_NAME}"
+echo "平台: ${PLATFORM}"
 echo "======================================"
 
-# Check if Docker is running
+# --- Docker 环境检查 ---
+# 在继续之前，确保 Docker 正在运行。
 if ! docker info > /dev/null 2>&1; then
-    echo "❌ Error: Docker is not running. Please start Docker and try again."
+    echo "❌ 错误: Docker 未运行。请启动 Docker 后重试。"
     exit 1
 fi
 
-# Build the Docker image
-echo "🔨 Building Docker image..."
-docker build -t ${FULL_IMAGE_NAME} .
+# --- Docker Buildx 设置 ---
+# 为多平台构建设置并使用一个构建器。
+BUILDER_NAME="mybuilder"
+if ! docker buildx ls | grep -q $BUILDER_NAME; then
+    echo "🔧 正在创建新的 buildx 构建器: $BUILDER_NAME..."
+    docker buildx create --name $BUILDER_NAME --use
+else
+    echo "🔧 正在使用已有的 buildx 构建器: $BUILDER_NAME..."
+    docker buildx use $BUILDER_NAME
+fi
+
+# --- Docker 构建 ---
+# 为指定平台构建 Docker 镜像。
+# --platform 标志对于交叉编译至关重要。
+# --load 标志将构建好的镜像加载到本地 Docker 守护进程中。
+echo "🔨 正在为 ${PLATFORM} 构建 Docker 镜像..."
+docker buildx build --platform "${PLATFORM}" -t "${FULL_IMAGE_NAME}" --load .
 
 if [ $? -eq 0 ]; then
-    echo "✅ Docker image built successfully: ${FULL_IMAGE_NAME}"
+    echo "✅ Docker 镜像构建成功: ${FULL_IMAGE_NAME}"
 else
-    echo "❌ Failed to build Docker image"
+    echo "❌ Docker 镜像构建失败"
     exit 1
 fi
 
-# Test the image locally (optional)
-echo "🧪 Testing the image locally..."
-CONTAINER_ID=$(docker run -d -p 8080:8080 ${FULL_IMAGE_NAME})
-sleep 5
+# --- Docker 登录 ---
+# 登录到 Docker Hub 以推送镜像。
+# 为了安全，建议使用个人访问令牌 (PAT)。
+echo "🔐 正在登录到 DockerHub..."
+echo "请输入您的 DockerHub 用户名 (或按回车使用 '${DOCKERHUB_USERNAME}'):"
+read -r input_username
+DOCKERHUB_USERNAME=${input_username:-$DOCKERHUB_USERNAME}
 
-# Check if container is running
-if docker ps | grep -q ${CONTAINER_ID}; then
-    echo "✅ Container is running successfully"
-    docker stop ${CONTAINER_ID}
-    docker rm ${CONTAINER_ID}
-else
-    echo "⚠️  Warning: Container test failed, but continuing with push..."
-fi
+echo "请输入您的 DockerHub 密码或访问令牌:"
+read -s DOCKERHUB_PASSWORD
+echo
 
-# Login to DockerHub
-echo "🔐 Logging in to DockerHub..."
-echo "Please enter your DockerHub credentials:"
-docker login
-
-if [ $? -ne 0 ]; then
-    echo "❌ Failed to login to DockerHub"
+if ! echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin; then
+    echo "❌ 登录 DockerHub 失败"
     exit 1
 fi
 
-# Push the image
-echo "📤 Pushing image to DockerHub..."
-docker push ${FULL_IMAGE_NAME}
+# --- Docker 推送 ---
+# 将构建好的镜像推送到 Docker Hub 仓库。
+echo "📤 正在将镜像推送到 DockerHub..."
+docker push "${FULL_IMAGE_NAME}"
 
 if [ $? -eq 0 ]; then
-    echo "✅ Successfully pushed ${FULL_IMAGE_NAME} to DockerHub!"
+    echo "✅ 成功将 ${FULL_IMAGE_NAME} 推送到 DockerHub！"
     echo ""
-    echo "🚀 You can now run your container with:"
-    echo "   docker run -p 8080:8080 ${FULL_IMAGE_NAME}"
+    echo "🚀 您现在可以使用以下命令运行您的容器:"
+    echo "   docker run -p 8080:8080 --env-file ./.env ${FULL_IMAGE_NAME}"
     echo ""
-    echo "🌐 Or pull it from anywhere with:"
+    echo "🌐 或者从任何地方拉取镜像:"
     echo "   docker pull ${FULL_IMAGE_NAME}"
 else
-    echo "❌ Failed to push image to DockerHub"
+    echo "❌ 推送镜像到 DockerHub 失败"
     exit 1
 fi
 
+# --- 脚本页脚 ---
 echo "======================================"
-echo "✅ Build and push completed successfully!"
+echo "✅ 构建和推送已成功完成！"
 echo "======================================"

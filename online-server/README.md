@@ -1,8 +1,6 @@
 # 以太坊交易管理系统 (Ethereum Transaction Management System)
 
-![版本](https://img.shields.io/badge/版本-1.0.0-blue)
-![Go版本](https://img.shields.io/badge/Go-1.24.0-blue)
-![许可证](https://img.shields.io/badge/许可证-MIT-green)
+![版本](https://img.shields.io/badge/版本-1.0.0-blue)![Go版本](https://img.shields.io/badge/Go-1.24.0-blue)![许可证](https://img.shields.io/badge/许可证-MIT-green)
 
 ## 项目概述
 
@@ -101,7 +99,7 @@ online-server/
 
 #### 3. 以太坊交互层 (Ethereum)
 - 位于 `ethereum` 目录
-- 提供与以太坊区块链的底层交互
+- 提供与以太坊��块链的底层交互
 - 采用懒汉式加载模式，确保资源高效利用
 - 使用 `sync.Once` 保证线程安全的单例模式
 - 职责：封装区块链API，处理交易构建和发送
@@ -309,6 +307,34 @@ func GetInstance() (*Service, error) {
    ```
 
 默认服务运行在 http://localhost:8080
+
+### Docker 部署
+
+本项目提供了通过 Docker 进行容器化部署的方案，以实现跨平台和标准化的部署。
+
+#### 1. 构建并推送镜像
+
+使用提供的 `docker-build-push.sh` 脚本可以方便地构建 `linux/amd64` 架构的镜像并推送到 Docker Hub。
+
+```bash
+# 赋予脚本执行权限
+chmod +x docker-build-push.sh
+
+# 运行脚本（使用你的 Docker Hub 用户名）
+./docker-build-push.sh your-dockerhub-username
+```
+
+#### 2. 使用 Docker Compose 运行
+
+`docker-compose.yml` 文件定义了如何运行服务。在运行前，请确保你有一个 `.env` 文件，其中包含所有必需的环境变量。
+
+```bash
+# 在后台启动服务
+docker-compose up -d
+```
+
+服务将在 `http://localhost:8080` 上可用。数据库和日志文件将分别持久化到 `./database` 和 `./logs` 目录中。
+
 ## 改进小结
 
 在项目重构过程中，我们进行了以下主要改进：
@@ -330,7 +356,7 @@ func GetInstance() (*Service, error) {
    - transaction_handler.go：处理与区块链直接交互的请求
    - account_handler.go：处理与账户和交易记录相关的请求
    - user_handler.go：处理用户管理相关请求
- 
+  
 5. **路由与中间件优化**：
    - 路由结构更加清晰，映射到相应的处理函数
    - 增强中间件功能，包括认证、权限控制和日志记录
