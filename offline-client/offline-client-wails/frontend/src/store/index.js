@@ -135,7 +135,11 @@ export default new Vuex.Store({
 
             try {
                 console.log('正在创建新的WebSocket连接...')
-                const ws = new WebSocket('ws://localhost:8081/ws')
+                const wsURL = process.env.NODE_ENV === 'production'
+                    ? 'wss://crypto-custody-offline-server.ceyewan.icu/ws'
+                    : `ws://localhost:8090/ws`;
+                console.log(`[WS Debug] NODE_ENV: ${process.env.NODE_ENV}, WS URL: ${wsURL}`);
+                const ws = new WebSocket(wsURL)
 
                 const connectionTimeout = setTimeout(() => {
                     if (ws.readyState !== WebSocket.OPEN) {

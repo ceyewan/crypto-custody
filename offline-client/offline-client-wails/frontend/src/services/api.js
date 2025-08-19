@@ -2,8 +2,12 @@ import axios from 'axios'
 import store from '../store'
 
 // API基础URL
-const API_URL = 'http://localhost:8080'
-const MPC_URL = 'http://localhost:8088'
+// 统一使用代理，简化配置
+const API_URL = process.env.NODE_ENV === 'production'
+    ? 'https://crypto-custody-offline-server.ceyewan.icu'
+    : '/api';
+
+console.log(`[API Debug] NODE_ENV: ${process.env.NODE_ENV}, API_URL: ${API_URL}`);
 
 // 创建axios实例
 const apiClient = axios.create({
