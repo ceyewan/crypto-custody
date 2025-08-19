@@ -1,29 +1,30 @@
-export namespace main {
+export namespace models {
 	
-	export class DeleteMessageRequest {
-	    user_name: string;
+	export class DeleteRequest {
+	    username: string;
 	    address: string;
-	    signature: number[];
+	    signature: string;
 	
 	    static createFrom(source: any = {}) {
-	        return new DeleteMessageRequest(source);
+	        return new DeleteRequest(source);
 	    }
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.user_name = source["user_name"];
+	        this.username = source["username"];
 	        this.address = source["address"];
 	        this.signature = source["signature"];
 	    }
 	}
-	export class KeyGenerationRequest {
+	export class KeyGenRequest {
 	    threshold: number;
 	    parties: number;
 	    index: number;
-	    user_name: string;
+	    filename: string;
+	    username: string;
 	
 	    static createFrom(source: any = {}) {
-	        return new KeyGenerationRequest(source);
+	        return new KeyGenRequest(source);
 	    }
 	
 	    constructor(source: any = {}) {
@@ -31,28 +32,31 @@ export namespace main {
 	        this.threshold = source["threshold"];
 	        this.parties = source["parties"];
 	        this.index = source["index"];
-	        this.user_name = source["user_name"];
+	        this.filename = source["filename"];
+	        this.username = source["username"];
 	    }
 	}
-	export class SignMessageRequest {
-	    message: string;
+	export class SignRequest {
 	    parties: string;
-	    user_name: string;
+	    data: string;
+	    filename: string;
+	    encryptedKey: string;
+	    userName: string;
 	    address: string;
-	    encrypted_key: number[];
-	    signature: number[];
+	    signature: string;
 	
 	    static createFrom(source: any = {}) {
-	        return new SignMessageRequest(source);
+	        return new SignRequest(source);
 	    }
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.message = source["message"];
 	        this.parties = source["parties"];
-	        this.user_name = source["user_name"];
+	        this.data = source["data"];
+	        this.filename = source["filename"];
+	        this.encryptedKey = source["encryptedKey"];
+	        this.userName = source["userName"];
 	        this.address = source["address"];
-	        this.encrypted_key = source["encrypted_key"];
 	        this.signature = source["signature"];
 	    }
 	}

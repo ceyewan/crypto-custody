@@ -115,7 +115,7 @@ export default {
         async handleKeygenInviteAccept(notification) {
             try {
                 // 获取当前用户的CPIC
-                const cpicResponse = await seApi.getCPIC()
+                const cpicResponse = await seApi.getCPLC()
                 const cpic = cpicResponse.data.cpic
 
                 // 发送接受响应

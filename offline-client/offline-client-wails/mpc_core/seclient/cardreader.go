@@ -9,9 +9,6 @@ import (
 	"github.com/ebfe/scard"
 )
 
-// 应用AID (Applet Identifier) - 与 build.xml 中定义的一致
-var AID = []byte{0xA0, 0x00, 0x00, 0x00, 0x62, 0xCF, 0x01, 0x01}
-
 // CardReader 结构体封装了与卡片交互的功能
 type CardReader struct {
 	context  *scard.Context
@@ -132,13 +129,13 @@ func (r *CardReader) Connect(readerName string) error {
 }
 
 // SelectApplet 选择Applet
-func (r *CardReader) SelectApplet() error {
+func (r *CardReader) SelectApplet(aid []byte) error {
 	// 在选择Applet之前，先获取芯片的CPLC数据，缓存下来
 	_, err := r.GetCPLC()
 	if err != nil {
 		return fmt.Errorf("获取CPLC数据失败: %v", err)
 	}
-	selectCmd := append([]byte{0x00, 0xA4, 0x04, 0x00, byte(len(AID))}, AID...)
+	selectCmd := append([]byte{0x00, 0xA4, 0x04, 0x00, byte(len(aid))}, aid...)
 
 	if r.debug {
 		clog.Info("=== 选择Applet命令 ===")
@@ -148,8 +145,8 @@ func (r *CardReader) SelectApplet() error {
 		clog.Info("  INS: 0xA4 (选择指令)")
 		clog.Info("  P1: 0x04 (按名称选择)")
 		clog.Info("  P2: 0x00 (首次选择)")
-		clog.Infof("  Lc: 0x%02X (AID长度)", len(AID))
-		clog.Infof("  Data: %X (AID)", AID)
+		clog.Infof("  Lc: 0x%02X (AID长度)", len(aid))
+		clog.Infof("  Data: %X (AID)", aid)
 	}
 
 	resp, err := r.card.Transmit(selectCmd)
@@ -167,7 +164,7 @@ func (r *CardReader) SelectApplet() error {
 		clog.Infof("响应数据: %X", resp)
 		clog.Infof("状态码: 0x%04X (成功)", sw)
 		clog.Infof("数据: %X", data)
-		clog.Infof("成功选择Applet, AID: %X", AID)
+		clog.Infof("成功选择Applet, AID: %X", aid)
 	}
 	return nil
 }

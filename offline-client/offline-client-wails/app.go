@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+
 	"offline-client-wails/mpc_core/clog"
+	"offline-client-wails/mpc_core/models"
 )
 
 // App struct
@@ -30,12 +32,12 @@ func (a *App) startup(ctx context.Context) {
 // 以下是需要绑定到前端的方法
 
 // PerformKeyGeneration 绑定密钥生成方法
-func (a *App) PerformKeyGeneration(req KeyGenerationRequest) (interface{}, error) {
+func (a *App) PerformKeyGeneration(req models.KeyGenRequest) (interface{}, error) {
 	return a.wailsServices.PerformKeyGeneration(req)
 }
 
 // PerformSignMessage 绑定消息签名方法
-func (a *App) PerformSignMessage(req SignMessageRequest) (interface{}, error) {
+func (a *App) PerformSignMessage(req models.SignRequest) (interface{}, error) {
 	return a.wailsServices.PerformSignMessage(req)
 }
 
@@ -45,6 +47,6 @@ func (a *App) GetCPLCInfo() (interface{}, error) {
 }
 
 // PerformDeleteMessage 绑定删除消息的方法
-func (a *App) PerformDeleteMessage(req DeleteMessageRequest) error {
+func (a *App) PerformDeleteMessage(req models.DeleteRequest) error {
 	return a.wailsServices.PerformDeleteMessage(req)
 }

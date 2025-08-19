@@ -90,3 +90,37 @@ graph TD
 | **Wails 绑定层** | `(a *App) GetCPLCInfo` | (无) | `map[string]interface{}`, `error` |
 | **适配器层** | `(ws *WailsServices) GetCPLCInfo` | (无) | `map[string]interface{}`, `error` |
 | **核心业务逻辑层** | `(s *SecurityService) GetCPLC` | (无) | `[]byte` (CPLC 数据), `error` |
+---
+
+## Code Review: 鲁棒性与正确性问题修复总结
+
+根据 Code Review 的发现，已对 `mpc_core` 模块进行了以下关键修复，以增强其在真实环境中的鲁棒性和正确性。
+
+### 1. **已修复**：硬件热插拔支持
+
+-   **问题**: 应用无法处理安全芯片在运行时断开并重连的情况。
+-   **修复方案**:
+    -   `SecurityService` 已被完全重构为**无状态服务**。
+    -   旧的模式（在启动时建立一个持久连接）已被废弃。
+    -   现在，**每一次**对硬件的操作（如 `ReadData`, `StoreData`）都会动态地执行一个完整的“**建立连接 -> 选择 Applet -> 执行操作 -> 关闭连接**”流程。
+    -   这种“按需连接”的模式从根本上解决了热插拔问题。即使用户在两次操作之间拔出并重新插入芯片，下一次操作也能成功建立新连接并执行。
+
+### 2. **已修复**：移除硬编码的 Applet AID
+
+-   **问题**: 安全芯片的 Applet AID 硬编码在源代码中，难以维护。
+-   **修复方案**:
+    -   硬编码的 `AID` 变量已从 `seclient/cardreader.go` 中移除。
+    -   `config.go` 和 `config.yaml` 中新增了 `applet_aid` 配置项，允许在配置文件中灵活指定 AID。
+    -   `SecurityService` 在每次连接时会从配置中动态读取并解析此 AID，再传递给 `SelectApplet` 函数。
+
+### 3. **已修复**：增强参数校验
+
+-   **问题**: 对外的服务方法缺少对输入参数的严格校验。
+-   **修复方案**:
+    -   在 `services/security.go` 的 `StoreData`, `ReadData`, 和 `DeleteData` 函数的入口处，增加了对 `username`, `addr`, 和 `signature` 等关键参数的**前置校验**。
+    -   现在，如果传入空用户名、空地址或空签名，函数将立即返回一个明确的错误信息，而不会将无效数据传递给底层硬件调用，提高了代码的健壮性。
+
+### 4. **未修复**：默认选择第一个读卡器
+
+-   **说明**: 根据指示，此问题**暂未修复**。
+-   **当前行为**: 如果配置文件中未指定 `card_reader_name`，系统仍将默认尝试连接设备列表中的第一个读卡器。在多读卡器环境下，这可能导致连接到非预期的设备。

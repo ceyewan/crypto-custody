@@ -8,6 +8,7 @@ import (
 type Config struct {
 	Debug          bool   `mapstructure:"debug"`            // SE 是否启用调试模式
 	CardReaderName string `mapstructure:"card_reader_name"` // SE 名称
+	AppletAID      string `mapstructure:"applet_aid"`       // Applet AID
 	Port           string `mapstructure:"port"`
 	TempDir        string `mapstructure:"temp_dir"`
 	BinDir         string `mapstructure:"bin_dir"`
@@ -33,6 +34,7 @@ func LoadConfig() (*Config, error) {
 	// 设置默认值
 	viper.SetDefault("debug", false)
 	viper.SetDefault("card_reader_name", "")
+	viper.SetDefault("applet_aid", "A000000062CF0101") // 默认值
 	viper.SetDefault("port", "8080")
 	viper.SetDefault("temp_dir", "./temp")
 	viper.SetDefault("bin_dir", "./bin")

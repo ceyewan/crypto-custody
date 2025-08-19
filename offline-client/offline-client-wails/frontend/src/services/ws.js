@@ -264,12 +264,13 @@ async function handleKeyGenInvite(message) {
 async function handleKeyGenParams(message) {
     try {
         const user = store.state.user.username
-        // 调用MPC服务进行密钥生成
+        // 调用MPC服务进行密钥生成，使用与 models 匹配的字段名
         const keygenResponse = await mpcApi.keyGen({
             threshold: message.threshold,
             parties: message.total_parts,
             index: message.part_index,
-            user_name: user
+            filename: "keygen_temp.json", // 添加必需的 filename 字段
+            username: user // 使用 models 中的字段名 (username 而不是 user_name)
         })
 
         if (keygenResponse.data.success) {
@@ -348,7 +349,7 @@ async function handleSignInvite(message) {
         ).catch(() => false)
 
         // 获取当前用户的CPIC
-        const cpicResponse = await seApi.getCPIC()
+        const cpicResponse = await seApi.getCPLC()
         const cpic = cpicResponse.data.cpic
 
         // 发送响应
@@ -377,13 +378,14 @@ async function handleSignInvite(message) {
 // 处理签名参数
 async function handleSignParams(message) {
     try {
-        // 调用MPC签名服务
+        // 调用MPC签名服务，使用与 models 匹配的字段名
         const signResponse = await mpcApi.sign({
             parties: message.parties,
-            message: message.data,
-            user_name: store.state.user.username,
+            data: message.data,        // 使用 models 中的字段名 (data 而不是 message)
+            filename: "sign_temp.json", // 添加必需的 filename 字段
+            userName: store.state.user.username, // 使用 models 中的字段名 (userName 而不是 user_name)
             address: message.address,
-            encrypted_key: message.encrypted_shard,
+            encryptedKey: message.encrypted_shard, // 使用 models 中的字段名 (encryptedKey 而不是 encrypted_key)
             signature: message.signature
         })
 
