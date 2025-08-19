@@ -219,46 +219,6 @@ function handleRegisterComplete(message) {
     }
 }
 
-// 处理密钥生成邀请
-async function handleKeyGenInvite(message) {
-    try {
-        // 显示确认对话框
-        const confirm = await MessageBox.confirm(
-            `您收到密钥生成邀请，参与者索引: ${message.part_index}, 会话: ${message.session_key}, 发起者: ${message.coordinator}。是否接受?`,
-            '密钥生成邀请',
-            {
-                confirmButtonText: '接受',
-                cancelButtonText: '拒绝',
-                type: 'info'
-            }
-        ).catch(() => false)
-
-        // 获取当前用户的CPIC
-        const cpicResponse = await seApi.getCPIC()
-        const cpic = cpicResponse.data.cpic
-
-        // 发送响应
-        sendWSMessage({
-            type: WS_MESSAGE_TYPES.KEYGEN_RESPONSE,
-            session_key: message.session_key,
-            part_index: message.part_index,
-            cpic: cpic,
-            accept: confirm !== false,
-            reason: confirm === false ? '用户拒绝' : ''
-        })
-    } catch (error) {
-        console.error('处理密钥生成邀请出错:', error)
-        // 发送拒绝响应
-        sendWSMessage({
-            type: WS_MESSAGE_TYPES.KEYGEN_RESPONSE,
-            session_key: message.session_key,
-            part_index: message.part_index,
-            cpic: '',
-            accept: false,
-            reason: '处理邀请出错: ' + error.message
-        })
-    }
-}
 
 // 处理密钥生成参数
 async function handleKeyGenParams(message) {
@@ -277,7 +237,7 @@ async function handleKeyGenParams(message) {
             // 尝试获取CPIC，即使出错也继续处理
             let cpic = ''
             try {
-                const cpicResponse = await seApi.getCPIC()
+                const cpicResponse = await seApi.getCPLC()
                 cpic = cpicResponse.data.cpic
             } catch (cpicError) {
                 console.error('获取CPIC失败:', cpicError)
@@ -334,46 +294,6 @@ function handleKeyGenComplete(message) {
     }
 }
 
-// 处理签名邀请
-async function handleSignInvite(message) {
-    try {
-        // 显示确认对话框
-        const confirm = await MessageBox.confirm(
-            `您收到签名邀请，参与者索引: ${message.part_index}, 会话: ${message.session_key}, 地址: ${message.address}。是否接受?`,
-            '签名邀请',
-            {
-                confirmButtonText: '接受',
-                cancelButtonText: '拒绝',
-                type: 'info'
-            }
-        ).catch(() => false)
-
-        // 获取当前用户的CPIC
-        const cpicResponse = await seApi.getCPLC()
-        const cpic = cpicResponse.data.cpic
-
-        // 发送响应
-        sendWSMessage({
-            type: WS_MESSAGE_TYPES.SIGN_RESPONSE,
-            session_key: message.session_key,
-            part_index: message.part_index,
-            cpic: cpic,
-            accept: confirm !== false,
-            reason: confirm === false ? '用户拒绝' : ''
-        })
-    } catch (error) {
-        console.error('处理签名邀请出错:', error)
-        // 发送拒绝响应
-        sendWSMessage({
-            type: WS_MESSAGE_TYPES.SIGN_RESPONSE,
-            session_key: message.session_key,
-            part_index: message.part_index,
-            cpic: '',
-            accept: false,
-            reason: '处理邀请出错: ' + error.message
-        })
-    }
-}
 
 // 处理签名参数
 async function handleSignParams(message) {

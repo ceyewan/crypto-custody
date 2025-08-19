@@ -1,16 +1,8 @@
 module.exports = {
-    publicPath: './', // 设置为相对路径，适用于Electron
+    publicPath: './', // 设置为相对路径，适用于Wails
     devServer: {
         port: 8090,
-        open: true,
-        proxy: {
-            '/api': {
-                target: 'http://localhost:8080',
-                changeOrigin: true,
-                pathRewrite: {
-                    '^/api': ''
-                }
-            }
-        }
+        open: true
+        // 移除了proxy配置，因为在Wails环境下不需要
     }
 }

@@ -55,6 +55,17 @@ export default new Vuex.Store({
         clearNotifications(state) {
             state.notifications = []
         },
+        updateNotificationResponse(state, { timestamp, type, responded = true }) {
+            const index = state.notifications.findIndex(n =>
+                n.timestamp.getTime() === timestamp.getTime() &&
+                n.type === type
+            )
+
+            if (index !== -1) {
+                // 使用Vue.set确保响应式更新
+                Vue.set(state.notifications[index], 'responded', responded)
+            }
+        },
         setCurrentSession(state, session) {
             state.currentSession = session
         },

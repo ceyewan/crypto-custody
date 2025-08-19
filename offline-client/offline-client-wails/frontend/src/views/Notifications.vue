@@ -65,7 +65,7 @@
 
 <script>
 import { mapGetters } from 'vuex'
-import { mpcApi, seApi } from '../services/api'
+import { seApi } from '../services/wails-api'
 import { sendWSMessage, WS_MESSAGE_TYPES } from '../services/ws'
 
 export default {
@@ -134,6 +134,20 @@ export default {
             } catch (error) {
                 console.error('接受密钥生成邀请失败:', error)
                 this.$message.error('接受密钥生成邀请失败: ' + error.message)
+                
+                // 通知协调者该参与者无法接受邀请
+                try {
+                    sendWSMessage({
+                        type: WS_MESSAGE_TYPES.KEYGEN_RESPONSE,
+                        session_key: notification.content.session_key,
+                        part_index: notification.content.part_index,
+                        cpic: '',
+                        accept: false,
+                        reason: '获取CPLC失败: ' + error.message
+                    })
+                } catch (wsError) {
+                    console.error('发送拒绝消息失败:', wsError)
+                }
             }
         },
 
@@ -163,7 +177,7 @@ export default {
         async handleSignInviteAccept(notification) {
             try {
                 // 获取当前用户的CPIC
-                const cpicResponse = await seApi.getCPIC()
+                const cpicResponse = await seApi.getCPLC()
                 const cpic = cpicResponse.data.cpic
 
                 // 发送接受响应
@@ -182,6 +196,20 @@ export default {
             } catch (error) {
                 console.error('接受签名邀请失败:', error)
                 this.$message.error('接受签名邀请失败: ' + error.message)
+                
+                // 通知协调者该参与者无法接受邀请
+                try {
+                    sendWSMessage({
+                        type: WS_MESSAGE_TYPES.SIGN_RESPONSE,
+                        session_key: notification.content.session_key,
+                        part_index: notification.content.part_index,
+                        cpic: '',
+                        accept: false,
+                        reason: '获取CPLC失败: ' + error.message
+                    })
+                } catch (wsError) {
+                    console.error('发送拒绝消息失败:', wsError)
+                }
             }
         },
 
@@ -209,15 +237,12 @@ export default {
 
         // 标记通知已响应
         markNotificationResponded(notification) {
-            const index = this.notifications.findIndex(n =>
-                n.timestamp === notification.timestamp &&
-                n.type === notification.type
-            )
-
-            if (index !== -1) {
-                // Vue 无法直接修改数组元素的属性，需要用 this.$set
-                this.$set(this.notifications[index], 'responded', true)
-            }
+            // 使用 Vuex mutation 来更新状态，遵循单向数据流原则
+            this.$store.commit('updateNotificationResponse', {
+                timestamp: notification.timestamp,
+                type: notification.type,
+                responded: true
+            })
         }
     }
 }
