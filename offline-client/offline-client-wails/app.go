@@ -30,13 +30,13 @@ func (a *App) startup(ctx context.Context) {
 // 以下是需要绑定到前端的方法
 
 // PerformKeyGeneration 绑定密钥生成方法
-func (a *App) PerformKeyGeneration() (interface{}, error) {
-	return a.wailsServices.PerformKeyGeneration()
+func (a *App) PerformKeyGeneration(req KeyGenerationRequest) (interface{}, error) {
+	return a.wailsServices.PerformKeyGeneration(req)
 }
 
 // PerformSignMessage 绑定消息签名方法
-func (a *App) PerformSignMessage(message string) (interface{}, error) {
-	return a.wailsServices.PerformSignMessage(message)
+func (a *App) PerformSignMessage(req SignMessageRequest) (interface{}, error) {
+	return a.wailsServices.PerformSignMessage(req)
 }
 
 // GetCPLCInfo 绑定获取CPLC信息的方法
@@ -45,6 +45,6 @@ func (a *App) GetCPLCInfo() (interface{}, error) {
 }
 
 // PerformDeleteMessage 绑定删除消息的方法
-func (a *App) PerformDeleteMessage() error {
-	return a.wailsServices.PerformDeleteMessage()
+func (a *App) PerformDeleteMessage(req DeleteMessageRequest) error {
+	return a.wailsServices.PerformDeleteMessage(req)
 }

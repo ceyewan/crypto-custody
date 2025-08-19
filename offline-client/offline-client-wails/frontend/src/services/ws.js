@@ -1,5 +1,5 @@
 import store from '../store'
-import { mpcApi, seApi } from './api'
+import { mpcApi, seApi } from './wails-api'
 import { MessageBox, Message } from 'element-ui'
 
 // 跟踪WebSocket服务初始化状态
@@ -269,8 +269,7 @@ async function handleKeyGenParams(message) {
             threshold: message.threshold,
             parties: message.total_parts,
             index: message.part_index,
-            filename: message.filename,
-            username: user
+            user_name: user
         })
 
         if (keygenResponse.data.success) {
@@ -381,11 +380,10 @@ async function handleSignParams(message) {
         // 调用MPC签名服务
         const signResponse = await mpcApi.sign({
             parties: message.parties,
-            data: message.data,
-            filename: message.filename,
-            encryptedKey: message.encrypted_shard,
-            userName: store.state.user.username,
+            message: message.data,
+            user_name: store.state.user.username,
             address: message.address,
+            encrypted_key: message.encrypted_shard,
             signature: message.signature
         })
 

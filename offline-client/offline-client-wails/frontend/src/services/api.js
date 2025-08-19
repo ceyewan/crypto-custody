@@ -114,29 +114,3 @@ export const signApi = {
         return apiClient.get(`/sign/users/${address}`)
     }
 }
-
-// 安全芯片API
-export const seApi = {
-    // 获取CPIC
-    getCPIC() {
-        return axios.get(`${MPC_URL}/api/v1/mpc/cplc`)
-    },
-
-    // 创建安全芯片记录
-    createSE(data) {
-        return apiClient.post(`/se/create`, data)
-    }
-}
-
-// MPC服务API
-export const mpcApi = {
-    // 密钥生成
-    keyGen(data) {
-        return axios.post(`${MPC_URL}/api/v1/mpc/keygen`, data)
-    },
-
-    // 签名
-    sign(data) {
-        return axios.post(`${MPC_URL}/api/v1/mpc/sign`, data)
-    }
-} 

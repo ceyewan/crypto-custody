@@ -10,6 +10,31 @@ import (
 	"offline-client-wails/mpc_core/services"
 )
 
+// KeyGenerationRequest 封装了密钥生成所需的参数
+type KeyGenerationRequest struct {
+	Threshold int    `json:"threshold"`
+	Parties   int    `json:"parties"`
+	Index     int    `json:"index"`
+	UserName  string `json:"user_name"`
+}
+
+// SignMessageRequest 封装了消息签名所需的参数
+type SignMessageRequest struct {
+	Message      string `json:"message"`
+	Parties      string `json:"parties"`
+	UserName     string `json:"user_name"`
+	Address      string `json:"address"`
+	EncryptedKey []byte `json:"encrypted_key"`
+	Signature    []byte `json:"signature"` // 用于授权安全芯片操作的签名
+}
+
+// DeleteMessageRequest 封装了删除消息（密钥）所需的参数
+type DeleteMessageRequest struct {
+	UserName  string `json:"user_name"`
+	Address   string `json:"address"`
+	Signature []byte `json:"signature"` // 用于授权安全芯片操作的签名
+}
+
 // WailsServices 包装原有的服务层，为 Wails 前端提供统一接口
 type WailsServices struct {
 	cfg             *config.Config
@@ -70,7 +95,7 @@ func (ws *WailsServices) Init() error {
 }
 
 // PerformKeyGeneration 执行密钥生成
-func (ws *WailsServices) PerformKeyGeneration() (interface{}, error) {
+func (ws *WailsServices) PerformKeyGeneration(req KeyGenerationRequest) (interface{}, error) {
 	if !ws.initialized {
 		if err := ws.Init(); err != nil {
 			return nil, err
@@ -78,8 +103,8 @@ func (ws *WailsServices) PerformKeyGeneration() (interface{}, error) {
 	}
 
 	ctx := context.Background()
-	// 使用默认参数：threshold=2, parties=3, index=1
-	address, encryptedKey, err := ws.mpcService.KeyGeneration(ctx, 2, 3, 1, "keygen_temp.json", "default_user")
+	// 使用从前端请求传递的参数
+	address, encryptedKey, err := ws.mpcService.KeyGeneration(ctx, req.Threshold, req.Parties, req.Index, "keygen_temp.json", req.UserName)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +116,7 @@ func (ws *WailsServices) PerformKeyGeneration() (interface{}, error) {
 }
 
 // PerformSignMessage 执行消息签名
-func (ws *WailsServices) PerformSignMessage(message string) (interface{}, error) {
+func (ws *WailsServices) PerformSignMessage(req SignMessageRequest) (interface{}, error) {
 	if !ws.initialized {
 		if err := ws.Init(); err != nil {
 			return nil, err
@@ -99,23 +124,24 @@ func (ws *WailsServices) PerformSignMessage(message string) (interface{}, error)
 	}
 
 	ctx := context.Background()
-	// 使用默认参数进行签名
-	// 注意：在实际使用中，这些参数应该从存储中获取或由用户提供
-	parties := "3"
-	filename := "sign_temp.json"
-	userName := "default_user"
-	address := ""            // 需要从之前的密钥生成中获取
-	encryptedKey := []byte{} // 需要从安全芯片中获取
-	signature := []byte{}    // 初始为空
-
-	result, err := ws.mpcService.SignMessage(ctx, parties, message, filename, userName, address, encryptedKey, signature)
+	// 使用从前端请求传递的参数
+	result, err := ws.mpcService.SignMessage(
+		ctx,
+		req.Parties,
+		req.Message,
+		"sign_temp.json", // 临时文件名仍然可以在后端定义
+		req.UserName,
+		req.Address,
+		req.EncryptedKey,
+		req.Signature,
+	)
 	if err != nil {
 		return nil, err
 	}
 
 	return map[string]interface{}{
 		"signature": result,
-		"message":   message,
+		"message":   req.Message,
 	}, nil
 }
 
@@ -137,16 +163,14 @@ func (ws *WailsServices) GetCPLCInfo() (interface{}, error) {
 	}, nil
 }
 
-// PerformDeleteMessage 执行删除消息
-func (ws *WailsServices) PerformDeleteMessage() error {
+// PerformDeleteMessage 从安全芯片中删除一个密钥记录
+func (ws *WailsServices) PerformDeleteMessage(req DeleteMessageRequest) error {
 	if !ws.initialized {
 		if err := ws.Init(); err != nil {
 			return err
 		}
 	}
 
-	// 这里可以添加具体的删除逻辑
-	// 现在先返回成功
-	clog.Info("执行删除操作")
-	return nil
+	// 调用 securityService 来执行删除
+	return ws.securityService.DeleteData(req.UserName, req.Address, req.Signature)
 }

@@ -1,7 +1,0 @@
-2025-08-19 11:50:10.194	INFO	default	offline-client-wails/app.go:43	Wails应用启动成功
-2025-08-19 11:50:10.195	INFO	default	offline-client-wails/app.go:44	配置加载成功	{"port": "23451", "debug": true, "log_file": "web-se.log", "log_dir": "./logs"}
-2025-08-19 11:50:10.195	DEBUG	default	services/security.go:30	初始化安全芯片服务	{"debug": true}
-2025-08-19 11:50:10.195	INFO	default	services/security.go:35	创建卡片读取器
-2025-08-19 11:50:10.231	INFO	default	services/security.go:43	连接读卡器
-2025-08-19 11:50:10.231	ERROR	default	services/security.go:45	连接读卡器失败	{"err": "未找到可用的读卡器"}
-2025-08-19 11:50:10.231	ERROR	default	offline-client-wails/wails_services.go:50	创建安全芯片服务失败	{"error": "未找到可用的读卡器"}

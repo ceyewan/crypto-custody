@@ -6,12 +6,12 @@ export function GetCPLCInfo() {
   return window['go']['main']['App']['GetCPLCInfo']();
 }
 
-export function PerformDeleteMessage() {
-  return window['go']['main']['App']['PerformDeleteMessage']();
+export function PerformDeleteMessage(arg1) {
+  return window['go']['main']['App']['PerformDeleteMessage'](arg1);
 }
 
-export function PerformKeyGeneration() {
-  return window['go']['main']['App']['PerformKeyGeneration']();
+export function PerformKeyGeneration(arg1) {
+  return window['go']['main']['App']['PerformKeyGeneration'](arg1);
 }
 
 export function PerformSignMessage(arg1) {
