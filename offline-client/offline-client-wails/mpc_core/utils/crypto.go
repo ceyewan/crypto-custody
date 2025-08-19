@@ -13,7 +13,7 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/ethereum/go-ethereum/crypto"
 
-	"offline-client-wails/clog"
+	"offline-client-wails/mpc_core/clog"
 )
 
 // GenerateRandomBytes 生成指定长度的随机字节序列

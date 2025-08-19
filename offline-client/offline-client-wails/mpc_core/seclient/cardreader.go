@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"offline-client-wails/clog"
+	"offline-client-wails/mpc_core/clog"
 
 	"github.com/ebfe/scard"
 )

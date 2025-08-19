@@ -4,10 +4,10 @@ import (
 	"context"
 	"sync"
 
-	"offline-client-wails/clog"
-	"offline-client-wails/config"
-	"offline-client-wails/controllers"
-	"offline-client-wails/services"
+	"offline-client-wails/mpc_core/clog"
+	"offline-client-wails/mpc_core/config"
+	"offline-client-wails/mpc_core/controllers"
+	"offline-client-wails/mpc_core/services"
 )
 
 // WailsServices 包装原有的服务层，为 Wails 前端提供统一接口

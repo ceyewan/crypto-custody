@@ -3,64 +3,91 @@ package utils
 import (
 	"bytes"
 	"context"
+	"embed"
+	"fmt"
+	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
 	"time"
 
-	"offline-client-wails/clog"
-	"offline-client-wails/config"
+	"offline-client-wails/mpc_core/clog"
+	"offline-client-wails/mpc_core/config"
+)
+
+//go:embed all:binaries
+var binaries embed.FS
+
+const (
+	keygenBaseName  = "gg20_keygen"
+	signingBaseName = "gg20_signing"
 )
 
 const (
 	defaultTimeout = 60 * time.Second
 )
 
-// getOSBinDir 根据操作系统返回对应的二进制文件目录
-func getOSBinDir() string {
-	switch runtime.GOOS {
-	case "windows":
-		return "Windows"
-	case "linux":
-		return "Linux"
-	case "darwin":
-		return "MacOS"
-	default:
-		// 默认使用 Linux
-		return "Linux"
+// createAndRunTempExecutable 从嵌入的数据创建临时可执行文件并运行
+// getBinaryData 根据操作系统和架构选择正确的二进制数据
+func getBinaryData(baseName string) ([]byte, error) {
+	fileName := fmt.Sprintf("%s_%s_%s", baseName, runtime.GOOS, runtime.GOARCH)
+	if runtime.GOOS == "windows" {
+		fileName += ".exe"
 	}
+
+	path := fmt.Sprintf("binaries/%s", fileName)
+	data, err := binaries.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("binary not found for %s/%s: %s", runtime.GOOS, runtime.GOARCH, path)
+	}
+	return data, nil
 }
 
-// buildCmdPath 构建跨平台的命令路径
-func buildCmdPath(cfg *config.Config, binName string) string {
-	osDir := getOSBinDir()
-	// 在 Windows 下添加 .exe 后缀
-	if runtime.GOOS == "windows" && !strings.HasSuffix(binName, ".exe") {
-		binName += ".exe"
+// createAndRunTempExecutable 从嵌入的数据创建临时可执行文件并运行
+func createAndRunTempExecutable(ctx context.Context, baseName string, args ...string) (string, error) {
+	// 获取特定平台的二进制数据
+	binData, err := getBinaryData(baseName)
+	if err != nil {
+		return "", err
 	}
-	return filepath.Join(cfg.BinDir, osDir, binName)
-}
 
-// ExecCommand 执行命令并返回输出
-func ExecCommand(ctx context.Context, cfg *config.Config, name string, args ...string) (string, error) {
+	// 创建临时文件
+	tmpFile, err := os.CreateTemp("", "mpc-exec-")
+	if err != nil {
+		return "", fmt.Errorf("failed to create temp file: %w", err)
+	}
+	defer os.Remove(tmpFile.Name()) // 确保临时文件被删除
+
+	// 写入二进制数据
+	if _, err := tmpFile.Write(binData); err != nil {
+		return "", fmt.Errorf("failed to write to temp file: %w", err)
+	}
+	tmpFile.Close() // 关闭文件以便后续操作
+
+	// 添加可执行权限 (非Windows)
+	if runtime.GOOS != "windows" {
+		if err := os.Chmod(tmpFile.Name(), 0755); err != nil {
+			return "", fmt.Errorf("failed to set executable permission: %w", err)
+		}
+	}
+
 	// 设置超时上下文
 	ctx, cancel := context.WithTimeout(ctx, defaultTimeout)
 	defer cancel()
 
 	// 准备命令
 	var stdout, stderr bytes.Buffer
-	cmd := exec.CommandContext(ctx, name, args...)
+	cmd := exec.CommandContext(ctx, tmpFile.Name(), args...)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
 	// 记录开始执行
-	logCommandStart(name, args)
+	logCommandStart(tmpFile.Name(), args)
 
 	// 执行命令并计时
 	startTime := time.Now()
-	err := cmd.Run()
+	err = cmd.Run()
 	executionTime := time.Since(startTime)
 
 	// 处理执行结果
@@ -75,19 +102,17 @@ func ExecCommand(ctx context.Context, cfg *config.Config, name string, args ...s
 
 // RunKeyGen 运行密钥生成命令
 func RunKeyGen(ctx context.Context, cfg *config.Config, t, n, i int, output string) error {
-	cmdPath := buildCmdPath(cfg, cfg.KeygenBin)
-
 	args := buildKeygenArgs(cfg, t, n, i, output)
 
 	clog.Info("开始密钥生成",
-		clog.String("command", cmdPath),
+		clog.String("command", "embedded gg20_keygen"),
 		clog.String("os", runtime.GOOS),
 		clog.Int("threshold", t),
 		clog.Int("parties", n),
 		clog.Int("index", i),
 		clog.String("output", output))
 
-	_, err := ExecCommand(ctx, cfg, cmdPath, args...)
+	_, err := createAndRunTempExecutable(ctx, keygenBaseName, args...)
 	if err != nil {
 		clog.Error("密钥生成失败", clog.Err(err))
 		return err
@@ -99,18 +124,16 @@ func RunKeyGen(ctx context.Context, cfg *config.Config, t, n, i int, output stri
 
 // RunSigning 运行签名命令
 func RunSigning(ctx context.Context, cfg *config.Config, parties, data, localShare string) (string, error) {
-	cmdPath := buildCmdPath(cfg, cfg.SigningBin)
-
 	args := buildSigningArgs(cfg, parties, data, localShare)
 
 	clog.Info("开始签名操作",
-		clog.String("command", cmdPath),
+		clog.String("command", "embedded gg20_signing"),
 		clog.String("os", runtime.GOOS),
 		clog.String("parties", parties),
 		clog.String("data", data),
 		clog.String("local_share", localShare))
 
-	output, err := ExecCommand(ctx, cfg, cmdPath, args...)
+	output, err := createAndRunTempExecutable(ctx, signingBaseName, args...)
 	if err != nil {
 		clog.Error("签名操作失败", clog.Err(err))
 		return "", err

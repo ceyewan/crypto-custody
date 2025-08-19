@@ -3,7 +3,7 @@ package seclient
 import (
 	"encoding/hex"
 	"fmt"
-	"offline-client-wails/clog"
+	"offline-client-wails/mpc_core/clog"
 )
 
 // StoreData 存储数据 - 简化接口，直接接收数据

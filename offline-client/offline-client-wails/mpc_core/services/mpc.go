@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"offline-client-wails/clog"
-	"offline-client-wails/config"
-	"offline-client-wails/utils"
+	"offline-client-wails/mpc_core/clog"
+	"offline-client-wails/mpc_core/config"
+	"offline-client-wails/mpc_core/utils"
 )
 
 // MPCService 提供多方计算(MPC)相关功能的服务接口。

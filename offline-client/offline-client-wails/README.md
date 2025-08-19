@@ -1,19 +1,93 @@
-# README
+# Offline Client - 安全可信的 MPC 密钥管理桌面应用
 
-## About
+![Wails](https://img.shields.io/badge/Wails-v2.10.2-blue)
+![Go](https://img.shields.io/badge/Go-1.24.3-00ADD8)
+![Vue](https://img.shields.io/badge/Vue-2.6.11-4FC08D)
+![License](https://img.shields.io/badge/License-MIT-green)
 
-This is the official Wails Vue template.
+**Offline Client** 是一款基于 Wails 框架构建的安全桌面应用，它将强大的多方计算（MPC）能力和硬件安全芯片集成在一起，为您提供企业级的密钥管理解决方案。
 
-You can configure the project by editing `wails.json`. More information about the project settings can be found
-here: https://wails.io/docs/reference/project-config
+无论您是需要与云端服务器协同工作，还是在完全离线的环境中执行密码学操作，本应用都能提供无缝、安全的体验。
 
-## Live Development
+## ✨ 核心功能
 
-To run in live development mode, run `wails dev` in the project directory. This will run a Vite development
-server that will provide very fast hot reload of your frontend changes. If you want to develop in a browser
-and have access to your Go methods, there is also a dev server that runs on http://localhost:34115. Connect
-to this in your browser, and you can call your Go code from devtools.
+- **混合工作模式**:
+    - **云端协作模式**: 与云端服务器实时通信，参与多方协同的密钥生成和签名任务。
+    - **本地离线模式**: 在没有网络连接的情况下，独立执行所有核心 MPC 功能，确保最高级别的安全隔离。
+- **强大的 MPC 能力**:
+    - **门限密钥生成**: 支持 t-n 门限方案，将密钥分片安全地分发给多个参与方。
+    - **分布式签名**: 多方协作完成数字签名，任何单一方都无法独自掌握完整密钥。
+    - **以太坊兼容**: 生成与以太坊兼容的地址和签名，无缝集成到区块链应用中。
+- **硬件级安全**:
+    - **安全芯片集成**: 支持将加密后的密钥材料存储在符合行业标准的智能卡或安全芯片中，提供物理层面的保护。
+- **跨平台支持**:
+    - 一套代码，可在 Windows、macOS 和 Linux 上原生运行。
 
-## Building
+## 🚀 快速开始
 
-To build a redistributable, production mode package, use `wails build`.
+### 环境要求
+
+- **操作系统**: Windows, macOS, 或 Linux
+- **智能卡读卡器**: (可选) 如果您需要使用硬件安全模块功能。
+
+### 安装与运行
+
+1.  **下载应用**:
+    从项目的 [Releases 页面](https://github.com/your-repo/offline-client-wails/releases)下载适用于您操作系统的最新版本。
+
+2.  **安装**:
+    - **Windows**: 运行 `.exe` 安装程序。
+    - **macOS**: 将 `.app` 文件拖入“应用程序”文件夹。
+    - **Linux**: 直接运行可执行文件。
+
+3.  **启动应用**:
+    打开应用后，您将看到主界面。
+
+## 🎯 如何使用
+
+应用主要包含以下功能模块：
+
+### 1. 密钥生成 (Key Generation)
+
+在此页面，您可以发起一个密钥生成流程。
+
+- **云端模式**:
+    1.  设置门限值 (t) 和总分片数 (n)。
+    2.  从云端同步的列表中选择参与会话的其他成员。
+    3.  点击“发起生成”，应用将通过 WebSocket 与云端服务器协调，并与其他参与方共同生成密钥。
+    4.  完成后，您的密钥分片将被加密并安全存储。
+
+- **本地模式**:
+    1.  输入测试用的参数。
+    2.  点击“本地生成”，应用将独立完成一次完整的密钥生成，用于功能验证。
+
+### 2. 消息签名 (Sign Message)
+
+使用已生成的密钥对消息或交易进行签名。
+
+- **云端模式**:
+    1.  输入需要签名的消息（通常是交易哈希）。
+    2.  选择您要用于签名的密钥（由地址标识）。
+    3.  应用将启动一个多方签名会话，等待其他参与方批准。
+    4.  所有参与方同意后，将共同计算出最终签名。
+
+- **本地模式**:
+    1.  输入测试消息。
+    2.  选择本地生成的密钥。
+    3.  点击“本地签名”以验证签名算法的正确性。
+
+### 3. 功能测试 (Test)
+
+这是一个为开发者和高级用户准备的页面，您可以在此直接与应用的底层功能交互：
+
+- **CPLC 测试**: 检查安全芯片是否已连接，并读取其基本信息 (CPLC)。
+- **密钥生成测试**: 绕过云端，直接调用本地 MPC 模块生成密钥。
+- **签名测试**: 直接使用本地密钥分片进行签名。
+
+## 🤝 贡献
+
+我们欢迎各种形式的贡献！如果您发现了 Bug 或有功能建议，请通过 [GitHub Issues](https://github.com/your-repo/offline-client-wails/issues) 告诉我们。
+
+## 📄 许可证
+
+本项目基于 MIT 许可证。详情请参阅 `LICENSE` 文件。

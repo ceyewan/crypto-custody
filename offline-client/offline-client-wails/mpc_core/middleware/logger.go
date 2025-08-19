@@ -3,7 +3,7 @@ package middleware
 import (
 	"time"
 
-	"offline-client-wails/clog"
+	"offline-client-wails/mpc_core/clog"
 
 	"github.com/gin-gonic/gin"
 )

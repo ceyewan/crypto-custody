@@ -2,135 +2,49 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"log"
-
-	"offline-client-wails/clog"
-	"offline-client-wails/config"
+	"offline-client-wails/mpc_core/clog"
 )
 
-// App struct - Wails 应用程序结构体
+// App struct
 type App struct {
-	ctx      context.Context
-	services *WailsServices
+	ctx           context.Context
+	wailsServices *WailsServices
 }
 
-// NewApp 创建新的 App 应用程序结构体
+// NewApp 创建App实例
 func NewApp() *App {
 	return &App{
-		services: GetWailsServices(),
+		wailsServices: GetWailsServices(),
 	}
 }
 
-// startup 当应用启动时调用，保存上下文以便调用运行时方法
+// startup 是应用启动时调用的函数
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
-
-	// 初始化配置
-	cfg, err := config.LoadConfig()
-	if err != nil {
-		log.Printf("加载配置失败: %v", err)
-		return
-	}
-
-	// 初始化日志系统
-	if err = clog.Init(clog.DefaultConfig()); err != nil {
-		log.Printf("初始化日志系统失败: %v", err)
-		return
-	}
-	clog.SetDefaultLevel(clog.DebugLevel)
-
-	clog.Info("Wails应用启动成功")
-	clog.Info("配置加载成功",
-		clog.String("port", cfg.Port),
-		clog.Bool("debug", cfg.Debug),
-		clog.String("log_file", cfg.LogFile),
-		clog.String("log_dir", cfg.LogDir),
-	)
-
-	// 初始化服务
-	if err := a.services.Init(); err != nil {
-		log.Printf("初始化服务失败: %v", err)
+	// 在应用启动时初始化所有服务
+	if err := a.wailsServices.Init(); err != nil {
+		clog.Fatal("初始化Wails服务失败", clog.String("error", err.Error()))
 	}
 }
 
-// Greet 为给定的名称返回问候语
-func (a *App) Greet(name string) string {
-	return fmt.Sprintf("Hello %s, It's show time!", name)
+// 以下是需要绑定到前端的方法
+
+// PerformKeyGeneration 绑定密钥生成方法
+func (a *App) PerformKeyGeneration() (interface{}, error) {
+	return a.wailsServices.PerformKeyGeneration()
 }
 
-// KeyGeneration 密钥生成 - 暴露给前端的方法
-func (a *App) KeyGeneration() map[string]interface{} {
-	clog.Info("前端调用密钥生成")
-
-	result, err := a.services.PerformKeyGeneration()
-	if err != nil {
-		clog.Error("密钥生成失败", clog.String("error", err.Error()))
-		return map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
-		}
-	}
-
-	return map[string]interface{}{
-		"success": true,
-		"data":    result,
-	}
+// PerformSignMessage 绑定消息签名方法
+func (a *App) PerformSignMessage(message string) (interface{}, error) {
+	return a.wailsServices.PerformSignMessage(message)
 }
 
-// SignMessage 消息签名 - 暴露给前端的方法
-func (a *App) SignMessage(message string) map[string]interface{} {
-	clog.Info("前端调用消息签名", clog.String("message", message))
-
-	result, err := a.services.PerformSignMessage(message)
-	if err != nil {
-		clog.Error("消息签名失败", clog.String("error", err.Error()))
-		return map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
-		}
-	}
-
-	return map[string]interface{}{
-		"success": true,
-		"data":    result,
-	}
+// GetCPLCInfo 绑定获取CPLC信息的方法
+func (a *App) GetCPLCInfo() (interface{}, error) {
+	return a.wailsServices.GetCPLCInfo()
 }
 
-// GetCPLC 获取CPLC信息 - 暴露给前端的方法
-func (a *App) GetCPLC() map[string]interface{} {
-	clog.Info("前端调用获取CPLC信息")
-
-	result, err := a.services.GetCPLCInfo()
-	if err != nil {
-		clog.Error("获取CPLC信息失败", clog.String("error", err.Error()))
-		return map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
-		}
-	}
-
-	return map[string]interface{}{
-		"success": true,
-		"data":    result,
-	}
-}
-
-// DeleteMessage 删除消息 - 暴露给前端的方法
-func (a *App) DeleteMessage() map[string]interface{} {
-	clog.Info("前端调用删除消息")
-
-	err := a.services.PerformDeleteMessage()
-	if err != nil {
-		clog.Error("删除消息失败", clog.String("error", err.Error()))
-		return map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
-		}
-	}
-
-	return map[string]interface{}{
-		"success": true,
-		"message": "删除成功",
-	}
+// PerformDeleteMessage 绑定删除消息的方法
+func (a *App) PerformDeleteMessage() error {
+	return a.wailsServices.PerformDeleteMessage()
 }

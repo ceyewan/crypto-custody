@@ -6,9 +6,9 @@ import (
 	"errors"
 	"fmt"
 
-	"offline-client-wails/clog"
-	"offline-client-wails/config"
-	"offline-client-wails/seclient"
+	"offline-client-wails/mpc_core/clog"
+	"offline-client-wails/mpc_core/config"
+	"offline-client-wails/mpc_core/seclient"
 )
 
 // SecurityService 提供与安全芯片通信的服务接口。

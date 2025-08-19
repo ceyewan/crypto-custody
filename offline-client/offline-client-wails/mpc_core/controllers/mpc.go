@@ -7,13 +7,13 @@ import (
 	"strings"
 	"sync"
 
-	"offline-client-wails/clog"
+	"offline-client-wails/mpc_core/clog"
 
 	"github.com/gin-gonic/gin"
 
-	"offline-client-wails/config"
-	"offline-client-wails/models"
-	"offline-client-wails/services"
+	"offline-client-wails/mpc_core/config"
+	"offline-client-wails/mpc_core/models"
+	"offline-client-wails/mpc_core/services"
 )
 
 var (
