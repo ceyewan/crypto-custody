@@ -4,7 +4,7 @@
   "outputfilename": "offline-client-wails",
   "frontend:install": "npm install",
   "frontend:build": "npm run build",
-  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:watcher": "npm run serve",
   "frontend:dev:serverUrl": "auto",
   "author": {
     "name": "ceyewan",
