@@ -14,10 +14,10 @@ async function detectEnvironmentAndSetURL() {
         isWailsEnvironment = true;
         // 在 Wails 环境中直接连接远程服务器
         API_URL = 'https://crypto-custody-offline-server.ceyewan.icu';
-        
+
         // 更新 axios 实例的 baseURL
         apiClient.defaults.baseURL = API_URL;
-        
+
         console.log(`[API Debug] Wails Environment detected - buildType: ${envInfo.buildType}, platform: ${envInfo.platform}, API_URL: ${API_URL}`);
     } catch (error) {
         // 不是 Wails 环境，使用代理
@@ -137,5 +137,13 @@ export const signApi = {
     // 获取可用签名参与者
     getAvailableUsers(address) {
         return apiClient.get(`/sign/users/${address}`)
+    }
+}
+
+// 安全芯片API (云端)
+export const seApi = {
+    // 创建安全芯片记录
+    createSecurityElement(seid, cpic) {
+        return apiClient.post(`/se/create`, { seId: seid, cpic: cpic })
     }
 }

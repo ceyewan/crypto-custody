@@ -17,6 +17,10 @@
                             <i class="el-icon-user"></i>
                             <span>用户管理</span>
                         </el-menu-item>
+                        <el-menu-item v-if="isAdmin" index="/import-se">
+                            <i class="el-icon-cpu"></i>
+                            <span>导入安全芯片</span>
+                        </el-menu-item>
                         <el-menu-item v-if="isAdmin || isCoordinator" index="/keygen">
                             <i class="el-icon-key"></i>
                             <span>密钥生成</span>

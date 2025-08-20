@@ -8,6 +8,7 @@ import KeyGen from '../views/KeyGen.vue'
 import Sign from '../views/Sign.vue'
 import Notifications from '../views/Notifications.vue'
 import Test from '../views/Test.vue'
+import ImportSE from '../views/ImportSE.vue'
 import store from '../store'
 
 Vue.use(VueRouter)
@@ -39,6 +40,12 @@ const routes = [
         path: '/users',
         name: 'Users',
         component: Users,
+        meta: { requiresAuth: true, requiresAdmin: true }
+    },
+    {
+        path: '/import-se',
+        name: 'ImportSE',
+        component: ImportSE,
         meta: { requiresAuth: true, requiresAdmin: true }
     },
     {
