@@ -2,6 +2,9 @@
     <div id="app">
         <ws-status-indicator v-if="isLoggedIn"></ws-status-indicator>
         <router-view />
+        <button v-if="showHomeButton" @click="goHome" class="home-button">
+            主页
+        </button>
     </div>
 </template>
 
@@ -16,6 +19,14 @@ export default {
     computed: {
         isLoggedIn() {
             return this.$store.getters.isLoggedIn
+        },
+        showHomeButton() {
+            return this.isLoggedIn && this.$route.path !== '/dashboard'
+        }
+    },
+    methods: {
+        goHome() {
+            this.$router.push('/dashboard')
         }
     }
 }
@@ -44,5 +55,28 @@ html {
     max-width: 1200px;
     margin: 0 auto;
     padding: 20px;
+}
+
+.home-button {
+    position: fixed;
+    bottom: 40px;
+    right: 40px;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background-color: #409eff;
+    color: white;
+    border: none;
+    font-size: 16px;
+    cursor: pointer;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.home-button:hover {
+    background-color: #66b1ff;
 }
 </style>
