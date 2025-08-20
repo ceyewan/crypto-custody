@@ -28,6 +28,10 @@ func main() {
 		Bind: []interface{}{
 			app,
 		},
+		// 调试配置 - 允许在生产环境启用 devtools
+		Debug: options.Debug{
+			OpenInspectorOnStartup: false, // 设为 true 可以自动打开调试器
+		},
 	})
 
 	if err != nil {

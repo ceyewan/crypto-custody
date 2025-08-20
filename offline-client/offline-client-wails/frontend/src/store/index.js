@@ -1,5 +1,6 @@
 import Vue from 'vue'
 import Vuex from 'vuex'
+import { Environment } from '../../wailsjs/runtime/runtime'
 
 Vue.use(Vuex)
 
@@ -109,7 +110,7 @@ export default new Vuex.Store({
 
             commit('clearToken')
         },
-        connectWebSocket({ commit, state, dispatch }) {
+        async connectWebSocket({ commit, state, dispatch }) {
             if (state.wsConnected || state.wsConnecting) {
                 console.log('WebSocket已连接或正在连接中，跳过连接请求')
                 return
@@ -135,10 +136,19 @@ export default new Vuex.Store({
 
             try {
                 console.log('正在创建新的WebSocket连接...')
-                const wsURL = process.env.NODE_ENV === 'production'
-                    ? 'wss://crypto-custody-offline-server.ceyewan.icu/ws'
-                    : `ws://localhost:8090/ws`;
-                console.log(`[WS Debug] NODE_ENV: ${process.env.NODE_ENV}, WS URL: ${wsURL}`);
+                
+                // 使用 Wails runtime.Environment() 来可靠地检测环境
+                let wsURL = `ws://localhost:8090/ws`; // 默认使用代理
+                try {
+                    const envInfo = await Environment();
+                    // 在 Wails 环境中直接连接远程服务器
+                    wsURL = 'wss://crypto-custody-offline-server.ceyewan.icu/ws';
+                    console.log(`[WS Debug] Wails Environment detected - buildType: ${envInfo.buildType}, platform: ${envInfo.platform}, WS URL: ${wsURL}`);
+                } catch (error) {
+                    // 不是 Wails 环境，使用代理
+                    console.log(`[WS Debug] Non-Wails Environment detected, using proxy: ${wsURL}`);
+                }
+                
                 const ws = new WebSocket(wsURL)
 
                 const connectionTimeout = setTimeout(() => {

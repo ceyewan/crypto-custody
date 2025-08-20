@@ -1,13 +1,34 @@
 import axios from 'axios'
 import store from '../store'
+import { Environment } from '../../wailsjs/runtime/runtime'
 
 // API基础URL
-// 统一使用代理，简化配置
-const API_URL = process.env.NODE_ENV === 'production'
-    ? 'https://crypto-custody-offline-server.ceyewan.icu'
-    : '/api';
+// 使用 Wails runtime.Environment() 来可靠地检测环境
+let API_URL = '/api'; // 默认使用代理
+let isWailsEnvironment = false;
 
-console.log(`[API Debug] NODE_ENV: ${process.env.NODE_ENV}, API_URL: ${API_URL}`);
+// 异步检测 Wails 环境并设置正确的 API URL
+async function detectEnvironmentAndSetURL() {
+    try {
+        const envInfo = await Environment();
+        isWailsEnvironment = true;
+        // 在 Wails 环境中直接连接远程服务器
+        API_URL = 'https://crypto-custody-offline-server.ceyewan.icu';
+        
+        // 更新 axios 实例的 baseURL
+        apiClient.defaults.baseURL = API_URL;
+        
+        console.log(`[API Debug] Wails Environment detected - buildType: ${envInfo.buildType}, platform: ${envInfo.platform}, API_URL: ${API_URL}`);
+    } catch (error) {
+        // 不是 Wails 环境，使用代理
+        isWailsEnvironment = false;
+        API_URL = '/api';
+        console.log(`[API Debug] Non-Wails Environment detected, using proxy: ${API_URL}`);
+    }
+}
+
+// 初始化环境检测
+detectEnvironmentAndSetURL();
 
 // 创建axios实例
 const apiClient = axios.create({
