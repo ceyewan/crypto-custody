@@ -3,7 +3,6 @@
 ![Wails](https://img.shields.io/badge/Wails-v2.10.2-blue)
 ![Go](https://img.shields.io/badge/Go-1.24.3-00ADD8)
 ![Vue](https://img.shields.io/badge/Vue-2.6.11-4FC08D)
-![License](https://img.shields.io/badge/License-MIT-green)
 
 **Offline Client** 是一款基于 Wails 框架构建的安全桌面应用，它将强大的多方计算（MPC）能力和硬件安全芯片集成在一起，为您提供企业级的密钥管理解决方案。
 
@@ -32,10 +31,10 @@
 
 ### 安装与运行
 
-1.  **下载应用**:
-    从项目的 [Releases 页面](https://github.com/your-repo/offline-client-wails/releases)下载适用于您操作系统的最新版本。
+1.  **准备应用**:
+    使用已构建的桌面端安装包，或在本目录执行本地构建命令生成应用。
 
-2.  **安装**:
+2.  **安装或运行**:
     - **Windows**: 运行 `.exe` 安装程序。
     - **macOS**: 将 `.app` 文件拖入“应用程序”文件夹。
     - **Linux**: 直接运行可执行文件。
@@ -83,11 +82,3 @@
 - **CPLC 测试**: 检查安全芯片是否已连接，并读取其基本信息 (CPLC)。
 - **密钥生成测试**: 绕过云端，直接调用本地 MPC 模块生成密钥。
 - **签名测试**: 直接使用本地密钥分片进行签名。
-
-## 🤝 贡献
-
-我们欢迎各种形式的贡献！如果您发现了 Bug 或有功能建议，请通过 [GitHub Issues](https://github.com/your-repo/offline-client-wails/issues) 告诉我们。
-
-## 📄 许可证
-
-本项目基于 MIT 许可证。详情请参阅 `LICENSE` 文件。

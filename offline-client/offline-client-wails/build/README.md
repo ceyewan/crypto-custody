@@ -1,35 +1,32 @@
-# Build Directory
+# build 目录
 
-The build directory is used to house all the build files and assets for your application. 
+`build` 目录保存 Wails 桌面应用构建所需的图标、平台配置和安装器资源。
 
-The structure is:
+## 目录结构
 
-* bin - Output directory
-* darwin - macOS specific files
-* windows - Windows specific files
+- `bin/`：构建输出目录。
+- `darwin/`：macOS 构建配置。
+- `windows/`：Windows 构建配置和安装器资源。
 
-## Mac
+## macOS
 
-The `darwin` directory holds files specific to Mac builds.
-These may be customised and used as part of the build. To return these files to the default state, simply delete them
-and
-build with `wails build`.
+`darwin` 目录保存 macOS 构建使用的 plist 配置，可根据应用名称、权限和打包需求调整。
 
-The directory contains the following files:
+## 文件说明
 
-- `Info.plist` - the main plist file used for Mac builds. It is used when building using `wails build`.
-- `Info.dev.plist` - same as the main plist file but used when building using `wails dev`.
+- `Info.plist`：正式构建使用的 macOS plist。
+- `Info.dev.plist`：开发模式使用的 macOS plist。
 
 ## Windows
 
-The `windows` directory contains the manifest and rc files used when building with `wails build`.
-These may be customised for your application. To return these files to the default state, simply delete them and
-build with `wails build`.
+`windows` 目录保存 Windows 构建、应用图标和安装器配置。
 
-- `icon.ico` - The icon used for the application. This is used when building using `wails build`. If you wish to
-  use a different icon, simply replace this file with your own. If it is missing, a new `icon.ico` file
-  will be created using the `appicon.png` file in the build directory.
-- `installer/*` - The files used to create the Windows installer. These are used when building using `wails build`.
-- `info.json` - Application details used for Windows builds. The data here will be used by the Windows installer,
-  as well as the application itself (right click the exe -> properties -> details)
-- `wails.exe.manifest` - The main application manifest file.
+- `icon.ico`：Windows 应用图标。
+- `installer/`：Windows 安装器资源。
+- `info.json`：Windows 应用元信息。
+- `wails.exe.manifest`：Windows 应用清单。
+
+## 维护建议
+
+- 修改应用名称、图标或平台权限后，同步检查对应平台配置。
+- 构建产物不要手动混入配置目录，输出文件应放在 `bin/`。

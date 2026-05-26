@@ -88,6 +88,3 @@ fmt.Printf("进程 PID: %d\n", pid)
 ## 注意事项
 - 确保 `BinaryPath` 指向的可执行文件存在并具有执行权限。
 - 如果启用了自动重启功能，请确保 `RestartDelay` 设置合理，避免频繁重启。
-
-## 许可证
-MIT License

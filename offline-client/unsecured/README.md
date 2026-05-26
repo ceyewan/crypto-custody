@@ -221,6 +221,3 @@ func (r *CardReader) DeleteData(username string, addr []byte) error {
     return nil
 }
 ```
-
----
-如有任何问题或建议，请联系安全芯片团队。
