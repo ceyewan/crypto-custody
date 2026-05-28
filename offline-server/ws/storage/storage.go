@@ -1,8 +1,6 @@
 package storage
 
 import (
-	"fmt"
-	"log"
 	"sync"
 
 	"offline-server/storage"
@@ -12,9 +10,23 @@ import (
 
 // SessionManager 提供对会话的内存缓存和操作
 type SessionManager struct {
-	mu          sync.RWMutex
-	keyGenCache map[string]*model.KeyGenSession
-	signCache   map[string]*model.SignSession
+	mu           sync.RWMutex
+	keyGenCache  map[string]*model.KeyGenSession
+	signCache    map[string]*model.SignSession
+	destroyCache map[string]*DestroySession
+}
+
+// DestroySession 是密钥销毁 WebSocket 流程的内存会话。
+type DestroySession struct {
+	SessionKey   string
+	OfflineKeyID string
+	Initiator    string
+	Address      string
+	Participants model.StringSlice
+	Responses    model.StringSlice
+	Shards       []model.KeyShard
+	Status       model.SessionStatus
+	Reason       string
 }
 
 var (
@@ -25,69 +37,91 @@ var (
 // GetSessionManager 返回SessionManager的单例实例
 func GetSessionManager() *SessionManager {
 	managerOnce.Do(func() {
-		managerInstance = &SessionManager{
-			keyGenCache: make(map[string]*model.KeyGenSession),
-			signCache:   make(map[string]*model.SignSession),
-		}
+		managerInstance = NewSessionManager()
 	})
 	return managerInstance
 }
 
+// NewSessionManager 创建独立的内存会话管理器，主要用于测试或显式依赖注入。
+func NewSessionManager() *SessionManager {
+	return &SessionManager{
+		keyGenCache:  make(map[string]*model.KeyGenSession),
+		signCache:    make(map[string]*model.SignSession),
+		destroyCache: make(map[string]*DestroySession),
+	}
+}
+
 // CreateKeyGenSession 在内存中创建一个新的密钥生成会话（不立即保存到数据库）
-func (m *SessionManager) CreateKeyGenSession(sessionKey, initiator string, threshold, totalParts int, participants []string) error {
-	if sessionKey == "" || initiator == "" || threshold <= 0 || totalParts <= 0 || len(participants) == 0 || threshold > totalParts {
+func (m *SessionManager) CreateKeyGenSession(session model.KeyGenSession) error {
+	if session.SessionKey == "" || session.Initiator == "" || session.RequiredSigners <= 0 ||
+		session.TotalParties <= 0 || len(session.Participants) == 0 ||
+		session.RequiredSigners > session.TotalParties {
 		return storage.ErrInvalidParameter
 	}
-
-	// 创建新会话
-	session := &model.KeyGenSession{
-		SessionKey:   sessionKey,
-		Initiator:    initiator,
-		Threshold:    threshold,
-		TotalParts:   totalParts,
-		Participants: model.StringSlice(participants),
-		Responses:    makeWaitingResponses(participants),
-		Chips:        makeDefaultChips(len(participants)),
-		Status:       model.StatusCreated,
+	if session.GG20Threshold == 0 {
+		session.GG20Threshold = session.RequiredSigners - 1
+	}
+	if len(session.Responses) == 0 {
+		session.Responses = makeWaitingResponses(session.Participants)
+	}
+	if session.Status == "" {
+		session.Status = model.StatusCreated
 	}
 
 	// 添加到缓存
 	m.mu.Lock()
-	m.keyGenCache[sessionKey] = session
+	m.keyGenCache[session.SessionKey] = &session
 	m.mu.Unlock()
 
 	return nil
 }
 
 // CreateSignSession 在内存中创建一个新的签名会话（不立即保存到数据库）
-func (m *SessionManager) CreateSignSession(sessionKey, initiator, data, address string, participants []string) (*model.SignSession, error) {
-	if sessionKey == "" || initiator == "" || data == "" || address == "" || len(participants) == 0 {
+func (m *SessionManager) CreateSignSession(session model.SignSession) (*model.SignSession, error) {
+	if session.SessionKey == "" || session.Initiator == "" || session.MessageHash == "" ||
+		session.Address == "" || len(session.Participants) == 0 {
 		return nil, storage.ErrInvalidParameter
 	}
-
-	// 创建新会话
-	session := &model.SignSession{
-		SessionKey:   sessionKey,
-		Initiator:    initiator,
-		Data:         data,
-		Address:      address,
-		Participants: model.StringSlice(participants),
-		Responses:    makeWaitingResponses(participants),
-		Status:       model.StatusCreated,
+	if len(session.Responses) == 0 {
+		session.Responses = makeWaitingResponses(session.Participants)
+	}
+	if session.Status == "" {
+		session.Status = model.StatusCreated
 	}
 
 	// 添加到缓存
 	m.mu.Lock()
-	m.signCache[sessionKey] = session
+	m.signCache[session.SessionKey] = &session
 	m.mu.Unlock()
 
-	return session, nil
+	return &session, nil
+}
+
+// CreateDestroySession 在内存中创建一个新的密钥销毁会话。
+func (m *SessionManager) CreateDestroySession(session DestroySession) (*DestroySession, error) {
+	if session.SessionKey == "" || session.OfflineKeyID == "" || session.Initiator == "" ||
+		session.Address == "" || len(session.Participants) == 0 || len(session.Shards) == 0 ||
+		len(session.Participants) != len(session.Shards) {
+		return nil, storage.ErrInvalidParameter
+	}
+	if len(session.Responses) == 0 {
+		session.Responses = makeWaitingResponses(session.Participants)
+	}
+	if session.Status == "" {
+		session.Status = model.StatusCreated
+	}
+
+	m.mu.Lock()
+	m.destroyCache[session.SessionKey] = &session
+	m.mu.Unlock()
+
+	return &session, nil
 }
 
 // GetKeyGenSession 获取密钥生成会话，如果不在内存则从数据库加载
 func (m *SessionManager) GetKeyGenSession(sessionKey string) *model.KeyGenSession {
 	if sessionKey == "" {
-		log.Fatal("GetKeyGenSession: sessionKey 不能为空")
+		return nil
 	}
 
 	// 先检查缓存
@@ -96,7 +130,7 @@ func (m *SessionManager) GetKeyGenSession(sessionKey string) *model.KeyGenSessio
 	m.mu.RUnlock()
 
 	if !exists {
-		log.Fatal("GetKeyGenSession: 会话不存在")
+		return nil
 	}
 	return session
 }
@@ -104,7 +138,7 @@ func (m *SessionManager) GetKeyGenSession(sessionKey string) *model.KeyGenSessio
 // GetSignSession 获取签名会话，如果不在内存则从数据库加载
 func (m *SessionManager) GetSignSession(sessionKey string) *model.SignSession {
 	if sessionKey == "" {
-		log.Fatal("GetSignSession: sessionKey 不能为空")
+		return nil
 	}
 
 	// 先检查缓存
@@ -113,7 +147,23 @@ func (m *SessionManager) GetSignSession(sessionKey string) *model.SignSession {
 	m.mu.RUnlock()
 
 	if !exists {
-		log.Fatal("GetSignSession: 会话不存在")
+		return nil
+	}
+	return session
+}
+
+// GetDestroySession 获取密钥销毁会话。
+func (m *SessionManager) GetDestroySession(sessionKey string) *DestroySession {
+	if sessionKey == "" {
+		return nil
+	}
+
+	m.mu.RLock()
+	session, exists := m.destroyCache[sessionKey]
+	m.mu.RUnlock()
+
+	if !exists {
+		return nil
 	}
 	return session
 }
@@ -213,13 +263,4 @@ func makeWaitingResponses(participants []string) model.StringSlice {
 		responses[i] = string(model.ParticipantInit)
 	}
 	return responses
-}
-
-// makeDefaultChips 创建一个与参与者列表等长的 Chips 数组，默认值从 "SE000" 开始递增
-func makeDefaultChips(count int) model.StringSlice {
-	chips := make([]string, count)
-	for i := range chips {
-		chips[i] = fmt.Sprintf("SE%03d", i)
-	}
-	return chips
 }

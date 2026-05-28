@@ -106,23 +106,24 @@ func KeyGeneration(c *gin.Context) {
 	clog.Info("接收到密钥生成请求",
 		clog.Int("threshold", req.Threshold),
 		clog.Int("parties", req.Parties),
-		clog.Int("index", req.Index),
+		clog.Int("party_index", req.PartyIndex),
 		clog.String("filename", req.Filename),
-		clog.String("username", req.UserName))
+		clog.String("record_id", req.RecordID))
 
 	// 调用服务生成密钥
-	address, encryptedKey, err := mpcService.KeyGeneration(
+	address, publicKey, encryptedShard, err := mpcService.KeyGeneration(
 		c.Request.Context(),
+		req.ManagerAddr,
+		req.Room,
 		req.Threshold,
 		req.Parties,
-		req.Index,
+		req.PartyIndex,
 		req.Filename,
-		req.UserName,
+		req.RecordID,
 	)
 	if err != nil {
 		clog.Error("密钥生成失败",
-			clog.String("error", err.Error()),
-			clog.String("username", req.UserName))
+			clog.String("error", err.Error()))
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"message": "密钥生成失败: " + err.Error(),
@@ -132,8 +133,7 @@ func KeyGeneration(c *gin.Context) {
 
 	clog.Info("密钥生成成功",
 		clog.String("address", address),
-		clog.String("username", req.UserName),
-		clog.Int("encrypted_key_length", len(encryptedKey)))
+		clog.Int("encrypted_shard_length", len(encryptedShard)))
 
 	// 确保地址格式正确（添加0x前缀如果没有）
 	if !strings.HasPrefix(address, "0x") {
@@ -141,15 +141,16 @@ func KeyGeneration(c *gin.Context) {
 		clog.Debug("地址格式规范化", clog.String("address", address))
 	}
 
-	// 转换加密密钥为base64字符串
-	encryptedKeyBase64 := base64.StdEncoding.EncodeToString(encryptedKey)
+	// 转换加密分片为base64字符串
+	encryptedShardBase64 := base64.StdEncoding.EncodeToString(encryptedShard)
 
 	// 返回响应
 	c.JSON(http.StatusOK, models.KeyGenResponse{
-		Success:      true,
-		UserName:     req.UserName,
-		Address:      address,
-		EncryptedKey: encryptedKeyBase64,
+		Success:        true,
+		Address:        address,
+		PublicKey:      publicKey,
+		RecordID:       req.RecordID,
+		EncryptedShard: encryptedShardBase64,
 	})
 }
 
@@ -187,15 +188,14 @@ func SignMessage(c *gin.Context) {
 		clog.Debug("地址格式规范化", clog.String("address", req.Address))
 	}
 
-	// 解码base64加密密钥
-	encryptedKey, err := base64.StdEncoding.DecodeString(req.EncryptedKey)
+	// 解码base64加密分片
+	encryptedShard, err := base64.StdEncoding.DecodeString(req.EncryptedShard)
 	if err != nil {
-		clog.Error("加密密钥解码失败",
-			clog.String("error", err.Error()),
-			clog.String("username", req.UserName))
+		clog.Error("加密分片解码失败",
+			clog.String("error", err.Error()))
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"message": "加密密钥格式错误: " + err.Error(),
+			"message": "加密分片格式错误: " + err.Error(),
 		})
 		return
 	}
@@ -204,8 +204,7 @@ func SignMessage(c *gin.Context) {
 	signature, err := base64.StdEncoding.DecodeString(req.Signature)
 	if err != nil {
 		clog.Error("签名解码失败",
-			clog.String("error", err.Error()),
-			clog.String("username", req.UserName))
+			clog.String("error", err.Error()))
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"message": "签名格式错误: " + err.Error(),
@@ -215,29 +214,32 @@ func SignMessage(c *gin.Context) {
 
 	clog.Info("接收到签名请求",
 		clog.String("parties", req.Parties),
-		clog.String("data", req.Data),
+		clog.Int("signing_index", req.SigningIndex),
+		clog.String("message_hash", req.MessageHash),
 		clog.String("filename", req.Filename),
-		clog.String("username", req.UserName),
+		clog.String("record_id", req.RecordID),
 		clog.String("address", req.Address))
 	clog.Debug("签名请求详情",
-		clog.String("encrypted_key_length", formatByteSize(int64(len(encryptedKey)))),
+		clog.String("encrypted_shard_length", formatByteSize(int64(len(encryptedShard)))),
 		clog.String("signature_length", formatByteSize(int64(len(signature)))))
 
 	// 调用服务进行签名
 	signatureResult, err := mpcService.SignMessage(
 		c.Request.Context(),
+		req.ManagerAddr,
+		req.Room,
+		req.SigningIndex,
 		req.Parties,
-		req.Data,
+		req.MessageHash,
 		req.Filename,
-		req.UserName,
+		req.RecordID,
 		req.Address,
-		encryptedKey,
+		encryptedShard,
 		signature,
 	)
 	if err != nil {
 		clog.Error("签名失败",
 			clog.String("error", err.Error()),
-			clog.String("username", req.UserName),
 			clog.String("address", req.Address))
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -253,7 +255,6 @@ func SignMessage(c *gin.Context) {
 	}
 
 	clog.Info("签名成功",
-		clog.String("username", req.UserName),
 		clog.String("address", req.Address))
 	clog.Debug("签名结果", clog.String("signature", signatureResult))
 
@@ -298,8 +299,8 @@ func GetCPLC(c *gin.Context) {
 
 	// 返回响应
 	c.JSON(http.StatusOK, models.GetCPLCResponse{
-		Success: true,
-		CPIC:    cplcHex,
+		Success:  true,
+		CPLCInfo: cplcHex,
 	})
 }
 
@@ -341,8 +342,7 @@ func DeleteMessage(c *gin.Context) {
 	signature, err := base64.StdEncoding.DecodeString(req.Signature)
 	if err != nil {
 		clog.Error("签名解码失败",
-			clog.String("error", err.Error()),
-			clog.String("username", req.UserName))
+			clog.String("error", err.Error()))
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"message": "签名格式错误: " + err.Error(),
@@ -351,17 +351,16 @@ func DeleteMessage(c *gin.Context) {
 	}
 
 	clog.Info("接收到删除数据请求",
-		clog.String("username", req.UserName),
+		clog.String("record_id", req.RecordID),
 		clog.String("address", req.Address))
 	clog.Debug("删除请求详情",
 		clog.String("signature_length", formatByteSize(int64(len(signature)))))
 
 	// 删除数据
-	err = securityService.DeleteData(req.UserName, req.Address, signature)
+	err = securityService.DeleteData(req.RecordID, req.Address, signature)
 	if err != nil {
 		clog.Error("删除数据失败",
 			clog.String("error", err.Error()),
-			clog.String("username", req.UserName),
 			clog.String("address", req.Address))
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -371,7 +370,7 @@ func DeleteMessage(c *gin.Context) {
 	}
 
 	clog.Info("删除数据成功",
-		clog.String("username", req.UserName),
+		clog.String("record_id", req.RecordID),
 		clog.String("address", req.Address))
 
 	// 返回响应

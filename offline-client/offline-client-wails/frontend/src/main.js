@@ -7,7 +7,7 @@ import 'element-ui/lib/theme-chalk/index.css'
 import axios from 'axios'
 
 // 引入原有的云端 API 服务（用于与云端服务器通信）
-import { userApi, keygenApi, signApi } from './services/api.js'
+import { userApi, keygenApi, signApi, offlineApi } from './services/api.js'
 
 // 引入 Wails 本地 MPC API 服务（用于调用内置 web-se 模块）
 import wailsMpcAPI from './services/wails-api.js'
@@ -25,6 +25,7 @@ Vue.prototype.$axios = axios
 Vue.prototype.$userApi = userApi
 Vue.prototype.$keygenApi = keygenApi
 Vue.prototype.$signApi = signApi
+Vue.prototype.$offlineApi = offlineApi
 
 // 挂载本地 MPC API 服务（替代原来的外部 web-se 调用）
 Vue.prototype.$localMpcApi = wailsMpcAPI.mpcApi

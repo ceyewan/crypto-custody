@@ -5,25 +5,20 @@ import { Environment } from '../../wailsjs/runtime/runtime'
 // API基础URL
 // 使用 Wails runtime.Environment() 来可靠地检测环境
 let API_URL = '/api'; // 默认使用代理
-let isWailsEnvironment = false;
 
 // 异步检测 Wails 环境并设置正确的 API URL
 async function detectEnvironmentAndSetURL() {
     try {
-        const envInfo = await Environment();
-        isWailsEnvironment = true;
+        await Environment();
         // 在 Wails 环境中直接连接远程服务器
         API_URL = 'https://crypto-custody-offline-server.ceyewan.icu';
 
         // 更新 axios 实例的 baseURL
         apiClient.defaults.baseURL = API_URL;
-
-        console.log(`[API Debug] Wails Environment detected - buildType: ${envInfo.buildType}, platform: ${envInfo.platform}, API_URL: ${API_URL}`);
-    } catch (error) {
+    } catch {
         // 不是 Wails 环境，使用代理
-        isWailsEnvironment = false;
         API_URL = '/api';
-        console.log(`[API Debug] Non-Wails Environment detected, using proxy: ${API_URL}`);
+        apiClient.defaults.baseURL = API_URL;
     }
 }
 
@@ -47,7 +42,6 @@ apiClient.interceptors.request.use(
         return config
     },
     error => {
-        console.error('请求拦截错误:', error)
         return Promise.reject(error)
     }
 )
@@ -59,7 +53,6 @@ apiClient.interceptors.response.use(
         if (error.response) {
             // 处理401认证错误
             if (error.response.status === 401) {
-                console.error('认证失败，请重新登录')
                 // 可选：自动登出并跳转到登录页面
                 if (store && store.dispatch) {
                     store.dispatch('logout')
@@ -70,26 +63,10 @@ apiClient.interceptors.response.use(
                 }
             }
 
-            // 处理其他错误
-            console.error('API错误:', error.response.status, error.response.data)
-        } else if (error.request) {
-            console.error('请求无响应:', error.request)
-        } else {
-            console.error('请求配置错误:', error.message)
         }
         return Promise.reject(error)
     }
 )
-
-// 设置请求头 - 确保发送裸token
-const getAuthHeader = () => {
-    const token = localStorage.getItem('token')
-    return {
-        headers: {
-            'Authorization': token && token.startsWith('Bearer ') ? token.substring(7) : token
-        }
-    }
-}
 
 // 用户API
 export const userApi = {
@@ -143,7 +120,50 @@ export const signApi = {
 // 安全芯片API (云端)
 export const seApi = {
     // 创建安全芯片记录
-    createSecurityElement(seid, cpic) {
-        return apiClient.post(`/se/create`, { seId: seid, cpic: cpic })
+    createSecurityElement(seid, cplc) {
+        return apiClient.post(`/se/create`, { se_id: seid, cplc: cplc })
+    }
+}
+
+// 离线任务和密钥API
+export const offlineApi = {
+    importTask(taskPackage) {
+        return apiClient.post(`/offline/tasks/import`, taskPackage)
+    },
+
+    getTask(taskNo) {
+        return apiClient.get(`/offline/tasks/${taskNo}`)
+    },
+
+    buildKeygenRequest(taskNo, data) {
+        return apiClient.post(`/offline/tasks/${taskNo}/keygen/start`, data)
+    },
+
+    buildSignRequest(taskNo, data) {
+        return apiClient.post(`/offline/tasks/${taskNo}/sign/start`, data)
+    },
+
+    downloadResult(taskNo) {
+        return apiClient.get(`/offline/results/${taskNo}/download`)
+    },
+
+    getKey(offlineKeyID) {
+        return apiClient.get(`/offline/keys/${offlineKeyID}`)
+    },
+
+    transferKey(offlineKeyID, data) {
+        return apiClient.post(`/offline/keys/${offlineKeyID}/transfer`, data)
+    },
+
+    destroyKey(offlineKeyID, data = {}) {
+        return apiClient.post(`/offline/keys/${offlineKeyID}/destroy`, data)
+    },
+
+    listAudit(limit = 100) {
+        return apiClient.get(`/offline/audit`, { params: { limit } })
+    },
+
+    listApprovals(limit = 100) {
+        return apiClient.get(`/offline/approvals`, { params: { limit } })
     }
 }

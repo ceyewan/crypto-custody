@@ -11,9 +11,9 @@ import (
 	"offline-server/storage/model"
 )
 
-// ShareStorage 提供对用户密钥分片的存储和访问
+// ShareStorage 提供对离线密钥分片的存储和访问。
 type ShareStorage struct {
-	mu sync.RWMutex // 使用读写锁提高并发效率
+	mu sync.RWMutex
 }
 
 var (
@@ -21,8 +21,7 @@ var (
 	shareOnce     sync.Once
 )
 
-// GetShareStorage 返回 ShareStorage 的单例实例
-// 通过单例模式确保整个应用程序中只有一个存储实例
+// GetShareStorage 返回 ShareStorage 的单例实例。
 func GetShareStorage() IShareStorage {
 	shareOnce.Do(func() {
 		shareInstance = &ShareStorage{}
@@ -30,19 +29,21 @@ func GetShareStorage() IShareStorage {
 	return shareInstance
 }
 
-// CreateEthereumKeyShard 创建以太坊私钥分片记录
-// 参数：
-//   - username: 用户名，标识私钥分片的所有者
-//   - address: 以太坊地址，标识私钥对应的账户
-//   - pcic: 安全芯片标识，用于标识存储加密密钥的安全芯片
-//   - privateShard: 加密的私钥分片，Base64编码
-//   - shardIndex: 分片索引，表示这是第几个私钥分片
-//
-// 返回：
-//   - 如果创建失败则返回错误信息
-func (s *ShareStorage) CreateEthereumKeyShard(username, address, pcic, privateShard string, shardIndex int) error {
-	if username == "" || address == "" || pcic == "" || privateShard == "" || shardIndex < 0 {
-		return ErrInvalidParameter
+// CreateKeyShard 创建密钥分片记录。
+func (s *ShareStorage) CreateKeyShard(shard model.KeyShard) (*model.KeyShard, error) {
+	if shard.ShardID == "" || shard.OfflineKeyID == "" || shard.Username == "" ||
+		shard.Address == "" || shard.RecordID == "" || shard.SeCPLC == "" ||
+		shard.EncryptedBlob == "" || shard.ShardIndex <= 0 {
+		return nil, ErrInvalidParameter
+	}
+	if shard.BlobType == "" {
+		shard.BlobType = model.BlobTypeMPCShare
+	}
+	if shard.KeyVersion == 0 {
+		shard.KeyVersion = 1
+	}
+	if shard.Status == "" {
+		shard.Status = model.KeyShardStatusActive
 	}
 
 	s.mu.Lock()
@@ -50,49 +51,19 @@ func (s *ShareStorage) CreateEthereumKeyShard(username, address, pcic, privateSh
 
 	database := db.GetDB()
 	if database == nil {
-		return ErrDatabaseNotInitialized
+		return nil, ErrDatabaseNotInitialized
 	}
 
-	// 检查是否已存在相同用户名、地址和索引的分片
-	var count int64
-	if err := database.Model(&model.EthereumKeyShard{}).
-		Where("username = ? AND address = ? AND shard_index = ?", username, address, shardIndex).
-		Count(&count).Error; err != nil {
-		log.Printf("查询以太坊私钥分片失败: %v", err)
-		return ErrOperationFailed
+	if err := database.Create(&shard).Error; err != nil {
+		log.Printf("创建密钥分片失败: %v", err)
+		return nil, ErrOperationFailed
 	}
 
-	if count > 0 {
-		log.Printf("已存在用户 %s 的地址 %s 索引为 %d 的分片", username, address, shardIndex)
-		return ErrRecordNotFound
-	}
-
-	// 创建新记录
-	keyShard := model.EthereumKeyShard{
-		Username:     username,
-		Address:      address,
-		ShardIndex:   shardIndex,
-		PCIC:         pcic,
-		PrivateShard: privateShard,
-	}
-
-	if err := database.Create(&keyShard).Error; err != nil {
-		log.Printf("创建以太坊私钥分片失败: %v", err)
-		return ErrOperationFailed
-	}
-
-	return nil
+	return &shard, nil
 }
 
-// GetEthereumKeyShard 根据用户名和以太坊地址获取密钥分片
-// 参数：
-//   - username: 用户名
-//   - address: 以太坊地址
-//
-// 返回：
-//   - 以太坊私钥分片记录指针
-//   - 如果找不到记录或查询失败则返回错误信息
-func (s *ShareStorage) GetEthereumKeyShard(username, address string) (*model.EthereumKeyShard, error) {
+// GetKeyShardForParticipant 根据用户名和地址获取可用分片。
+func (s *ShareStorage) GetKeyShardForParticipant(username, address string) (*model.KeyShard, error) {
 	if username == "" || address == "" {
 		return nil, ErrInvalidParameter
 	}
@@ -105,14 +76,93 @@ func (s *ShareStorage) GetEthereumKeyShard(username, address string) (*model.Eth
 		return nil, ErrDatabaseNotInitialized
 	}
 
-	var keyShard model.EthereumKeyShard
-	if err := database.Where("username = ? AND address = ?", username, address).First(&keyShard).Error; err != nil {
+	var shard model.KeyShard
+	if err := database.
+		Where("username = ? AND address = ? AND status = ?", username, address, model.KeyShardStatusActive).
+		First(&shard).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, ErrRecordNotFound
 		}
-		log.Printf("查找以太坊私钥分片失败: %v", err)
+		log.Printf("查找密钥分片失败: %v", err)
 		return nil, ErrOperationFailed
 	}
 
-	return &keyShard, nil
+	return &shard, nil
+}
+
+// ListActiveKeyShardsByAddress 获取地址下所有可用分片。
+func (s *ShareStorage) ListActiveKeyShardsByAddress(address string) ([]model.KeyShard, error) {
+	if address == "" {
+		return nil, ErrInvalidParameter
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	database := db.GetDB()
+	if database == nil {
+		return nil, ErrDatabaseNotInitialized
+	}
+
+	var shards []model.KeyShard
+	if err := database.
+		Where("address = ? AND status = ?", address, model.KeyShardStatusActive).
+		Order("shard_index ASC").
+		Find(&shards).Error; err != nil {
+		log.Printf("查询地址分片失败: %v", err)
+		return nil, ErrOperationFailed
+	}
+	return shards, nil
+}
+
+// ListKeyShardsByAddress 获取地址下所有分片。
+func (s *ShareStorage) ListKeyShardsByAddress(address string) ([]model.KeyShard, error) {
+	if address == "" {
+		return nil, ErrInvalidParameter
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	database := db.GetDB()
+	if database == nil {
+		return nil, ErrDatabaseNotInitialized
+	}
+
+	var shards []model.KeyShard
+	if err := database.
+		Where("address = ?", address).
+		Order("shard_index ASC").
+		Find(&shards).Error; err != nil {
+		log.Printf("查询地址全部分片失败: %v", err)
+		return nil, ErrOperationFailed
+	}
+	return shards, nil
+}
+
+// UpdateKeyShardStatus 更新分片状态。
+func (s *ShareStorage) UpdateKeyShardStatus(shardID string, status model.KeyShardStatus) error {
+	if shardID == "" || status == "" {
+		return ErrInvalidParameter
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	database := db.GetDB()
+	if database == nil {
+		return ErrDatabaseNotInitialized
+	}
+
+	result := database.Model(&model.KeyShard{}).
+		Where("shard_id = ?", shardID).
+		Update("status", status)
+	if result.Error != nil {
+		log.Printf("更新分片状态失败: %v", result.Error)
+		return ErrOperationFailed
+	}
+	if result.RowsAffected == 0 {
+		return ErrRecordNotFound
+	}
+	return nil
 }

@@ -101,8 +101,8 @@ func createAndRunTempExecutable(ctx context.Context, baseName string, args ...st
 }
 
 // RunKeyGen 运行密钥生成命令
-func RunKeyGen(ctx context.Context, cfg *config.Config, t, n, i int, output string) error {
-	args := buildKeygenArgs(cfg, t, n, i, output)
+func RunKeyGen(ctx context.Context, cfg *config.Config, managerAddr, room string, t, n, i int, output string) error {
+	args := buildKeygenArgs(cfg, managerAddr, room, t, n, i, output)
 
 	clog.Info("开始密钥生成",
 		clog.String("command", "embedded gg20_keygen"),
@@ -123,12 +123,13 @@ func RunKeyGen(ctx context.Context, cfg *config.Config, t, n, i int, output stri
 }
 
 // RunSigning 运行签名命令
-func RunSigning(ctx context.Context, cfg *config.Config, parties, data, localShare string) (string, error) {
-	args := buildSigningArgs(cfg, parties, data, localShare)
+func RunSigning(ctx context.Context, cfg *config.Config, managerAddr, room string, signingIndex int, parties, data, localShare string) (string, error) {
+	args := buildSigningArgs(cfg, managerAddr, room, signingIndex, parties, data, localShare)
 
 	clog.Info("开始签名操作",
 		clog.String("command", "embedded gg20_signing"),
 		clog.String("os", runtime.GOOS),
+		clog.Int("signing_index", signingIndex),
 		clog.String("parties", parties),
 		clog.String("data", data),
 		clog.String("local_share", localShare))
@@ -158,24 +159,39 @@ func toString(value interface{}) string {
 }
 
 // 构建密钥生成命令的参数
-func buildKeygenArgs(cfg *config.Config, t, n, i int, output string) []string {
-	return []string{
-		"--address", cfg.ManagerAddr,
+func buildKeygenArgs(cfg *config.Config, managerAddr, room string, t, n, i int, output string) []string {
+	if managerAddr == "" {
+		managerAddr = cfg.ManagerAddr
+	}
+	args := []string{
+		"--address", managerAddr,
 		"--threshold", toString(t),
 		"--number-of-parties", toString(n),
 		"--index", toString(i),
 		"--output", output,
 	}
+	if room != "" {
+		args = append(args, "--room", room)
+	}
+	return args
 }
 
 // 构建签名命令的参数
-func buildSigningArgs(cfg *config.Config, parties, data, localShare string) []string {
-	return []string{
-		"--address", cfg.ManagerAddr,
+func buildSigningArgs(cfg *config.Config, managerAddr, room string, signingIndex int, parties, data, localShare string) []string {
+	if managerAddr == "" {
+		managerAddr = cfg.ManagerAddr
+	}
+	args := []string{
+		"--address", managerAddr,
+		"--index", toString(signingIndex),
 		"--parties", parties,
 		"--data-to-sign", data,
 		"--local-share", localShare,
 	}
+	if room != "" {
+		args = append(args, "--room", room)
+	}
+	return args
 }
 
 // 记录命令开始执行

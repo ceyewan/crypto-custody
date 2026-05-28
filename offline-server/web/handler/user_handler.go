@@ -170,6 +170,7 @@ func isValidRole(role string) bool {
 		string(model.RoleAdmin),
 		string(model.RoleCoordinator),
 		string(model.RoleParticipant),
+		string(model.RoleAuditor),
 		string(model.RoleGuest),
 	}
 

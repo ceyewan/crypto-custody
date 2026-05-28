@@ -325,6 +325,18 @@ func (c *Client) handleMessage(message []byte) error {
 
 		return c.handler.signHandler.ProcessMessage(baseMsg.Type, message, c)
 
+	// 密钥销毁相关消息
+	case MsgDestroyRequest, MsgDestroyResponse, MsgDestroyResult:
+		if c.username == "" {
+			return fmt.Errorf("客户端尚未注册，请先发送注册消息")
+		}
+
+		clog.Debug("转发密钥销毁消息到处理器",
+			clog.String("username", c.username),
+			clog.String("msg_type", string(baseMsg.Type)))
+
+		return c.handler.destroyHandler.ProcessMessage(baseMsg.Type, message, c)
+
 	default:
 		if c.username == "" {
 			return fmt.Errorf("客户端尚未注册，请先发送注册消息")

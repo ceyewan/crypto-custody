@@ -20,6 +20,7 @@ func Register() *gin.Engine {
 	initShareRouter(r)
 	initPushRouter(r)
 	initSeRouter(r) // 新增SE相关路由
+	initOfflineRouter(r)
 
 	// 处理404请求
 	r.NoRoute(func(c *gin.Context) {
@@ -27,6 +28,33 @@ func Register() *gin.Engine {
 	})
 
 	return r
+}
+
+func initOfflineRouter(r *gin.Engine) {
+	offlineGroup := r.Group("/offline")
+	offlineGroup.Use(KeyAuthMiddleware())
+	{
+		offlineGroup.POST("/tasks/import", handler.ImportOfflineTask)
+		offlineGroup.GET("/tasks/:task_no", handler.GetOfflineTask)
+		offlineGroup.POST("/tasks/:task_no/keygen/start", handler.BuildKeygenTaskRequest)
+		offlineGroup.POST("/tasks/:task_no/sign/start", handler.BuildSignTaskRequest)
+		offlineGroup.GET("/results/:task_no/download", handler.DownloadOfflineResult)
+		offlineGroup.GET("/keys/:offline_key_id", handler.GetOfflineKey)
+	}
+
+	offlineAdminGroup := r.Group("/offline")
+	offlineAdminGroup.Use(AdminAuthMiddleware())
+	{
+		offlineAdminGroup.POST("/keys/:offline_key_id/transfer", handler.TransferOfflineKey)
+		offlineAdminGroup.POST("/keys/:offline_key_id/destroy", handler.DestroyOfflineKey)
+	}
+
+	offlineAuditGroup := r.Group("/offline")
+	offlineAuditGroup.Use(AuditAuthMiddleware())
+	{
+		offlineAuditGroup.GET("/audit", handler.ListAuditLogs)
+		offlineAuditGroup.GET("/approvals", handler.ListApprovals)
+	}
 }
 
 // initUserRouter 初始化用户相关路由
@@ -146,6 +174,32 @@ func KeyAuthMiddleware() gin.HandlerFunc {
 		}
 
 		// 设置用户信息到上下文
+		c.Set("userName", userName)
+		c.Set("role", role)
+		c.Next()
+	}
+}
+
+// AuditAuthMiddleware 审计查询权限验证中间件。
+func AuditAuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		tokenString := c.GetHeader("Authorization")
+		if tokenString == "" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "未提供认证令牌"})
+			return
+		}
+
+		userName, role, err := tools.ValidateToken(tokenString)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "无效的认证令牌"})
+			return
+		}
+
+		if role != "admin" && role != "coordinator" && role != "auditor" {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "权限不足，需要Admin、Coordinator或Auditor角色"})
+			return
+		}
+
 		c.Set("userName", userName)
 		c.Set("role", role)
 		c.Next()

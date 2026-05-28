@@ -41,6 +41,16 @@
                             </el-button>
                         </div>
 
+                        <!-- 针对密钥销毁邀请消息 -->
+                        <div v-else-if="scope.row.type === 'destroy_invite'">
+                            <el-button type="danger" size="mini" @click="handleDestroyInviteAccept(scope.row)">
+                                确认销毁
+                            </el-button>
+                            <el-button size="mini" @click="handleDestroyInviteReject(scope.row)">
+                                拒绝
+                            </el-button>
+                        </div>
+
                         <!-- 其他消息类型 -->
                         <el-button type="text" @click="showMessageDetail(scope.row)">
                             查看详情
@@ -93,6 +103,9 @@ export default {
                 'sign_invite': '签名邀请',
                 'sign_params': '签名参数',
                 'sign_complete': '签名完成',
+                'destroy_invite': '销毁邀请',
+                'destroy_params': '销毁参数',
+                'destroy_complete': '销毁完成',
                 'error': '错误'
             }
             return typeMap[type] || type
@@ -108,22 +121,22 @@ export default {
 
         // 判断是否是需要响应的邀请消息
         isInviteMessage(type) {
-            return type === 'keygen_invite' || type === 'sign_invite'
+            return type === 'keygen_invite' || type === 'sign_invite' || type === 'destroy_invite'
         },
 
         // 处理密钥生成邀请接受
         async handleKeygenInviteAccept(notification) {
             try {
-                // 获取当前用户的CPIC
-                const cpicResponse = await seApi.getCPLC()
-                const cpic = cpicResponse.data.cpic
+                // 获取当前用户的CPLC
+                const cplcResponse = await seApi.getCPLC()
+                const cplc = cplcResponse.data.cplc_info || ''
 
                 // 发送接受响应
                 sendWSMessage({
                     type: WS_MESSAGE_TYPES.KEYGEN_RESPONSE,
                     session_key: notification.content.session_key,
-                    part_index: notification.content.part_index,
-                    cpic: cpic,
+                    party_index: notification.content.party_index,
+                    cplc: cplc,
                     accept: true,
                     reason: ''
                 })
@@ -132,21 +145,20 @@ export default {
                 this.markNotificationResponded(notification)
                 this.$message.success('已接受密钥生成邀请')
             } catch (error) {
-                console.error('接受密钥生成邀请失败:', error)
                 this.$message.error('接受密钥生成邀请失败: ' + error.message)
-                
+
                 // 通知协调者该参与者无法接受邀请
                 try {
                     sendWSMessage({
                         type: WS_MESSAGE_TYPES.KEYGEN_RESPONSE,
                         session_key: notification.content.session_key,
-                        part_index: notification.content.part_index,
-                        cpic: '',
+                        party_index: notification.content.party_index,
+                        cplc: '',
                         accept: false,
                         reason: '获取CPLC失败: ' + error.message
                     })
-                } catch (wsError) {
-                    console.error('发送拒绝消息失败:', wsError)
+                } catch {
+                    // 忽略二次错误
                 }
             }
         },
@@ -158,8 +170,8 @@ export default {
                 sendWSMessage({
                     type: WS_MESSAGE_TYPES.KEYGEN_RESPONSE,
                     session_key: notification.content.session_key,
-                    part_index: notification.content.part_index,
-                    cpic: '',
+                    party_index: notification.content.party_index,
+                    cplc: '',
                     accept: false,
                     reason: '用户拒绝'
                 })
@@ -168,7 +180,6 @@ export default {
                 this.markNotificationResponded(notification)
                 this.$message.info('已拒绝密钥生成邀请')
             } catch (error) {
-                console.error('拒绝密钥生成邀请失败:', error)
                 this.$message.error('拒绝密钥生成邀请失败: ' + error.message)
             }
         },
@@ -176,16 +187,16 @@ export default {
         // 处理签名邀请接受
         async handleSignInviteAccept(notification) {
             try {
-                // 获取当前用户的CPIC
-                const cpicResponse = await seApi.getCPLC()
-                const cpic = cpicResponse.data.cpic
+                // 获取当前用户的CPLC
+                const cplcResponse = await seApi.getCPLC()
+                const cplc = cplcResponse.data.cplc_info || ''
 
                 // 发送接受响应
                 sendWSMessage({
                     type: WS_MESSAGE_TYPES.SIGN_RESPONSE,
                     session_key: notification.content.session_key,
-                    part_index: notification.content.part_index,
-                    cpic: cpic,
+                    party_index: notification.content.party_index,
+                    cplc: cplc,
                     accept: true,
                     reason: ''
                 })
@@ -194,21 +205,20 @@ export default {
                 this.markNotificationResponded(notification)
                 this.$message.success('已接受签名邀请')
             } catch (error) {
-                console.error('接受签名邀请失败:', error)
                 this.$message.error('接受签名邀请失败: ' + error.message)
-                
+
                 // 通知协调者该参与者无法接受邀请
                 try {
                     sendWSMessage({
                         type: WS_MESSAGE_TYPES.SIGN_RESPONSE,
                         session_key: notification.content.session_key,
-                        part_index: notification.content.part_index,
-                        cpic: '',
+                        party_index: notification.content.party_index,
+                        cplc: '',
                         accept: false,
                         reason: '获取CPLC失败: ' + error.message
                     })
-                } catch (wsError) {
-                    console.error('发送拒绝消息失败:', wsError)
+                } catch {
+                    // 忽略二次错误
                 }
             }
         },
@@ -220,8 +230,8 @@ export default {
                 sendWSMessage({
                     type: WS_MESSAGE_TYPES.SIGN_RESPONSE,
                     session_key: notification.content.session_key,
-                    part_index: notification.content.part_index,
-                    cpic: '',
+                    party_index: notification.content.party_index,
+                    cplc: '',
                     accept: false,
                     reason: '用户拒绝'
                 })
@@ -230,8 +240,65 @@ export default {
                 this.markNotificationResponded(notification)
                 this.$message.info('已拒绝签名邀请')
             } catch (error) {
-                console.error('拒绝签名邀请失败:', error)
                 this.$message.error('拒绝签名邀请失败: ' + error.message)
+            }
+        },
+
+        // 处理密钥销毁邀请接受
+        async handleDestroyInviteAccept(notification) {
+            try {
+                await this.$confirm('确认对当前安全芯片执行密钥记录删除？', '销毁确认', { type: 'warning' })
+            } catch {
+                return
+            }
+            try {
+                const cplcResponse = await seApi.getCPLC()
+                const cplc = cplcResponse.data.cplc_info || ''
+
+                sendWSMessage({
+                    type: WS_MESSAGE_TYPES.DESTROY_RESPONSE,
+                    session_key: notification.content.session_key,
+                    party_index: notification.content.party_index,
+                    cplc: cplc,
+                    accept: true,
+                    reason: ''
+                })
+
+                this.markNotificationResponded(notification)
+                this.$message.success('已确认密钥销毁邀请')
+            } catch (error) {
+                this.$message.error('确认销毁邀请失败: ' + error.message)
+                try {
+                    sendWSMessage({
+                        type: WS_MESSAGE_TYPES.DESTROY_RESPONSE,
+                        session_key: notification.content.session_key,
+                        party_index: notification.content.party_index,
+                        cplc: '',
+                        accept: false,
+                        reason: '获取CPLC失败: ' + error.message
+                    })
+                } catch {
+                    // 忽略二次错误
+                }
+            }
+        },
+
+        // 处理密钥销毁邀请拒绝
+        async handleDestroyInviteReject(notification) {
+            try {
+                sendWSMessage({
+                    type: WS_MESSAGE_TYPES.DESTROY_RESPONSE,
+                    session_key: notification.content.session_key,
+                    party_index: notification.content.party_index,
+                    cplc: '',
+                    accept: false,
+                    reason: '用户拒绝'
+                })
+
+                this.markNotificationResponded(notification)
+                this.$message.info('已拒绝密钥销毁邀请')
+            } catch (error) {
+                this.$message.error('拒绝销毁邀请失败: ' + error.message)
             }
         },
 

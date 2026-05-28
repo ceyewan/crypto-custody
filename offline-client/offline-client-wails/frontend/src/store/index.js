@@ -25,6 +25,7 @@ export default new Vuex.Store({
         isAdmin: state => state.user && state.user.role === 'admin',
         isCoordinator: state => state.user && state.user.role === 'coordinator',
         isParticipant: state => state.user && state.user.role === 'participant',
+        isAuditor: state => state.user && state.user.role === 'auditor',
         wsConnected: state => state.wsConnected,
         notifications: state => state.notifications,
         currentSession: state => state.currentSession

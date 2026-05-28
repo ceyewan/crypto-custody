@@ -3,15 +3,14 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"syscall"
-	"time"
 
 	"offline-server/clog"
-	"offline-server/manager"
 	"offline-server/storage/db"
 	"offline-server/web"
 	"offline-server/ws"
@@ -22,13 +21,13 @@ const (
 	DataDir        = "./data"
 	LogsDir        = "./logs"
 	ManagerBinPath = "./bin/gg20_sm_manager"
-	DBFilePath     = "./data/users.db"
 )
 
 func main() {
 	// 命令行参数
 	webPort := flag.Int("web-port", 8080, "Web服务器监听端口")
 	wsPort := flag.Int("ws-port", 8081, "WebSocket服务器监听端口")
+	wsHost := flag.String("ws-host", "0.0.0.0", "WebSocket服务器监听地址")
 	flag.Parse()
 
 	// 确保必要的目录存在
@@ -50,17 +49,13 @@ func main() {
 		log.Fatalf("初始化数据库失败: %v", err)
 	}
 
-	// 启动Manager服务
-	log.Println("正在启动Manager服务...")
-	managerExitCh := startManager(ctx)
-
 	// 启动WebSocket服务器
 	log.Println("正在启动WebSocket服务器...")
-	wsServer := ws.NewServer("localhost:8081")
+	wsServer := ws.NewServer(fmt.Sprintf("%s:%d", *wsHost, *wsPort))
 	if err := wsServer.Start(); err != nil {
 		log.Fatalf("启动WebSocket服务器失败: %v", err)
 	}
-	log.Printf("WebSocket服务器已启动，监听端口 %d", *wsPort)
+	log.Printf("WebSocket服务器已启动，监听地址 %s:%d", *wsHost, *wsPort)
 
 	// 启动Web服务器（支持优雅关闭）
 	log.Println("正在启动Web服务器...")
@@ -73,14 +68,6 @@ func main() {
 
 	// 优雅关闭服务
 	wsServer.Stop() // 关闭WebSocket服务器
-
-	// 等待Manager退出
-	select {
-	case <-managerExitCh:
-		log.Println("Manager已关闭")
-	case <-time.After(5 * time.Second):
-		log.Println("等待Manager关闭超时")
-	}
 
 	log.Println("系统已关闭")
 }
@@ -110,42 +97,4 @@ func setupSignalHandler(cancel context.CancelFunc) {
 		log.Printf("收到信号: %s", sig)
 		cancel()
 	}()
-}
-
-// startManager 启动Manager服务
-func startManager(ctx context.Context) <-chan struct{} {
-	exitCh := make(chan struct{})
-
-	go func() {
-		defer close(exitCh)
-
-		// 检查Manager可执行文件是否存在
-		if _, err := os.Stat(ManagerBinPath); os.IsNotExist(err) {
-			log.Printf("警告: Manager可执行文件不存在: %s", ManagerBinPath)
-			log.Printf("请确保将gg20_sm_manager放置在正确位置")
-			return
-		}
-
-		// 配置Manager
-		config := manager.Config{
-			BinaryPath:   ManagerBinPath,
-			LogDir:       LogsDir,
-			RestartDelay: 3 * time.Second,
-			AutoRestart:  true,
-		}
-
-		// 创建并启动Manager进程
-		managerProcess := manager.New(config)
-		if err := managerProcess.Start(); err != nil {
-			log.Printf("启动Manager失败: %v", err)
-			return
-		}
-
-		// 等待上下文取消
-		<-ctx.Done()
-		log.Println("正在关闭Manager...")
-		managerProcess.Stop()
-	}()
-
-	return exitCh
 }

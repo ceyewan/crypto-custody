@@ -151,6 +151,9 @@ func (s *Server) Stop() error {
 	if err := s.server.Shutdown(ctx); err != nil {
 		return fmt.Errorf("关闭HTTP服务器失败: %w", err)
 	}
+	if s.handler != nil {
+		_ = s.handler.Close()
+	}
 
 	s.started = false
 	clog.Info("WebSocket服务器已停止")

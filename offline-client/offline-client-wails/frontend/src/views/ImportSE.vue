@@ -60,11 +60,12 @@ export default {
                 console.log('正在从安全芯片获取 CPLC 数据...')
                 const cplcResponse = await wailsSeApi.getCPLC()
                 
-                if (!cplcResponse.data) {
+                const cplc = cplcResponse.data && cplcResponse.data.cplc_info
+                if (!cplc) {
                     throw new Error('未能从安全芯片获取到 CPLC 数据')
                 }
 
-                this.cplc = cplcResponse.data
+                this.cplc = cplc
                 console.log('成功获取 CPLC:', this.cplc)
 
                 // 步骤2: 调用云端后端创建安全芯片记录

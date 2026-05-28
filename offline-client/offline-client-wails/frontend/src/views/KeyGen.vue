@@ -31,16 +31,6 @@
                 </el-form-item>
             </el-form>
 
-            <!-- 本地测试区域 -->
-            <el-divider content-text="本地测试（直接调用内置MPC）"></el-divider>
-            <el-form label-width="120px">
-                <el-form-item>
-                    <el-button type="success" :loading="localKeygenLoading" @click="handleLocalKeyGenTest">
-                        本地密钥生成测试
-                    </el-button>
-                </el-form-item>
-            </el-form>
-
             <!-- 结果显示区域 -->
             <el-card v-if="keygenResult" style="margin-top: 20px;">
                 <div slot="header">
@@ -92,7 +82,6 @@ export default {
             },
             availableParticipants: [],
             keygenLoading: false,
-            localKeygenLoading: false,
             keygenResult: null
         }
     },
@@ -168,8 +157,8 @@ export default {
                     sendWSMessage({
                         type: WS_MESSAGE_TYPES.KEYGEN_REQUEST,
                         session_key: sessionKey,
-                        threshold: this.keygenForm.threshold,
-                        total_parts: this.keygenForm.totalParts,
+                        required_signers: this.keygenForm.threshold,
+                        total_parties: this.keygenForm.totalParts,
                         participants: this.keygenForm.participants
                     })
 
@@ -183,40 +172,6 @@ export default {
                     this.keygenLoading = false
                 }
             })
-        },
-
-        // 本地密钥生成测试（直接调用内置MPC模块）
-        async handleLocalKeyGenTest() {
-            this.localKeygenLoading = true
-            this.keygenResult = null
-
-            try {
-                console.log('开始本地密钥生成测试...')
-                // 直接调用 Wails 内置的 MPC 模块
-                const result = await this.$localMpcApi.keyGen({
-                    threshold: this.keygenForm.threshold,
-                    total_parts: this.keygenForm.totalParts,
-                    participants: this.keygenForm.participants
-                })
-
-                console.log('本地密钥生成结果:', result)
-                this.keygenResult = result.data
-
-                if (result.data.success) {
-                    this.$message.success('本地密钥生成成功！')
-                } else {
-                    this.$message.error('本地密钥生成失败: ' + (result.data.error || '未知错误'))
-                }
-            } catch (error) {
-                console.error('本地密钥生成失败:', error)
-                this.keygenResult = {
-                    success: false,
-                    error: error.message || '本地密钥生成过程中发生错误'
-                }
-                this.$message.error('本地密钥生成失败: ' + (error.message || '未知错误'))
-            } finally {
-                this.localKeygenLoading = false
-            }
         }
     }
 }

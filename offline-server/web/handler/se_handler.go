@@ -9,8 +9,9 @@ import (
 
 // CreateSeRequest 创建SE的请求结构
 type CreateSeRequest struct {
-	SeId string `json:"seId" binding:"required"`
-	CPIC string `json:"cpic" binding:"required"`
+	SeID            string `json:"se_id" binding:"required"`
+	CPLC            string `json:"cplc" binding:"required"`
+	CustodyLocation string `json:"custody_location"`
 }
 
 // CreateSe 创建新的安全芯片记录
@@ -25,7 +26,7 @@ func CreateSe(c *gin.Context) {
 	}
 
 	seStorage := storage.GetSeStorage()
-	se, err := seStorage.CreateSe(req.SeId, req.CPIC)
+	se, err := seStorage.CreateSe(req.SeID, req.CPLC, req.CustodyLocation, "")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":  500,

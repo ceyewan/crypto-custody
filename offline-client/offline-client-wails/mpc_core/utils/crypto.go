@@ -27,8 +27,7 @@ func GenerateRandomBytes(size int) ([]byte, error) {
 
 // EncryptAES 使用AES-GCM加密数据
 func EncryptAES(plaintext []byte, key []byte) ([]byte, error) {
-	clog.Debug("开始AES加密",
-		clog.String("key_hex", hex.EncodeToString(key)))
+	clog.Debug("开始AES加密")
 
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -74,7 +73,6 @@ func DecryptAES(ciphertext []byte, key []byte) ([]byte, error) {
 	}
 
 	clog.Debug("开始AES解密",
-		clog.String("key_hex", hex.EncodeToString(key)),
 		clog.String("ciphertext_preview", ciphertextPreview+"..."))
 
 	block, err := aes.NewCipher(key)

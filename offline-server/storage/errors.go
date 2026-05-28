@@ -48,7 +48,7 @@ var (
 	ErrParticipantNotFound = errors.New("参与者未找到")
 
 	// ErrSeExists 表示当尝试创建已存在的安全芯片记录时返回的错误
-	// 在使用已存在的SeId或CPIC创建新记录时会触发此错误
+	// 在使用已存在的 se_id 或 CPLC 创建新记录时会触发此错误
 	ErrSeExists = errors.New("安全芯片记录已存在")
 
 	// ErrOperationFailed 表示当操作失败时返回的通用错误

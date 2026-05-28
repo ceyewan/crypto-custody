@@ -2,11 +2,23 @@ package model
 
 import "gorm.io/gorm"
 
-// SE 表示一个安全芯片，包含外部贴着的用户可读的 ID 和芯片的唯一标识符 CPIC
-// 执行安全芯片相关操作时，使用 CPIC 作为唯一标识符
-// 但在用户界面上，使用 SE ID 作为用户可读的标识符
+// SeStatus 表示安全芯片的管理状态。
+type SeStatus string
+
+const (
+	SeStatusActive    SeStatus = "active"
+	SeStatusLost      SeStatus = "lost"
+	SeStatusDisabled  SeStatus = "disabled"
+	SeStatusDestroyed SeStatus = "destroyed"
+)
+
+// Se 表示一个由离线系统统一管理的安全芯片。
+// 执行芯片校验时使用 CPLC 作为芯片唯一标识；用户界面展示 se_id。
 type Se struct {
 	gorm.Model
-	SeId string `gorm:"column:se_id;uniqueIndex;size:10;comment:SE ID"`
-	CPIC string `gorm:"column:cpic;uniqueIndex;size:100;comment:SE CPIC"`
+	SeID            string   `gorm:"column:se_id;uniqueIndex;size:32;not null;comment:SE ID"`
+	CPLC            string   `gorm:"column:cplc;uniqueIndex;size:128;not null;comment:SE CPLC"`
+	Status          SeStatus `gorm:"column:status;type:varchar(20);not null;default:'active';comment:芯片状态"`
+	CustodyLocation string   `gorm:"column:custody_location;size:200;comment:保管位置"`
+	RegisteredBy    string   `gorm:"column:registered_by;size:100;comment:登记人"`
 }

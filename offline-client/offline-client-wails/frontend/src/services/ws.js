@@ -27,16 +27,16 @@ export const WS_MESSAGE_TYPES = {
     SIGN_RESULT: 'sign_result',
     SIGN_COMPLETE: 'sign_complete',
 
+    // 销毁相关
+    DESTROY_REQUEST: 'destroy_request',
+    DESTROY_INVITE: 'destroy_invite',
+    DESTROY_RESPONSE: 'destroy_response',
+    DESTROY_PARAMS: 'destroy_params',
+    DESTROY_RESULT: 'destroy_result',
+    DESTROY_COMPLETE: 'destroy_complete',
+
     // 错误消息
     ERROR: 'error'
-}
-
-// WebSocket连接参数常量
-const WS_CONSTANTS = {
-    RECONNECT_INTERVAL: 2000,      // 初始重连时间间隔(2秒)
-    MAX_RECONNECT_INTERVAL: 30000, // 最大重连时间间隔(30秒)
-    RECONNECT_DECAY: 1.5,          // 重连时间递增系数
-    MAX_RECONNECT_ATTEMPTS: 10     // 最大重连尝试次数
 }
 
 // WebSocket连接状态
@@ -148,6 +148,18 @@ export function initWebSocketService() {
                     handleSignComplete(message)
                     break
 
+                case WS_MESSAGE_TYPES.DESTROY_INVITE:
+                    Message.warning(`收到密钥销毁邀请，地址: ${message.address}，请在通知页面处理`)
+                    break
+
+                case WS_MESSAGE_TYPES.DESTROY_PARAMS:
+                    await handleDestroyParams(message)
+                    break
+
+                case WS_MESSAGE_TYPES.DESTROY_COMPLETE:
+                    handleDestroyComplete(message)
+                    break
+
                 case WS_MESSAGE_TYPES.ERROR:
                     handleError(message)
                     break
@@ -223,34 +235,37 @@ function handleRegisterComplete(message) {
 // 处理密钥生成参数
 async function handleKeyGenParams(message) {
     try {
-        const user = store.state.user.username
         // 调用MPC服务进行密钥生成，使用与 models 匹配的字段名
         const keygenResponse = await mpcApi.keyGen({
+            manager_addr: message.manager_addr,
+            room: message.room,
             threshold: message.threshold,
-            parties: message.total_parts,
-            index: message.part_index,
-            filename: "keygen_temp.json", // 添加必需的 filename 字段
-            username: user // 使用 models 中的字段名 (username 而不是 user_name)
+            parties: message.total_parties,
+            party_index: message.party_index,
+            record_id: message.record_id,
+            filename: message.filename || "keygen_temp.json"
         })
 
         if (keygenResponse.data.success) {
-            // 尝试获取CPIC，即使出错也继续处理
-            let cpic = ''
+            // 尝试获取CPLC，即使出错也继续处理
+            let cplc = ''
             try {
-                const cpicResponse = await seApi.getCPLC()
-                cpic = cpicResponse.data.cpic
-            } catch (cpicError) {
-                console.error('获取CPIC失败:', cpicError)
+                const cplcResponse = await seApi.getCPLC()
+                cplc = cplcResponse.data.cplc_info || ''
+            } catch (cplcError) {
+                console.error('获取CPLC失败:', cplcError)
             }
 
             // 发送密钥生成结果
             sendWSMessage({
                 type: WS_MESSAGE_TYPES.KEYGEN_RESULT,
                 session_key: message.session_key,
-                part_index: message.part_index,
+                party_index: message.party_index,
                 address: keygenResponse.data.address,
-                cpic: cpic,
-                encrypted_shard: keygenResponse.data.encryptedKey,
+                public_key: keygenResponse.data.public_key,
+                cplc: cplc,
+                record_id: message.record_id,
+                encrypted_shard: keygenResponse.data.encrypted_shard,
                 success: true,
                 message: '密钥生成成功'
             })
@@ -265,9 +280,11 @@ async function handleKeyGenParams(message) {
         sendWSMessage({
             type: WS_MESSAGE_TYPES.KEYGEN_RESULT,
             session_key: message.session_key,
-            part_index: message.part_index,
+            party_index: message.party_index,
             address: '',
-            cpic: '',
+            public_key: '',
+            cplc: '',
+            record_id: message.record_id,
             encrypted_shard: '',
             success: false,
             message: '密钥生成失败: ' + error.message
@@ -300,12 +317,15 @@ async function handleSignParams(message) {
     try {
         // 调用MPC签名服务，使用与 models 匹配的字段名
         const signResponse = await mpcApi.sign({
+            manager_addr: message.manager_addr,
+            room: message.room,
             parties: message.parties,
-            data: message.data,        // 使用 models 中的字段名 (data 而不是 message)
-            filename: "sign_temp.json", // 添加必需的 filename 字段
-            userName: store.state.user.username, // 使用 models 中的字段名 (userName 而不是 user_name)
+            signing_index: message.signing_index,
+            message_hash: message.message_hash,
+            filename: message.filename || "sign_temp.json",
+            record_id: message.record_id,
             address: message.address,
-            encryptedKey: message.encrypted_shard, // 使用 models 中的字段名 (encryptedKey 而不是 encrypted_key)
+            encrypted_shard: message.encrypted_shard,
             signature: message.signature
         })
 
@@ -314,7 +334,7 @@ async function handleSignParams(message) {
             sendWSMessage({
                 type: WS_MESSAGE_TYPES.SIGN_RESULT,
                 session_key: message.session_key,
-                part_index: message.part_index,
+                signing_index: message.signing_index,
                 success: true,
                 signature: signResponse.data.signature,
                 message: '签名成功'
@@ -330,7 +350,7 @@ async function handleSignParams(message) {
         sendWSMessage({
             type: WS_MESSAGE_TYPES.SIGN_RESULT,
             session_key: message.session_key,
-            part_index: message.part_index,
+            signing_index: message.signing_index,
             success: false,
             signature: '',
             message: '签名失败: ' + error.message
@@ -352,6 +372,54 @@ function handleSignComplete(message) {
         MessageBox.alert(
             `签名失败: ${message.message}`,
             '签名失败',
+            { type: 'error' }
+        )
+    }
+}
+
+// 处理密钥销毁参数
+async function handleDestroyParams(message) {
+    try {
+        await mpcApi.delete({
+            record_id: message.record_id,
+            address: message.address,
+            signature: message.signature
+        })
+
+        sendWSMessage({
+            type: WS_MESSAGE_TYPES.DESTROY_RESULT,
+            session_key: message.session_key,
+            party_index: message.party_index,
+            success: true,
+            message: 'SE记录已删除并验证不可读取'
+        })
+
+        Message.success('SE记录销毁成功')
+    } catch (error) {
+        sendWSMessage({
+            type: WS_MESSAGE_TYPES.DESTROY_RESULT,
+            session_key: message.session_key,
+            party_index: message.party_index,
+            success: false,
+            message: 'SE记录销毁失败: ' + error.message
+        })
+
+        Message.error('SE记录销毁失败: ' + error.message)
+    }
+}
+
+// 处理密钥销毁完成消息
+function handleDestroyComplete(message) {
+    if (message.success) {
+        MessageBox.alert(
+            `密钥销毁完成，已销毁分片数: ${message.destroyed}`,
+            '密钥销毁完成',
+            { type: 'success' }
+        )
+    } else {
+        MessageBox.alert(
+            `密钥销毁失败: ${message.message}`,
+            '密钥销毁失败',
             { type: 'error' }
         )
     }

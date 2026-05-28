@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"strings"
 )
 
 // 从PEM文件加载私钥
@@ -39,14 +40,20 @@ func loadPrivateKey(filename string) (*ecdsa.PrivateKey, error) {
 	return ecdsaKey, nil
 }
 
-// 对数据进行签名
-func SignData(username, address string) (string, error) {
-	hash := sha256.Sum256([]byte(username))
-	userBytes := hash[:]
-	addrBytes, _ := hex.DecodeString(address[2:])
-	data := append(userBytes, addrBytes...)
+// SignData 对 SE 授权数据签名。
+// recordID 是 32 字节记录编号的 hex 表示；Applet 看到的第一段字段仍为 32 字节。
+func SignData(recordID, address string) (string, error) {
+	recordBytes, err := hex.DecodeString(strings.TrimPrefix(recordID, "0x"))
+	if err != nil || len(recordBytes) != 32 {
+		return "", fmt.Errorf("record_id必须是32字节hex")
+	}
+	addrBytes, err := hex.DecodeString(strings.TrimPrefix(address, "0x"))
+	if err != nil || len(addrBytes) != 20 {
+		return "", fmt.Errorf("地址格式错误")
+	}
+	data := append(recordBytes, addrBytes...)
 	// 计算消息哈希
-	hash = sha256.Sum256(data)
+	hash := sha256.Sum256(data)
 
 	// 加载私钥
 	privateKey, err := loadPrivateKey("./private_keys/ec_private_key.pem")

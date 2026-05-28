@@ -23,19 +23,38 @@ type IUserStorage interface {
 	UpdateUserRole(username string, role string) error
 }
 
-// IShareStorage 定义以太坊私钥分片存储接口
+// IShareStorage 定义离线密钥分片存储接口
 type IShareStorage interface {
-	// CreateEthereumKeyShard 创建以太坊私钥分片记录
-	CreateEthereumKeyShard(username, address, pcic, privateShard string, shardIndex int) error
+	// CreateKeyShard 创建密钥分片记录
+	CreateKeyShard(shard model.KeyShard) (*model.KeyShard, error)
 
-	// GetEthereumKeyShard 根据用户名和以太坊地址获取密钥分片数据
-	GetEthereumKeyShard(username, address string) (*model.EthereumKeyShard, error)
+	// GetKeyShardForParticipant 根据用户名和地址获取可用分片
+	GetKeyShardForParticipant(username, address string) (*model.KeyShard, error)
+
+	// ListActiveKeyShardsByAddress 获取地址下所有可用分片
+	ListActiveKeyShardsByAddress(address string) ([]model.KeyShard, error)
+
+	// ListKeyShardsByAddress 获取地址下全部分片
+	ListKeyShardsByAddress(address string) ([]model.KeyShard, error)
+
+	// UpdateKeyShardStatus 更新分片状态
+	UpdateKeyShardStatus(shardID string, status model.KeyShardStatus) error
+}
+
+// IOfflineKeyStorage 定义离线密钥元数据存储接口
+type IOfflineKeyStorage interface {
+	CreateOfflineKey(key model.OfflineKey) (*model.OfflineKey, error)
+	GetOfflineKeyByID(offlineKeyID string) (*model.OfflineKey, error)
+	GetOfflineKeyByAddress(address string) (*model.OfflineKey, error)
+	GetOfflineKeyByTaskNo(taskNo string) (*model.OfflineKey, error)
+	UpdateOfflineKeyOwner(offlineKeyID, logicalOwner string) error
+	UpdateOfflineKeyStatus(offlineKeyID string, status model.OfflineKeyStatus) error
 }
 
 // IKeyGenStorage 定义密钥生成会话存储接口
 type IKeyGenStorage interface {
 	// CreateSession 创建新的密钥生成会话
-	CreateSession(sessionKey, initiator string, threshold, totalParts int, participants []string) error
+	CreateSession(session model.KeyGenSession) (*model.KeyGenSession, error)
 
 	// GetSession 获取指定密钥ID的生成会话
 	GetSession(sessionKey string) (*model.KeyGenSession, error)
@@ -55,8 +74,8 @@ type IKeyGenStorage interface {
 	// DeleteSession 删除指定密钥ID的生成会话
 	DeleteSession(sessionKey string) error
 
-	// UpdateChips 更新指定会话的 Chips 字段
-	UpdateChips(sessionKey string, chips []string) error
+	// UpdateSeIDs 更新指定会话的 SeIDs 字段
+	UpdateSeIDs(sessionKey string, seIDs []string) error
 
 	// AllKeyGenInvitationsAccepted 检查所有参与者是否接受了邀请
 	AllKeyGenInvitationsAccepted(sessionKey string) bool
@@ -68,10 +87,13 @@ type IKeyGenStorage interface {
 // ISignStorage 定义签名会话存储接口
 type ISignStorage interface {
 	// CreateSession 创建新的签名会话
-	CreateSession(sessionKey, initiator, data, accountAddr string, participants []string) error
+	CreateSession(session model.SignSession) (*model.SignSession, error)
 
 	// GetSession 获取指定密钥ID的签名会话
 	GetSession(sessionKey string) (*model.SignSession, error)
+
+	// GetSessionByTaskNo 获取指定任务编号的签名会话
+	GetSessionByTaskNo(taskNo string) (*model.SignSession, error)
 
 	// UpdateStatus 更新签名会话状态
 	UpdateStatus(sessionKey string, status model.SessionStatus) error
@@ -85,8 +107,8 @@ type ISignStorage interface {
 	// DeleteSession 删除指定密钥ID的签名会话
 	DeleteSession(sessionKey string) error
 
-	// UpdateChips 更新指定会话的 Chips 字段
-	UpdateChips(sessionKey string, chips []string) error
+	// UpdateSeIDs 更新指定会话的 SeIDs 字段
+	UpdateSeIDs(sessionKey string, seIDs []string) error
 
 	// AllKeyGenInvitationsAccepted 检查所有参与者是否接受了邀请
 	AllKeyGenInvitationsAccepted(sessionKey string) bool
@@ -128,17 +150,40 @@ type ICaseStorage interface {
 // ISeStorage 定义安全芯片存储接口
 type ISeStorage interface {
 	// CreateSe 创建新的安全芯片记录
-	CreateSe(seId, cpic string) (*model.Se, error)
+	CreateSe(seID, cplc, custodyLocation, registeredBy string) (*model.Se, error)
 
 	// GetSeBySeId 根据安全芯片ID获取记录
 	GetSeBySeId(seId string) (*model.Se, error)
 
-	// GetSeByCPIC 根据CPIC获取安全芯片记录
-	GetSeByCPIC(cpic string) (*model.Se, error)
+	// GetSeByCPLC 根据CPLC获取安全芯片记录
+	GetSeByCPLC(cplc string) (*model.Se, error)
 
 	// GetAllSe 获取所有安全芯片记录
 	GetAllSe() ([]model.Se, error)
 
-	// GetRandomSeIds 随机选取指定数量的安全芯片ID
-	GetRandomSeIds(n int) ([]string, error)
+	// GetActiveSeIds 选取指定数量的可用安全芯片ID
+	GetActiveSeIds(n int) ([]string, error)
+
+	// UpdateSeStatus 更新安全芯片状态
+	UpdateSeStatus(seID string, status model.SeStatus) error
+}
+
+// IOfflineTaskStorage 定义离线任务存储接口
+type IOfflineTaskStorage interface {
+	CreateTask(task model.OfflineTask) (*model.OfflineTask, error)
+	GetTask(taskNo string) (*model.OfflineTask, error)
+	UpdateTaskStatus(taskNo string, status model.OfflineTaskStatus) error
+	UpdateTaskResultHash(taskNo, resultHash string) error
+}
+
+// IAuditStorage 定义审计日志存储接口
+type IAuditStorage interface {
+	CreateAuditLog(log model.AuditLog) error
+	ListAuditLogs(limit int) ([]model.AuditLog, error)
+}
+
+// IApprovalStorage 定义敏感操作审批记录存储接口
+type IApprovalStorage interface {
+	CreateApproval(approval model.Approval) (*model.Approval, error)
+	ListApprovals(limit int) ([]model.Approval, error)
 }

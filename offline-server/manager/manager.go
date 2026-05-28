@@ -30,6 +30,8 @@ const (
 type Config struct {
 	// BinaryPath 是 Manager 可执行文件的路径
 	BinaryPath string
+	// Args 是启动 Manager 时传入的命令行参数
+	Args []string
 	// LogDir 是日志文件的目录
 	LogDir string
 	// RestartDelay 是重启前等待的时间
@@ -155,18 +157,21 @@ func (mp *Process) Start() error {
 		// 继续执行，这不是致命错误
 	}
 
-	// 监控进程状态
-	ctx, cancel := context.WithCancel(context.Background())
-	mp.cancelFunc = cancel
-	go mp.monitor(ctx)
-	mp.logger.Info("Manager进程监控已启动")
+	// 只有需要异常重启时才启动监控协程。会话级 manager 使用一次性进程，
+	// 由业务会话在完成、失败或服务退出时显式停止。
+	if mp.config.AutoRestart {
+		ctx, cancel := context.WithCancel(context.Background())
+		mp.cancelFunc = cancel
+		go mp.monitor(ctx)
+		mp.logger.Info("Manager进程监控已启动")
+	}
 
 	return nil
 }
 
 // startProcess 启动 Manager 进程
 func (mp *Process) startProcess() error {
-	cmd := exec.Command(mp.config.BinaryPath)
+	cmd := exec.Command(mp.config.BinaryPath, mp.config.Args...)
 	cmd.Env = mp.config.Environment
 
 	// 重定向标准输出和标准错误到日志文件

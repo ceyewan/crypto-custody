@@ -84,7 +84,7 @@ func UpdateUserRole(userName, role string) error {
 
 	// 验证角色是否有效（使用 model.Role 类型）
 	isValid := false
-	validRoles := []model.Role{model.RoleAdmin, model.RoleCoordinator, model.RoleParticipant, model.RoleGuest}
+	validRoles := []model.Role{model.RoleAdmin, model.RoleCoordinator, model.RoleParticipant, model.RoleAuditor, model.RoleGuest}
 	for _, validRole := range validRoles {
 		if role == string(validRole) {
 			isValid = true
@@ -152,7 +152,7 @@ func GetUsersByAddress(address string) ([]model.User, error) {
 
 	// 查询拥有该地址分片的所有用户名
 	var usernames []string
-	if err := database.Model(&model.EthereumKeyShard{}).
+	if err := database.Model(&model.KeyShard{}).
 		Where("address = ?", address).
 		Pluck("username", &usernames).Error; err != nil {
 		return nil, errors.New("查询密钥分片失败: " + err.Error())

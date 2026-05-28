@@ -1,38 +1,21 @@
-# WS模块开发文档
+# WS 模块协议说明
 
-## 简介
+本文件描述离线系统当前唯一支持的 WebSocket 协议。旧字段 `total_parts`、`part_index`、`cpic` 不再作为接口字段使用；新协议统一使用 `total_parties`、`party_index`、`cplc` 和 `record_id`。
 
-WS模块是一个基于WebSocket的多方门限签名系统，提供了安全的分布式密钥生成和签名功能。该模块支持多角色协作，通过安全芯片保护私钥分片，实现了高安全性的加密操作。
+## 注册
 
-## 系统角色
-
-系统支持两种角色：
-
-1. **协调者(Coordinator)**: 负责发起密钥生成和签名请求
-2. **参与者(Participant)**: 负责响应协调者的请求，参与密钥生成和签名过程
-
-## 主要功能
-
-1. **分布式密钥生成**：生成多方持有的私钥分片，支持门限签名
-2. **分布式签名**：使用多方持有的私钥分片进行签名
-
-## 连接与认证
-
-### 建立WebSocket连接
-
-1. 连接到WebSocket服务器
-2. 发送注册消息进行身份验证
+客户端连接 `/ws` 后先注册：
 
 ```json
 {
   "type": "register",
-  "username": "您的用户名",
-  "role": "coordinator或participant",
-  "token": "您的JWT令牌"
+  "username": "u1",
+  "role": "participant",
+  "token": "<jwt>"
 }
 ```
 
-服务器将返回注册完成消息：
+服务端返回：
 
 ```json
 {
@@ -42,252 +25,290 @@ WS模块是一个基于WebSocket的多方门限签名系统，提供了安全的
 }
 ```
 
-## 密钥生成流程
+## Keygen
 
-### 1. 协调者发起密钥生成请求
-
-协调者需要发送以下消息：
+协调方发起：
 
 ```json
 {
   "type": "keygen_request",
-  "session_key": "唯一会话标识",
-  "threshold": 3,
-  "total_parts": 5,
-  "participants": ["用户1", "用户2", "用户3", "用户4", "用户5"]
+  "session_key": "keygen_20260528120000_admin",
+  "task_no": "TASK-001",
+  "offline_key_id": "OFFKEY-001",
+  "required_signers": 2,
+  "total_parties": 3,
+  "participants": ["u1", "u2", "u3"]
 }
 ```
 
-参数说明：
-- `session_key`: 唯一标识此次密钥生成会话
-- `threshold`: 门限值，需要至少多少个分片才能重构私钥（进行签名）
-- `total_parts`: 总分片数，将私钥分成多少份
-- `participants`: 参与密钥生成的用户名列表
+服务端行为：
 
-### 2. 参与者接收密钥生成邀请
+1. 为本次会话启动独立 `gg20_sm_manager --address <bind> --port <port>`。
+2. 生成本次 `manager_addr` 和 `room`。
+3. 为每个参与方分配安全芯片和 `party_index`。
 
-参与者将收到以下邀请消息：
+参与方收到邀请：
 
 ```json
 {
   "type": "keygen_invite",
-  "session_key": "会话标识",
-  "coordinator": "协调者用户名",
-  "threshold": 3,
-  "total_parts": 5,
-  "part_index": 2,
-  "se_id": "安全芯片标识符",
-  "participants": ["用户1", "用户2", "用户3", "用户4", "用户5"]
+  "session_key": "keygen_20260528120000_admin",
+  "coordinator": "admin",
+  "required_signers": 2,
+  "total_parties": 3,
+  "party_index": 1,
+  "se_id": "SE01",
+  "participants": ["u1", "u2", "u3"]
 }
 ```
 
-### 3. 参与者响应密钥生成邀请
-
-参与者需要回复是否接受参与：
+参与方接受：
 
 ```json
 {
   "type": "keygen_response",
-  "session_key": "会话标识",
-  "part_index": 2,
-  "cpic": "安全芯片唯一标识符",
-  "accept": true,
-  "reason": "" // 如果拒绝，需提供原因
+  "session_key": "keygen_20260528120000_admin",
+  "party_index": 1,
+  "cplc": "<security-element-cplc>",
+  "accept": true
 }
 ```
 
-### 4. 参与者接收密钥生成参数
-
-当所有参与者都接受邀请后，参与者将收到生成参数：
+全部接受后，服务端下发执行参数：
 
 ```json
 {
   "type": "keygen_params",
-  "session_key": "会话标识",
-  "threshold": 3,
-  "total_parts": 5,
-  "part_index": 2,
-  "filename": "密钥生成配置文件名"
+  "session_key": "keygen_20260528120000_admin",
+  "manager_addr": "http://192.168.1.10:18001",
+  "room": "keygen_20260528120000_admin",
+  "threshold": 1,
+  "total_parties": 3,
+  "party_index": 1,
+  "record_id": "64-byte-hex-string",
+  "filename": "keygen_20260528120000_admin_keygen_1.json"
 }
 ```
 
-### 5. 参与者发送密钥生成结果
-
-参与者完成密钥生成后，需发送结果：
+桌面端执行 `gg20_keygen`，将 AES key 写入 SE，并返回加密后的 local share：
 
 ```json
 {
   "type": "keygen_result",
-  "session_key": "会话标识",
-  "part_index": 2,
-  "address": "生成的账户地址",
-  "cpic": "安全芯片唯一标识符",
-  "encrypted_shard": "Base64编码的加密密钥分片",
+  "session_key": "keygen_20260528120000_admin",
+  "party_index": 1,
+  "address": "0x1111111111111111111111111111111111111111",
+  "public_key": "<public-key>",
+  "cplc": "<security-element-cplc>",
+  "record_id": "64-byte-hex-string",
+  "encrypted_shard": "<base64>",
   "success": true,
-  "message": "密钥生成成功"
+  "message": "ok"
 }
 ```
 
-### 6. 协调者接收密钥生成完成通知
-
-当所有参与者都完成密钥生成后，协调者将收到完成通知：
+所有分片完成后，服务端保存 `offline_keys` 和 `key_shards`，停止本次 manager，并通知协调方：
 
 ```json
 {
   "type": "keygen_complete",
-  "session_key": "会话标识",
-  "address": "生成的账户地址",
+  "session_key": "keygen_20260528120000_admin",
+  "address": "0x1111111111111111111111111111111111111111",
   "success": true,
-  "message": "密钥生成成功"
+  "message": "密钥生成已完成"
 }
 ```
 
-## 签名流程
+## Signing
 
-### 1. 协调者发起签名请求
-
-协调者需要发送以下消息：
+协调方发起：
 
 ```json
 {
   "type": "sign_request",
-  "session_key": "唯一会话标识",
-  "threshold": 3,
-  "total_parts": 5,
-  "data": "要签名的数据(32字节的哈希值)",
-  "address": "账户地址",
-  "participants": ["用户1", "用户2", "用户3"]
+  "session_key": "sign_20260528121000_admin",
+  "task_no": "TASK-002",
+  "offline_key_id": "OFFKEY-001",
+  "transaction_no": "TX-001",
+  "message_hash": "0000000000000000000000000000000000000000000000000000000000000001",
+  "address": "0x1111111111111111111111111111111111111111",
+  "participants": ["u2", "u3"]
 }
 ```
 
-参数说明：
-- `session_key`: 唯一标识此次签名会话
-- `threshold`: 门限值
-- `total_parts`: 总分片数
-- `data`: 要签名的数据(32字节的哈希值)
-- `address`: 账户地址（表示使用哪个账户的密钥）
-- `participants`: 选定参与签名的用户列表（数量必须≥门限值）
+服务端行为：
 
-### 2. 参与者接收签名邀请
+1. 校验离线密钥状态和参与人数。
+2. 按参与者读取原始 `shard_index`。
+3. 对 `shard_index` 排序生成 `parties`，例如参与者 `u2 + u3` 得到 `"2,3"`。
+4. 为本次签名启动独立 manager。
 
-参与者将收到以下邀请消息：
+参与方收到邀请：
 
 ```json
 {
   "type": "sign_invite",
-  "session_key": "会话标识",
-  "data": "要签名的数据",
-  "address": "账户地址",
-  "part_index": 2,
-  "se_id": "安全芯片标识符",
-  "participants": ["用户1", "用户2", "用户3"]
+  "session_key": "sign_20260528121000_admin",
+  "message_hash": "0000000000000000000000000000000000000000000000000000000000000001",
+  "address": "0x1111111111111111111111111111111111111111",
+  "party_index": 2,
+  "se_id": "SE02",
+  "participants": ["u2", "u3"]
 }
 ```
 
-### 3. 参与者响应签名邀请
-
-参与者需要回复是否接受参与：
+参与方接受：
 
 ```json
 {
   "type": "sign_response",
-  "session_key": "会话标识",
-  "part_index": 2,
-  "cpic": "安全芯片唯一标识符",
-  "accept": true,
-  "reason": "" // 如果拒绝，需提供原因
+  "session_key": "sign_20260528121000_admin",
+  "party_index": 2,
+  "cplc": "<security-element-cplc>",
+  "accept": true
 }
 ```
 
-### 4. 参与者接收签名参数
-
-当所有参与者都接受邀请后，参与者将收到签名参数：
+全部接受后，服务端下发签名参数：
 
 ```json
 {
   "type": "sign_params",
-  "session_key": "会话标识",
-  "data": "要签名的数据(Base64编码)",
-  "address": "账户地址",
-  "signature": "用于从安全芯片中获取私钥分片的签名",
-  "parties": "参与者列表(逗号分隔的索引)",
-  "part_index": 2,
-  "filename": "签名配置文件名",
-  "encrypted_shard": "Base64编码的加密密钥分片"
+  "session_key": "sign_20260528121000_admin",
+  "manager_addr": "http://192.168.1.10:18002",
+  "room": "sign_20260528121000_admin",
+  "message_hash": "0000000000000000000000000000000000000000000000000000000000000001",
+  "address": "0x1111111111111111111111111111111111111111",
+  "signature": "<base64-se-authorization-signature>",
+  "parties": "2,3",
+  "party_index": 2,
+  "signing_index": 1,
+  "record_id": "64-byte-hex-string",
+  "filename": "sign_20260528121000_admin_sign_1.json",
+  "encrypted_shard": "<base64>"
 }
 ```
 
-### 5. 参与者发送签名结果
+`party_index` 是 keygen 时的原始分片编号；`signing_index` 是当前分片在 `parties` 中的 1-based 位置。2-of-3 签名必须支持 `1,2`、`1,3`、`2,3`，也允许 `1,2,3` 一起参与。
 
-参与者完成签名后，需发送结果：
+桌面端返回：
 
 ```json
 {
   "type": "sign_result",
-  "session_key": "会话标识",
-  "part_index": 2,
+  "session_key": "sign_20260528121000_admin",
+  "signing_index": 1,
   "success": true,
-  "signature": "签名结果",
-  "message": "签名成功"
+  "signature": "0x...",
+  "message": "ok"
 }
 ```
 
-### 6. 协调者接收签名完成通知
-
-当所有参与者都完成签名后，协调者将收到完成通知：
+所有参与方完成后，服务端停止本次 manager，并通知协调方：
 
 ```json
 {
   "type": "sign_complete",
-  "session_key": "会话标识",
-  "signature": "最终签名结果",
+  "session_key": "sign_20260528121000_admin",
+  "signature": "0x...",
   "success": true,
-  "message": "签名成功"
+  "message": "签名已完成"
 }
 ```
 
-## 错误处理
+多个参与方返回的 `signature` 必须一致。若任一成功结果与已收到的签名不同，服务端会将会话标记为 failed，通知协调方并停止本次 manager。
 
-在操作过程中，可能会收到错误消息：
+## Destroy
+
+管理员从 HTTP 接口拿到 `destroy_request` 后，通过 WebSocket 发送：
+
+```json
+{
+  "type": "destroy_request",
+  "session_key": "destroy_20260528122000_OFFKEY-001",
+  "offline_key_id": "OFFKEY-001",
+  "address": "0x1111111111111111111111111111111111111111",
+  "participants": ["u1", "u2", "u3"],
+  "reason": "案件密钥销毁"
+}
+```
+
+服务端按 active `key_shards` 邀请相关参与方：
+
+```json
+{
+  "type": "destroy_invite",
+  "session_key": "destroy_20260528122000_OFFKEY-001",
+  "offline_key_id": "OFFKEY-001",
+  "address": "0x1111111111111111111111111111111111111111",
+  "party_index": 1,
+  "se_id": "SE01",
+  "reason": "案件密钥销毁"
+}
+```
+
+参与方插入对应 SE，确认后返回 CPLC：
+
+```json
+{
+  "type": "destroy_response",
+  "session_key": "destroy_20260528122000_OFFKEY-001",
+  "party_index": 1,
+  "cplc": "<security-element-cplc>",
+  "accept": true
+}
+```
+
+所有参与方确认后，服务端下发删除授权：
+
+```json
+{
+  "type": "destroy_params",
+  "session_key": "destroy_20260528122000_OFFKEY-001",
+  "offline_key_id": "OFFKEY-001",
+  "address": "0x1111111111111111111111111111111111111111",
+  "party_index": 1,
+  "record_id": "64-byte-hex-string",
+  "signature": "<base64-se-delete-authorization-signature>"
+}
+```
+
+桌面端执行 SE DELETE，并立即 READ 验证不可读取，成功后返回：
+
+```json
+{
+  "type": "destroy_result",
+  "session_key": "destroy_20260528122000_OFFKEY-001",
+  "party_index": 1,
+  "success": true,
+  "message": "SE记录已删除并验证不可读取"
+}
+```
+
+服务端收到所有成功结果后，才把对应 `key_shards.status` 和 `offline_keys.status` 标记为 `destroyed`，并通知发起方：
+
+```json
+{
+  "type": "destroy_complete",
+  "session_key": "destroy_20260528122000_OFFKEY-001",
+  "offline_key_id": "OFFKEY-001",
+  "address": "0x1111111111111111111111111111111111111111",
+  "destroyed": 3,
+  "success": true,
+  "message": "密钥销毁已完成"
+}
+```
+
+## 错误
+
+任何阶段失败都返回：
 
 ```json
 {
   "type": "error",
-  "message": "错误消息",
+  "message": "错误摘要",
   "details": "错误详情"
 }
 ```
 
-## 注意事项
-
-1. **会话标识唯一性**: 每次密钥生成或签名操作，`session_key` 必须唯一
-2. **安全芯片管理**: 确保安全芯片标识符 (`se_id`) 安全保存
-3. **门限值设置**: 门限值 (`threshold`) 应根据安全需求设置，建议不低于总分片数的一半
-4. **错误处理**: 实现完善的错误处理逻辑，尤其是网络断开重连机制
-5. **参与者数量**: 签名时的参与者数量必须大于或等于门限值
-
-## 安全建议
-
-1. 使用安全通信通道，如TLS加密的WebSocket连接 (WSS)
-2. 定期更新JWT令牌
-3. 实施访问控制政策，限制用户权限
-4. 记录审计日志，跟踪所有密钥生成和签名操作
-5. 实施防DDoS措施
-6. 定期安全审查系统
-
-## 常见问题与解决方案
-
-1. **问题**: 连接断开后如何恢复会话？
-   **解决方案**: 实现重连机制，保存会话状态，重连后发送新的注册消息
-
-2. **问题**: 如何处理参与者拒绝参与的情况？
-   **解决方案**: 协调者需要重新选择参与者列表，发起新的请求
-
-3. **问题**: 密钥生成或签名过程中出错怎么办？
-   **解决方案**: 实现错误恢复机制，出错时通知所有参与者中止当前会话
-
-4. **问题**: 如何验证生成的密钥对应的公钥是否正确？
-   **解决方案**: 使用生成的地址与已知的公钥地址进行比对
-
-5. **问题**: 性能优化建议？
-   **解决方案**: 实现消息批处理，优化网络传输，使用高效的加密库 
+失败、拒绝、会话完成或服务退出时，服务端都必须清理本次 manager。

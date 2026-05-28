@@ -1,7 +1,7 @@
 export namespace models {
 	
 	export class DeleteRequest {
-	    username: string;
+	    record_id: string;
 	    address: string;
 	    signature: string;
 	
@@ -11,17 +11,19 @@ export namespace models {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.username = source["username"];
+	        this.record_id = source["record_id"];
 	        this.address = source["address"];
 	        this.signature = source["signature"];
 	    }
 	}
 	export class KeyGenRequest {
+	    manager_addr: string;
+	    room: string;
 	    threshold: number;
 	    parties: number;
-	    index: number;
+	    party_index: number;
+	    record_id: string;
 	    filename: string;
-	    username: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new KeyGenRequest(source);
@@ -29,19 +31,24 @@ export namespace models {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.manager_addr = source["manager_addr"];
+	        this.room = source["room"];
 	        this.threshold = source["threshold"];
 	        this.parties = source["parties"];
-	        this.index = source["index"];
+	        this.party_index = source["party_index"];
+	        this.record_id = source["record_id"];
 	        this.filename = source["filename"];
-	        this.username = source["username"];
 	    }
 	}
 	export class SignRequest {
+	    manager_addr: string;
+	    room: string;
 	    parties: string;
-	    data: string;
+	    signing_index: number;
+	    message_hash: string;
 	    filename: string;
-	    encryptedKey: string;
-	    userName: string;
+	    encrypted_shard: string;
+	    record_id: string;
 	    address: string;
 	    signature: string;
 	
@@ -51,15 +58,17 @@ export namespace models {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.manager_addr = source["manager_addr"];
+	        this.room = source["room"];
 	        this.parties = source["parties"];
-	        this.data = source["data"];
+	        this.signing_index = source["signing_index"];
+	        this.message_hash = source["message_hash"];
 	        this.filename = source["filename"];
-	        this.encryptedKey = source["encryptedKey"];
-	        this.userName = source["userName"];
+	        this.encrypted_shard = source["encrypted_shard"];
+	        this.record_id = source["record_id"];
 	        this.address = source["address"];
 	        this.signature = source["signature"];
 	    }
 	}
 
 }
-

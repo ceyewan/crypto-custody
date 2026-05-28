@@ -2,7 +2,7 @@
 
 一个运行在 JavaCard 智能卡平台上的数据存储应用，提供安全的数据存储和检索功能。
 
-本文档为**用户**提供快速入门指南。如需了解技术细节，请参阅 [DEVELOPMENT.md](DEVELOPMENT.md)。
+本文档为**用户**提供快速入门指南。设计边界请参阅 [SECURITY_CHIP_DESIGN.md](SECURITY_CHIP_DESIGN.md)，技术细节请参阅 [DEVELOPMENT.md](DEVELOPMENT.md)。
 
 ## 功能特性
 

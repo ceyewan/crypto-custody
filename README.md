@@ -49,9 +49,11 @@ crypto-custody/
 
 ## 文档入口
 
+- `docs/README.md`：全局文档中心，统一索引总体设计、测试大纲、权威离线设计和归档草案。
 - `online-server/API_DOCUMENTATION.md`：在线服务端汇总接口文档。
 - `online-server/docs/`：在线服务端分模块接口与开发说明。
-- `offline-server/docs/`：离线协作服务端 Web 和 WebSocket 模块说明。
+- `offline-server/docs/offline_system_detailed_design.md`：离线系统当前权威详细设计，覆盖 MPC、SE、桌面端、服务端、认证、安全、移交、销毁和提取控制。
+- `offline-server/docs/`：离线协作服务端 Web、WebSocket、在线/离线包格式和 GG20 使用说明。
 - `offline-client/offline-client-wails/DEVELOPMENT.md`：离线桌面应用开发说明。
 - `offline-client/offline-client-wails/mpc_core/DEVELOPMENT.md`：MPC 核心模块开发说明。
 - `offline-client/secured/DEVELOPMENT.md`：安全芯片 Applet 开发说明。

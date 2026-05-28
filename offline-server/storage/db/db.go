@@ -87,9 +87,13 @@ func autoMigrateModels() error {
 
 	// 迁移所有模型
 	return instance.AutoMigrate(
-		&model.EthereumKeyShard{},
+		&model.OfflineTask{},
+		&model.OfflineKey{},
+		&model.KeyShard{},
 		&model.KeyGenSession{},
 		&model.SignSession{},
+		&model.Approval{},
+		&model.AuditLog{},
 		&model.User{},
 		&model.Case{},
 		&model.Se{},

@@ -29,6 +29,18 @@
                             <i class="el-icon-edit"></i>
                             <span>交易签名</span>
                         </el-menu-item>
+                        <el-menu-item v-if="isAdmin || isCoordinator" index="/offline-tasks">
+                            <i class="el-icon-document"></i>
+                            <span>离线任务</span>
+                        </el-menu-item>
+                        <el-menu-item v-if="isAdmin || isCoordinator" index="/keys">
+                            <i class="el-icon-wallet"></i>
+                            <span>密钥管理</span>
+                        </el-menu-item>
+                        <el-menu-item v-if="isAdmin || isCoordinator || isAuditor" index="/audit">
+                            <i class="el-icon-document-checked"></i>
+                            <span>审计记录</span>
+                        </el-menu-item>
                         <el-menu-item index="/notifications">
                             <i class="el-icon-bell"></i>
                             <span>通知消息</span>
@@ -54,14 +66,25 @@
                             <div v-if="isAdmin" class="feature-box">
                                 <h3>管理员功能</h3>
                                 <el-button type="primary" @click="$router.push('/users')">用户管理</el-button>
+                                <el-button type="primary" @click="$router.push('/offline-tasks')">离线任务</el-button>
+                                <el-button type="primary" @click="$router.push('/keys')">密钥管理</el-button>
+                                <el-button type="primary" @click="$router.push('/audit')">审计记录</el-button>
                                 <el-button type="primary" @click="$router.push('/keygen')">密钥生成</el-button>
                                 <el-button type="primary" @click="$router.push('/sign')">交易签名</el-button>
                             </div>
 
                             <div v-else-if="isCoordinator" class="feature-box">
                                 <h3>协调者功能</h3>
+                                <el-button type="primary" @click="$router.push('/offline-tasks')">离线任务</el-button>
+                                <el-button type="primary" @click="$router.push('/keys')">密钥管理</el-button>
+                                <el-button type="primary" @click="$router.push('/audit')">审计记录</el-button>
                                 <el-button type="primary" @click="$router.push('/keygen')">密钥生成</el-button>
                                 <el-button type="primary" @click="$router.push('/sign')">交易签名</el-button>
+                            </div>
+
+                            <div v-else-if="isAuditor" class="feature-box">
+                                <h3>审计员功能</h3>
+                                <el-button type="primary" @click="$router.push('/audit')">审计记录</el-button>
                             </div>
 
                             <div v-else-if="isParticipant" class="feature-box">
@@ -79,7 +102,7 @@
 
 <script>
 import { mapGetters } from 'vuex'
-import { initWebSocketService, resetWebSocketService } from '../services/ws'
+import { initWebSocketService } from '../services/ws'
 
 export default {
     name: 'Dashboard',
@@ -98,6 +121,7 @@ export default {
             'isAdmin',
             'isCoordinator',
             'isParticipant',
+            'isAuditor',
             'notifications',
             'wsConnected'
         ]),
@@ -107,6 +131,7 @@ export default {
         roleText() {
             if (this.isAdmin) return '管理员'
             if (this.isCoordinator) return '协调者'
+            if (this.isAuditor) return '审计员'
             if (this.isParticipant) return '参与者'
             return '访客'
         },
@@ -171,8 +196,6 @@ export default {
         // 处理页面可见性变化
         handleVisibilityChange() {
             if (!document.hidden) {
-                // 页面变为可见时，检查WebSocket连接
-                console.log('页面变为可见，检查WebSocket连接')
                 this.checkWsConnection()
             }
         },
@@ -234,15 +257,12 @@ export default {
         // WebSocket连接状态变化
         wsConnected(connected) {
             if (connected) {
-                console.log('WebSocket已连接')
                 this.wsErrorCount = 0  // 重置错误计数
-            } else {
-                console.warn('WebSocket连接已断开')
             }
         },
 
         // 通知数量变化
-        notifications(newNotifications) {
+        notifications() {
             // 当新增通知时检查是否需要跳转
             if (this.hasUnhandledNotifications && this.$route.path !== '/notifications') {
                 this.checkPendingNotifications()

@@ -17,17 +17,6 @@
                     <el-input v-model="signForm.data" type="textarea" :rows="2"></el-input>
                 </el-form-item>
 
-                <el-form-item label="门限值" prop="threshold">
-                    <el-input-number v-model="signForm.threshold" :min="2" :max="signForm.totalParts"
-                        @change="handleSignThresholdChange">
-                    </el-input-number>
-                </el-form-item>
-
-                <el-form-item label="总分片数" prop="totalParts">
-                    <el-input-number v-model="signForm.totalParts" :min="signForm.threshold" :max="10">
-                    </el-input-number>
-                </el-form-item>
-
                 <el-form-item label="参与者" prop="participants">
                     <el-select v-model="signForm.participants" multiple placeholder="请选择参与者" style="width: 100%">
                         <el-option v-for="p in signAvailableParticipants" :key="p" :label="p" :value="p">
@@ -42,44 +31,6 @@
                 </el-form-item>
             </el-form>
 
-            <!-- 本地测试区域 -->
-            <el-divider content-text="本地测试（直接调用内置MPC）"></el-divider>
-            <el-form label-width="120px">
-                <el-form-item>
-                    <el-button type="success" :loading="localSignLoading" @click="handleLocalSignTest">
-                        本地签名测试
-                    </el-button>
-                </el-form-item>
-            </el-form>
-
-            <!-- 结果显示区域 -->
-            <el-card v-if="signResult" style="margin-top: 20px;">
-                <div slot="header">
-                    <span>签名结果</span>
-                </div>
-                <el-row>
-                    <el-col :span="24">
-                        <p><strong>状态:</strong> 
-                            <el-tag :type="signResult.success ? 'success' : 'danger'">
-                                {{ signResult.success ? '成功' : '失败' }}
-                            </el-tag>
-                        </p>
-                        <p v-if="signResult.success && signResult.data">
-                            <strong>签名结果:</strong>
-                            <el-input 
-                                v-model="signResult.data.signature" 
-                                type="textarea" 
-                                :rows="3" 
-                                readonly
-                                style="margin-top: 10px;">
-                            </el-input>
-                        </p>
-                        <p v-if="!signResult.success">
-                            <strong>错误信息:</strong> {{ signResult.error }}
-                        </p>
-                    </el-col>
-                </el-row>
-            </el-card>
         </el-card>
     </div>
 </template>
@@ -93,9 +44,7 @@ export default {
         return {
             signForm: {
                 address: '',
-                data: '0x1234abcd5678efgh9012ijkl3456mnop7890qrst', // 测试数据
-                threshold: 2,
-                totalParts: 3,
+                data: '0x0000000000000000000000000000000000000000000000000000000000000000',
                 participants: []
             },
             signRules: {
@@ -105,37 +54,22 @@ export default {
                 data: [
                     { required: true, message: '请输入待签名数据', trigger: 'blur' }
                 ],
-                threshold: [
-                    { required: true, message: '请输入门限值', trigger: 'blur' }
-                ],
-                totalParts: [
-                    { required: true, message: '请输入总分片数', trigger: 'blur' }
-                ],
                 participants: [
                     { required: true, message: '请选择参与者', trigger: 'change' },
                     { validator: this.validateSignParticipants, trigger: 'change' }
                 ]
             },
             signAvailableParticipants: [],
-            signLoading: false,
-            localSignLoading: false,
-            signResult: null
+            signLoading: false
         }
     },
     methods: {
         // 验证签名参与者选择是否满足门限要求
         validateSignParticipants(rule, value, callback) {
-            if (!value || value.length < this.signForm.threshold) {
-                callback(new Error(`至少需要选择${this.signForm.threshold}个参与者`))
+            if (!value || value.length === 0) {
+                callback(new Error('至少需要选择1个参与者'))
             } else {
                 callback()
-            }
-        },
-
-        // 签名门限值变更处理
-        handleSignThresholdChange(val) {
-            if (val > this.signForm.totalParts) {
-                this.signForm.totalParts = val
             }
         },
 
@@ -150,9 +84,9 @@ export default {
                 const response = await this.$signApi.getAvailableUsers(this.signForm.address)
                 this.signAvailableParticipants = response.data.data.map(user => user.username)
 
-                // 默认选择前n个参与者
-                if (this.signAvailableParticipants.length >= this.signForm.threshold) {
-                    this.signForm.participants = this.signAvailableParticipants.slice(0, this.signForm.threshold)
+                // 默认选择前两个参与者；实际门限由离线密钥元数据在服务端校验
+                if (this.signAvailableParticipants.length > 0) {
+                    this.signForm.participants = this.signAvailableParticipants.slice(0, Math.min(2, this.signAvailableParticipants.length))
                 }
 
                 this.$message.success('已获取可用参与者')
@@ -183,9 +117,7 @@ export default {
                     sendWSMessage({
                         type: WS_MESSAGE_TYPES.SIGN_REQUEST,
                         session_key: sessionKey,
-                        threshold: this.signForm.threshold,
-                        total_parts: this.signForm.totalParts,
-                        data: this.signForm.data,
+                        message_hash: this.signForm.data,
                         address: this.signForm.address,
                         participants: this.signForm.participants
                     })
@@ -200,43 +132,6 @@ export default {
                     this.signLoading = false
                 }
             })
-        },
-
-        // 本地签名测试（直接调用内置MPC模块）
-        async handleLocalSignTest() {
-            this.localSignLoading = true
-            this.signResult = null
-
-            try {
-                console.log('开始本地签名测试...')
-                // 直接调用 Wails 内置的 MPC 模块
-                const result = await this.$localMpcApi.sign({
-                    address: this.signForm.address,
-                    message: this.signForm.data,
-                    data: this.signForm.data,
-                    threshold: this.signForm.threshold,
-                    total_parts: this.signForm.totalParts,
-                    participants: this.signForm.participants
-                })
-
-                console.log('本地签名结果:', result)
-                this.signResult = result.data
-
-                if (result.data.success) {
-                    this.$message.success('本地签名成功！')
-                } else {
-                    this.$message.error('本地签名失败: ' + (result.data.error || '未知错误'))
-                }
-            } catch (error) {
-                console.error('本地签名失败:', error)
-                this.signResult = {
-                    success: false,
-                    error: error.message || '本地签名过程中发生错误'
-                }
-                this.$message.error('本地签名失败: ' + (error.message || '未知错误'))
-            } finally {
-                this.localSignLoading = false
-            }
         }
     }
 }

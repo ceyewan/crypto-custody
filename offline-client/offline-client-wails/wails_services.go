@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"sync"
@@ -76,8 +77,7 @@ func (ws *WailsServices) PerformKeyGeneration(req models.KeyGenRequest) (interfa
 	}
 
 	ctx := context.Background()
-	// 使用从前端请求传递的参数，使用 models 中定义的字段
-	address, encryptedKey, err := ws.mpcService.KeyGeneration(ctx, req.Threshold, req.Parties, req.Index, req.Filename, req.UserName)
+	address, publicKey, encryptedShard, err := ws.mpcService.KeyGeneration(ctx, req.ManagerAddr, req.Room, req.Threshold, req.Parties, req.PartyIndex, req.Filename, req.RecordID)
 	if err != nil {
 		return nil, err
 	}
@@ -87,15 +87,15 @@ func (ws *WailsServices) PerformKeyGeneration(req models.KeyGenRequest) (interfa
 		address = "0x" + address
 	}
 
-	// 转换加密密钥为Base64字符串（仿照原controller逻辑）
-	encryptedKeyBase64 := base64.StdEncoding.EncodeToString(encryptedKey)
+	// 转换加密分片为Base64字符串（仿照原controller逻辑）
+	encryptedShardBase64 := base64.StdEncoding.EncodeToString(encryptedShard)
 
-	// 返回与原有 models.KeyGenResponse 兼容的格式
 	return models.KeyGenResponse{
-		Success:      true,
-		UserName:     req.UserName,
-		Address:      address,
-		EncryptedKey: encryptedKeyBase64,
+		Success:        true,
+		Address:        address,
+		PublicKey:      publicKey,
+		RecordID:       req.RecordID,
+		EncryptedShard: encryptedShardBase64,
 	}, nil
 }
 
@@ -113,17 +113,17 @@ func (ws *WailsServices) PerformSignMessage(req models.SignRequest) (interface{}
 		address = "0x" + address
 	}
 
-	// 解码Base64加密密钥（仿照原controller逻辑）
-	encryptedKey, err := base64.StdEncoding.DecodeString(req.EncryptedKey)
+	// 解码Base64加密分片（仿照原controller逻辑）
+	encryptedShard, err := base64.StdEncoding.DecodeString(req.EncryptedShard)
 	if err != nil {
-		clog.Error("加密密钥解码失败", clog.String("error", err.Error()), clog.String("username", req.UserName))
-		return nil, fmt.Errorf("加密密钥格式错误: %v", err)
+		clog.Error("加密分片解码失败", clog.String("error", err.Error()))
+		return nil, fmt.Errorf("加密分片格式错误: %v", err)
 	}
 
 	// 解码签名（Base64格式）（仿照原controller逻辑）
 	signature, err := base64.StdEncoding.DecodeString(req.Signature)
 	if err != nil {
-		clog.Error("签名解码失败", clog.String("error", err.Error()), clog.String("username", req.UserName))
+		clog.Error("签名解码失败", clog.String("error", err.Error()))
 		return nil, fmt.Errorf("签名格式错误: %v", err)
 	}
 
@@ -131,13 +131,16 @@ func (ws *WailsServices) PerformSignMessage(req models.SignRequest) (interface{}
 	// 使用解码后的数据调用服务，使用 models 中定义的字段
 	result, err := ws.mpcService.SignMessage(
 		ctx,
+		req.ManagerAddr,
+		req.Room,
+		req.SigningIndex,
 		req.Parties,
-		req.Data,     // 使用 models 中的 Data 字段
-		req.Filename, // 使用 models 中的 Filename 字段
-		req.UserName,
-		address,      // 使用标准化的地址
-		encryptedKey, // 使用解码后的[]byte
-		signature,    // 使用解码后的[]byte
+		req.MessageHash,
+		req.Filename,
+		req.RecordID,
+		address,
+		encryptedShard,
+		signature,
 	)
 	if err != nil {
 		return nil, err
@@ -148,7 +151,6 @@ func (ws *WailsServices) PerformSignMessage(req models.SignRequest) (interface{}
 		result = "0x" + result
 	}
 
-	// 返回与原有 models.SignResponse 兼容的格式
 	return models.SignResponse{
 		Success:   true,
 		Signature: result,
@@ -169,7 +171,7 @@ func (ws *WailsServices) GetCPLCInfo() (interface{}, error) {
 	}
 
 	return map[string]interface{}{
-		"cplc_info": cplcInfo,
+		"cplc_info": strings.ToUpper(hex.EncodeToString(cplcInfo)),
 	}, nil
 }
 
@@ -190,10 +192,16 @@ func (ws *WailsServices) PerformDeleteMessage(req models.DeleteRequest) error {
 	// 解码签名（Base64格式）（仿照原controller逻辑）
 	signature, err := base64.StdEncoding.DecodeString(req.Signature)
 	if err != nil {
-		clog.Error("签名解码失败", clog.String("error", err.Error()), clog.String("username", req.UserName))
+		clog.Error("签名解码失败", clog.String("error", err.Error()))
 		return fmt.Errorf("签名格式错误: %v", err)
 	}
 
-	// 调用 securityService 来执行删除，使用解码后的数据
-	return ws.securityService.DeleteData(req.UserName, address, signature)
+	if err := ws.securityService.DeleteData(req.RecordID, address, signature); err != nil {
+		return err
+	}
+
+	if _, err := ws.securityService.ReadData(req.RecordID, address, signature); err == nil {
+		return fmt.Errorf("SE记录删除后仍可读取")
+	}
+	return nil
 }

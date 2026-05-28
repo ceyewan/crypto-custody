@@ -9,7 +9,7 @@
 - 密钥生成：创建 MPC 密钥生成会话，并协调参与方完成流程。
 - 签名协作：创建签名会话，通过 WebSocket 分发和收集签名消息。
 - 安全芯片管理：登记安全芯片标识和 CPLC 信息。
-- 进程管理：启动并监控 `gg20_sm_manager` 后台进程。
+- 进程管理：每个 keygen/sign 会话独立启动并清理 `gg20_sm_manager`。
 - 本地存储：使用 SQLite 保存用户、会话、安全芯片和密钥分片相关数据。
 
 ## 目录结构
@@ -21,7 +21,6 @@ offline-server/
 ├── docs/          # Web 和 WebSocket 模块文档
 ├── manager/       # 后台进程管理器
 ├── storage/       # SQLite 数据访问层
-├── test/          # 接口和流程测试
 ├── tools/         # JWT 等辅助工具
 ├── web/           # HTTP API 服务
 ├── ws/            # WebSocket 协调服务
@@ -35,13 +34,13 @@ offline-server/
 
 ```text
 HTTP API:  http://localhost:8080
-WebSocket: ws://localhost:8081/ws
+WebSocket: ws://0.0.0.0:8081/ws
 ```
 
 启动参数可调整端口：
 
 ```bash
-go run . -web-port 8080 -ws-port 8081
+go run . -web-port 8080 -ws-host 0.0.0.0 -ws-port 8081
 ```
 
 ## 本地运行
@@ -53,13 +52,23 @@ go run .
 
 运行前需要确认 `bin/gg20_sm_manager` 存在并具有执行权限。启动后会自动创建 `data/` 和 `logs/` 目录。
 
+会话级 manager 可通过环境变量配置：
+
+```bash
+OFFLINE_MANAGER_BIN=./bin/gg20_sm_manager
+OFFLINE_MANAGER_BIND_ADDRESS=0.0.0.0
+OFFLINE_MANAGER_PUBLIC_HOST=192.168.1.10
+OFFLINE_MANAGER_PORT_START=18001
+OFFLINE_MANAGER_PORT_END=18100
+```
+
 ## 测试
 
 ```bash
 go test ./...
 ```
 
-`test/` 下的用例会访问本地服务并读写本地数据库，运行前请确认当前环境适合测试数据写入。
+当前测试以新 WebSocket 协议单元测试为主，不需要提前启动 HTTP/WebSocket 服务。
 
 ## 相关文档
 

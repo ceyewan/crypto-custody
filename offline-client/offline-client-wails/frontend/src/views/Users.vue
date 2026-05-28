@@ -15,6 +15,7 @@
                             <el-option label="管理员" value="admin"></el-option>
                             <el-option label="协调者" value="coordinator"></el-option>
                             <el-option label="参与者" value="participant"></el-option>
+                            <el-option label="审计员" value="auditor"></el-option>
                             <el-option label="访客" value="guest"></el-option>
                         </el-select>
                         <el-button type="primary" size="small" :disabled="scope.row.role === scope.row.newRole"
@@ -63,7 +64,6 @@ export default {
                     this.$message.warning('未找到用户数据')
                 }
             } catch (error) {
-                console.error('获取用户列表失败:', error)
                 this.$message.error('获取用户列表失败: ' + (error.response?.data?.error || error.message))
             } finally {
                 this.loading = false
@@ -77,7 +77,6 @@ export default {
                 // 更新当前角色
                 user.role = user.newRole
             } catch (error) {
-                console.error('更新用户角色失败:', error)
                 this.$message.error('更新用户角色失败')
             }
         }
