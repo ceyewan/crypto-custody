@@ -1,0 +1,15 @@
+.git
+.gitignore
+.env
+data
+logs
+tmp
+private_keys
+*.db
+*.sqlite
+*.sqlite3
+*.log
+Dockerfile
+docker-compose.yml
+bin/gg20_sm_manager_darwin_arm64
+bin/gg20_sm_manager_windows_amd64.exe

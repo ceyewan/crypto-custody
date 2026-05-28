@@ -1,0 +1,45 @@
+services:
+  offline-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${OFFLINE_SERVER_IMAGE:-ceyewan/crypto-custody-offline-server:latest}
+    platform: ${DOCKER_PLATFORM:-linux/amd64}
+    container_name: crypto-custody-offline-server
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-Asia/Singapore}
+      OFFLINE_MANAGER_BIN: /app/bin/gg20_sm_manager_linux_amd64
+      OFFLINE_MANAGER_BIND_ADDRESS: 0.0.0.0
+      OFFLINE_MANAGER_PUBLIC_HOST: ${OFFLINE_MANAGER_PUBLIC_HOST:-127.0.0.1}
+      OFFLINE_MANAGER_PORT_START: ${OFFLINE_MANAGER_PORT_START:-18001}
+      OFFLINE_MANAGER_PORT_END: ${OFFLINE_MANAGER_PORT_END:-18100}
+      OFFLINE_MANAGER_LOG_DIR: /app/logs/managers
+    command:
+      - -web-port
+      - ${OFFLINE_WEB_PORT:-8080}
+      - -ws-port
+      - ${OFFLINE_WS_PORT:-8081}
+      - -ws-host
+      - 0.0.0.0
+    ports:
+      - "${OFFLINE_WEB_HOST_PORT:-8080}:${OFFLINE_WEB_PORT:-8080}"
+      - "${OFFLINE_WS_HOST_PORT:-8081}:${OFFLINE_WS_PORT:-8081}"
+      - "${OFFLINE_MANAGER_PORT_START:-18001}-${OFFLINE_MANAGER_PORT_END:-18100}:${OFFLINE_MANAGER_PORT_START:-18001}-${OFFLINE_MANAGER_PORT_END:-18100}"
+    volumes:
+      - offline-server-data:/app/data
+      - offline-server-logs:/app/logs
+      - ./private_keys:/app/private_keys:ro
+    networks:
+      - crypto-custody-offline-net
+
+networks:
+  crypto-custody-offline-net:
+    name: crypto-custody-offline-net
+    driver: bridge
+
+volumes:
+  offline-server-data:
+    name: crypto-custody-offline-data
+  offline-server-logs:
+    name: crypto-custody-offline-logs
