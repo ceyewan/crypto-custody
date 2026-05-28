@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -38,10 +40,32 @@ type ClientConfig struct {
 // 返回:
 //   - ClientConfig: 包含默认参数的配置对象
 func DefaultConfig() ClientConfig {
+	rpc := strings.TrimSpace(os.Getenv("ETH_RPC_URL"))
+	if rpc == "" {
+		infuraProjectID := strings.TrimSpace(os.Getenv("ETH_RPC"))
+		if infuraProjectID != "" {
+			rpc = "https://sepolia.infura.io/v3/" + infuraProjectID
+		}
+	}
+
+	chainID := int64(11155111)
+	if value := strings.TrimSpace(os.Getenv("ETH_CHAIN_ID")); value != "" {
+		if parsed, err := strconv.ParseInt(value, 10, 64); err == nil && parsed > 0 {
+			chainID = parsed
+		}
+	}
+
+	confirmSeconds := int64(60)
+	if value := strings.TrimSpace(os.Getenv("ETH_CONFIRM_TIMEOUT_SECONDS")); value != "" {
+		if parsed, err := strconv.ParseInt(value, 10, 64); err == nil && parsed > 0 {
+			confirmSeconds = parsed
+		}
+	}
+
 	return ClientConfig{
-		RPC:         "https://sepolia.infura.io/v3/" + os.Getenv("ETH_RPC"), // 从环境变量获取RPC地址
-		ChainID:     big.NewInt(11155111),                                   // Sepolia 测试网
-		ConfirmTime: 60 * time.Second,                                       // 等待交易确认的默认时间
+		RPC:         rpc,
+		ChainID:     big.NewInt(chainID),
+		ConfirmTime: time.Duration(confirmSeconds) * time.Second,
 	}
 }
 
@@ -84,6 +108,10 @@ func GetClientInstance() (*Client, error) {
 //   - *Client: 初始化成功的客户端实例
 //   - error: 初始化过程中的错误
 func newClient(config ClientConfig) (*Client, error) {
+	if strings.TrimSpace(config.RPC) == "" {
+		return nil, fmt.Errorf("ETH_RPC_URL 未设置")
+	}
+
 	client, err := ethclient.Dial(config.RPC)
 	if err != nil {
 		return nil, fmt.Errorf("连接以太坊节点失败: %w", err)

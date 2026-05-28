@@ -1,8 +1,8 @@
 import axios from 'axios'
 import store from '../store'
 
-// API基础URL - 支持环境变量配置
-const API_URL = process.env.VUE_APP_API_BASE_URL || 'http://192.168.192.1:22221'
+// API基础URL为空时使用同源 /api，由 Nginx 或开发代理转发到后端。
+const API_URL = process.env.VUE_APP_API_BASE_URL || ''
 
 // 创建axios实例
 const apiClient = axios.create({

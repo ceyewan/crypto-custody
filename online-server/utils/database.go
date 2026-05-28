@@ -4,6 +4,8 @@ package utils
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"online-server/model"
@@ -33,8 +35,11 @@ func InitDB() error {
 	})
 	dbLogger.Info("开始初始化数据库")
 
+	dbPath := databasePath()
+	dbDir := filepath.Dir(dbPath)
+
 	// 确保数据目录存在
-	if err := os.MkdirAll("database", 0755); err != nil {
+	if err := os.MkdirAll(dbDir, 0755); err != nil {
 		dbLogger.Error("创建数据目录失败", clog.Err(err))
 		return fmt.Errorf("创建数据目录失败: %w", err)
 	}
@@ -52,8 +57,8 @@ func InitDB() error {
 	)
 
 	// 连接SQLite数据库
-	dbLogger.Info("连接SQLite数据库", clog.String("path", "database/crypto-custody.db"))
-	db, err := gorm.Open(sqlite.Open("database/crypto-custody.db"), &gorm.Config{
+	dbLogger.Info("连接SQLite数据库", clog.String("path", dbPath))
+	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{
 		Logger: newLogger,
 	})
 	if err != nil {
@@ -227,7 +232,10 @@ func ensureAdminUser() error {
 		dbLogger.Info("未检测到管理员用户，正在创建默认管理员...")
 
 		// 设置默认管理员密码
-		defaultPassword := os.Getenv("DEFAULT_ADMIN_PASSWORD")
+		defaultPassword := strings.TrimSpace(os.Getenv("DEFAULT_ADMIN_PASSWORD"))
+		if defaultPassword == "" {
+			return fmt.Errorf("DEFAULT_ADMIN_PASSWORD 未设置，无法创建默认管理员")
+		}
 
 		// 使用bcrypt生成密码哈希
 		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(defaultPassword), bcrypt.DefaultCost)
@@ -251,11 +259,18 @@ func ensureAdminUser() error {
 
 		dbLogger.Info("默认管理员用户创建成功",
 			clog.String("username", "admin"),
-			clog.String("password", "admin123"),
 			clog.String("role", string(model.RoleAdmin)))
 	} else {
 		dbLogger.Info("管理员用户已存在，无需创建")
 	}
 
 	return nil
+}
+
+func databasePath() string {
+	value := strings.TrimSpace(os.Getenv("DATABASE_PATH"))
+	if value == "" {
+		return "database/crypto-custody.db"
+	}
+	return value
 }

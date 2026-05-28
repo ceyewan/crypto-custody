@@ -5,6 +5,7 @@ import (
 	"online-server/route"
 	"online-server/utils"
 	"os"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -17,7 +18,7 @@ func main() {
 		log.Printf("未加载 .env 文件，将使用系统环境变量: %v", err)
 	}
 
-	jwtSecret := os.Getenv("JWT_SECRET_KEY")
+	jwtSecret := strings.TrimSpace(os.Getenv("JWT_SECRET_KEY"))
 	if jwtSecret == "" {
 		log.Fatal("JWT_SECRET_KEY 未设置")
 	}
@@ -37,12 +38,22 @@ func main() {
 	route.Setup(r)
 
 	// 启动服务器
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
+	bindAddr := getEnv("BACKEND_BIND_ADDR", "0.0.0.0")
+	port := getEnv("BACKEND_PORT", getEnv("PORT", "22221"))
+	addr := bindAddr + ":" + port
+	if bindAddr == "" || bindAddr == "0.0.0.0" {
+		addr = ":" + port
 	}
-	log.Printf("服务器启动在 :%s 端口", port)
-	if err := r.Run(":" + port); err != nil {
+	log.Printf("服务器启动在 %s", addr)
+	if err := r.Run(addr); err != nil {
 		log.Fatalf("服务器启动失败: %v", err)
 	}
+}
+
+func getEnv(key, fallback string) string {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	return value
 }

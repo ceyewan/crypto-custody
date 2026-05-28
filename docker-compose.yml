@@ -1,0 +1,40 @@
+services:
+  online-server:
+    image: ${ONLINE_SERVER_IMAGE:-ceyewan/crypto-custody-online-server:latest}
+    platform: ${DOCKER_PLATFORM:-linux/amd64}
+    pull_policy: always
+    container_name: crypto-custody-online-server
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      BACKEND_BIND_ADDR: 0.0.0.0
+      BACKEND_PORT: ${BACKEND_PORT:-22221}
+      DATABASE_PATH: ${DATABASE_PATH:-/app/database/crypto-custody.db}
+    ports:
+      - "${BACKEND_HOST_PORT:-22221}:${BACKEND_PORT:-22221}"
+    volumes:
+      - ./online-server/database:/app/database
+      - ./online-server/logs:/app/logs
+    networks:
+      - crypto-custody-online-net
+
+  online-client:
+    image: ${ONLINE_CLIENT_IMAGE:-ceyewan/crypto-custody-frontend:latest}
+    platform: ${DOCKER_PLATFORM:-linux/amd64}
+    pull_policy: always
+    container_name: crypto-custody-online-client
+    restart: unless-stopped
+    environment:
+      BACKEND_UPSTREAM: http://online-server:${BACKEND_PORT:-22221}
+    ports:
+      - "${FRONTEND_HOST_PORT:-22220}:80"
+    depends_on:
+      - online-server
+    networks:
+      - crypto-custody-online-net
+
+networks:
+  crypto-custody-online-net:
+    name: crypto-custody-online-net
+    driver: bridge

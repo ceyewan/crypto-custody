@@ -1,4 +1,5 @@
 .DS_Store
+.env
 */.DS_Store
 offline-client/.DS_Store
 offline-client/secured/genkey/ec_private_key.pem
@@ -10,6 +11,7 @@ offline-server/private_keys/ec_private_key.pem
 offline-server/logs/*
 offline-server/data/crypto-custody.db
 **/node_modules
+online-client/frontend/dist/
 online-server/tmp/*
 offline-server/bin/offline-server
 offline-client/electron-app/*

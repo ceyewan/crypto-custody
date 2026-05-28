@@ -5,6 +5,8 @@ import (
 	"online-server/model"
 	"online-server/service"
 	"online-server/utils"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/ceyewan/clog"
@@ -23,8 +25,17 @@ func Setup(r *gin.Engine) {
 
 // CORSMiddleware CORS中间件
 func CORSMiddleware() gin.HandlerFunc {
+	allowedOrigins := parseAllowedOrigins(os.Getenv("CORS_ALLOWED_ORIGINS"))
 	return func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		origin := c.Request.Header.Get("Origin")
+		if isOriginAllowed(origin, allowedOrigins) {
+			if len(allowedOrigins) == 1 && allowedOrigins["*"] {
+				c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+			} else {
+				c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+				c.Writer.Header().Add("Vary", "Origin")
+			}
+		}
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization")
 		if c.Request.Method == "OPTIONS" {
@@ -33,6 +44,32 @@ func CORSMiddleware() gin.HandlerFunc {
 		}
 		c.Next()
 	}
+}
+
+func parseAllowedOrigins(value string) map[string]bool {
+	value = strings.TrimSpace(value)
+	origins := make(map[string]bool)
+	if value == "" {
+		return origins
+	}
+
+	for _, item := range strings.Split(value, ",") {
+		origin := strings.TrimSpace(item)
+		if origin != "" {
+			origins[origin] = true
+		}
+	}
+	return origins
+}
+
+func isOriginAllowed(origin string, allowed map[string]bool) bool {
+	if allowed["*"] {
+		return true
+	}
+	if origin == "" {
+		return false
+	}
+	return allowed[origin]
 }
 
 // JWTAuth JWT认证中间件

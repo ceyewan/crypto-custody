@@ -1,32 +1,25 @@
-version: '3.8'
-
 services:
-  app:
+  online-server:
     build:
       context: .
     image: ceyewan/crypto-custody-online-server:latest
-    container_name: crypto-custody-server
+    container_name: crypto-custody-online-server
     restart: unless-stopped
 
-    # 从 .env 文件加载环境变量
     env_file:
       - .env
     environment:
-      PORT: "8080"
+      BACKEND_BIND_ADDR: 0.0.0.0
+      BACKEND_PORT: ${BACKEND_PORT:-22221}
+      DATABASE_PATH: ${DATABASE_PATH:-/app/database/crypto-custody.db}
 
     ports:
-      - "${SERVER_PORT:-8080}:8080"
+      - "${BACKEND_HOST_PORT:-22221}:${BACKEND_PORT:-22221}"
 
-    # 挂载卷以实现数据持久化
     volumes:
       - ./database:/app/database
       - ./logs:/app/logs
 
-    # 以有限权限运行容器是一个好习惯
-    # 该用户应与 Dockerfile 中指定的用户匹配
-    user: nonroot:nonroot
-
-    # 将服务连接到特定的内部网络
     networks:
       - crypto-custody-online-net
 

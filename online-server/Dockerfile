@@ -24,7 +24,7 @@ COPY --from=builder /main /app/main
 RUN mkdir -p /app/database /app/logs \
     && chown -R app:app /app
 
-EXPOSE 8080
+EXPOSE 22221
 
 USER app
 
