@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -42,7 +43,7 @@ type SessionRuntimeConfig struct {
 // DefaultSessionRuntimeConfig 返回可通过环境变量覆盖的默认配置。
 func DefaultSessionRuntimeConfig() SessionRuntimeConfig {
 	cfg := SessionRuntimeConfig{
-		BinaryPath:      envString("OFFLINE_MANAGER_BIN", "./bin/gg20_sm_manager"),
+		BinaryPath:      envString("OFFLINE_MANAGER_BIN", defaultManagerBinaryPath()),
 		BindAddress:     envString("OFFLINE_MANAGER_BIND_ADDRESS", "0.0.0.0"),
 		PublicHost:      envString("OFFLINE_MANAGER_PUBLIC_HOST", "127.0.0.1"),
 		LogDir:          envString("OFFLINE_MANAGER_LOG_DIR", "logs/managers"),
@@ -69,7 +70,7 @@ type sessionProcess struct {
 // NewSessionRuntime 创建会话级 manager runtime。
 func NewSessionRuntime(cfg SessionRuntimeConfig) SessionRuntime {
 	if cfg.BinaryPath == "" {
-		cfg.BinaryPath = "./bin/gg20_sm_manager"
+		cfg.BinaryPath = defaultManagerBinaryPath()
 	}
 	if cfg.BindAddress == "" {
 		cfg.BindAddress = "0.0.0.0"
@@ -92,6 +93,14 @@ func NewSessionRuntime(cfg SessionRuntimeConfig) SessionRuntime {
 		active:   make(map[string]sessionProcess),
 		usedPort: make(map[int]struct{}),
 	}
+}
+
+func defaultManagerBinaryPath() string {
+	name := fmt.Sprintf("gg20_sm_manager_%s_%s", runtime.GOOS, runtime.GOARCH)
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	return filepath.Join(".", "bin", name)
 }
 
 // NewSessionRuntimeFromEnv 创建使用环境变量配置的会话级 manager runtime。

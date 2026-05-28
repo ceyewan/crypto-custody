@@ -50,12 +50,19 @@ go mod tidy
 go run .
 ```
 
-运行前需要确认 `bin/gg20_sm_manager` 存在并具有执行权限。启动后会自动创建 `data/` 和 `logs/` 目录。
+运行前需要确认 `bin/` 下存在当前平台对应的 manager 二进制，并具有执行权限：
+
+- macOS arm64：`gg20_sm_manager_darwin_arm64`
+- Linux amd64：`gg20_sm_manager_linux_amd64`
+- Windows amd64：`gg20_sm_manager_windows_amd64.exe`
+
+启动后会自动创建 `data/` 和 `logs/` 目录。
 
 会话级 manager 可通过环境变量配置：
 
 ```bash
-OFFLINE_MANAGER_BIN=./bin/gg20_sm_manager
+# 可选；不设置时会按当前平台自动选择 ./bin/gg20_sm_manager_<goos>_<goarch>[.exe]
+OFFLINE_MANAGER_BIN=./bin/gg20_sm_manager_linux_amd64
 OFFLINE_MANAGER_BIND_ADDRESS=0.0.0.0
 OFFLINE_MANAGER_PUBLIC_HOST=192.168.1.10
 OFFLINE_MANAGER_PORT_START=18001

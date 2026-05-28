@@ -7,7 +7,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 
 	"offline-server/clog"
@@ -18,9 +17,9 @@ import (
 
 const (
 	// 配置文件和数据存储的路径
-	DataDir        = "./data"
-	LogsDir        = "./logs"
-	ManagerBinPath = "./bin/gg20_sm_manager"
+	DataDir       = "./data"
+	LogsDir       = "./logs"
+	ManagerBinDir = "./bin"
 )
 
 func main() {
@@ -77,7 +76,7 @@ func ensureDirectories() {
 	dirs := []string{
 		DataDir,
 		LogsDir,
-		filepath.Dir(ManagerBinPath),
+		ManagerBinDir,
 	}
 
 	for _, dir := range dirs {

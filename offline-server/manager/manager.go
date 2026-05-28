@@ -47,7 +47,7 @@ type Config struct {
 // DefaultConfig 返回默认的 Manager 配置
 func DefaultConfig() Config {
 	return Config{
-		BinaryPath:      "./bin/gg20_sm_manager",
+		BinaryPath:      defaultManagerBinaryPath(),
 		LogDir:          "logs",
 		RestartDelay:    3 * time.Second,
 		AutoRestart:     true,

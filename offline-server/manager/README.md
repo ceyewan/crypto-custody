@@ -16,7 +16,7 @@
 
 ```go
 config := manager.Config{
-    BinaryPath:      "./bin/gg20_sm_manager", // 可执行文件路径
+    BinaryPath:      "./bin/gg20_sm_manager_linux_amd64", // 可执行文件路径；空值时按当前平台自动选择
     LogDir:          "logs",                 // 日志目录
     RestartDelay:    3 * time.Second,         // 重启延迟时间
     AutoRestart:     true,                    // 是否自动重启

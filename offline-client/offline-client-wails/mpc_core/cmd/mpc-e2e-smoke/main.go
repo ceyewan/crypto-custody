@@ -15,12 +15,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"offline-client-wails/mpc_core/clog"
 	"offline-client-wails/mpc_core/config"
 	"offline-client-wails/mpc_core/seclient"
 	"offline-client-wails/mpc_core/services"
@@ -48,6 +50,7 @@ func main() {
 	var appletAID string
 	var tempDir string
 	var keepRecords bool
+	var debug bool
 
 	flag.StringVar(&managerBin, "manager-bin", "", "gg20 manager binary path")
 	flag.StringVar(&privateKeyPath, "private-key", "", "server ECDSA private key PEM path")
@@ -55,7 +58,21 @@ func main() {
 	flag.StringVar(&appletAID, "aid", "A000000062CF0101", "SE applet AID hex")
 	flag.StringVar(&tempDir, "temp-dir", "", "temporary directory for local share files")
 	flag.BoolVar(&keepRecords, "keep-records", false, "keep smoke records in SE for debugging")
+	flag.BoolVar(&debug, "debug", false, "enable production mpc_core debug logs")
 	flag.Parse()
+
+	if debug {
+		_ = clog.Init(clog.Config{
+			Level:         clog.DebugLevel,
+			Format:        clog.FormatConsole,
+			Filename:      "logs/mpc-e2e-smoke.log",
+			Name:          "default",
+			ConsoleOutput: true,
+			EnableCaller:  false,
+			EnableColor:   false,
+		})
+		defer clog.Sync()
+	}
 
 	if err := run(managerBin, privateKeyPath, readerName, appletAID, tempDir, keepRecords); err != nil {
 		fmt.Fprintf(os.Stderr, "\n[FAIL] %v\n", err)
@@ -65,6 +82,9 @@ func main() {
 
 func run(managerBin, privateKeyPath, readerName, appletAID, tempDir string, keepRecords bool) error {
 	managerBin, err := resolvePath(managerBin, []string{
+		filepath.Join("../../offline-server/bin", defaultManagerBinaryName()),
+		filepath.Join("offline-server/bin", defaultManagerBinaryName()),
+		filepath.Join("../offline-server/bin", defaultManagerBinaryName()),
 		"../../offline-server/bin/gg20_sm_manager",
 		"offline-server/bin/gg20_sm_manager",
 		"../offline-server/bin/gg20_sm_manager",
@@ -528,4 +548,12 @@ func waitForPort(port int, timeout time.Duration) error {
 		time.Sleep(50 * time.Millisecond)
 	}
 	return fmt.Errorf("timeout waiting for %s", address)
+}
+
+func defaultManagerBinaryName() string {
+	name := fmt.Sprintf("gg20_sm_manager_%s_%s", runtime.GOOS, runtime.GOARCH)
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	return name
 }
