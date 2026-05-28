@@ -1,11 +1,28 @@
 // Wails API 服务 - 用于调用内置的 web-se 后端模块
-import { PerformKeyGeneration, PerformSignMessage, GetCPLCInfo, PerformDeleteMessage } from '../../wailsjs/go/main/App'
+import {
+    PerformKeyGeneration,
+    PerformSignMessage,
+    GetCPLCInfo,
+    PerformDeleteMessage,
+    SetCardReaderName,
+    GetCardReaderName
+} from '../../wailsjs/go/main/App'
 
 // 安全芯片 API - 直接调用 Wails 内置的 mpc_core 模块
 export const seApi = {
     // 获取 CPLC - 调用内置 mpc_core
     getCPLC() {
         return GetCPLCInfo().then(result => ({ data: result }))
+    }
+}
+
+export const clientConfigApi = {
+    setCardReaderName(name) {
+        return SetCardReaderName((name || '').trim())
+    },
+
+    getCardReaderName() {
+        return GetCardReaderName()
     }
 }
 
@@ -40,5 +57,6 @@ export const mpcApi = {
 // 导出本地 MPC API（用于替代原来对外部 web-se 服务的调用）
 export default {
     seApi,
-    mpcApi
+    mpcApi,
+    clientConfigApi
 }

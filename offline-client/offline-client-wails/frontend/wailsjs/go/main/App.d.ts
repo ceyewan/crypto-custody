@@ -4,8 +4,12 @@ import {models} from '../models';
 
 export function GetCPLCInfo():Promise<any>;
 
+export function GetCardReaderName():Promise<string>;
+
 export function PerformDeleteMessage(arg1:models.DeleteRequest):Promise<void>;
 
 export function PerformKeyGeneration(arg1:models.KeyGenRequest):Promise<any>;
 
 export function PerformSignMessage(arg1:models.SignRequest):Promise<any>;
+
+export function SetCardReaderName(arg1:string):Promise<void>;

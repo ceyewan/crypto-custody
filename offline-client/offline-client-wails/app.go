@@ -23,10 +23,7 @@ func NewApp() *App {
 // startup 是应用启动时调用的函数
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
-	// 在应用启动时初始化所有服务
-	if err := a.wailsServices.Init(); err != nil {
-		clog.Fatal("初始化Wails服务失败", clog.String("error", err.Error()))
-	}
+	clog.Info("Wails应用已启动，MPC/SE服务将在任务执行时初始化")
 }
 
 // 以下是需要绑定到前端的方法
@@ -49,4 +46,14 @@ func (a *App) GetCPLCInfo() (interface{}, error) {
 // PerformDeleteMessage 绑定删除消息的方法
 func (a *App) PerformDeleteMessage(req models.DeleteRequest) error {
 	return a.wailsServices.PerformDeleteMessage(req)
+}
+
+// SetCardReaderName 设置当前桌面端使用的读卡器名称。
+func (a *App) SetCardReaderName(name string) error {
+	return a.wailsServices.SetCardReaderName(name)
+}
+
+// GetCardReaderName 获取当前桌面端使用的读卡器名称。
+func (a *App) GetCardReaderName() string {
+	return a.wailsServices.GetCardReaderName()
 }

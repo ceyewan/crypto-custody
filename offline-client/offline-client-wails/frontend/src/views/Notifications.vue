@@ -23,30 +23,35 @@
                     <template slot-scope="scope">
                         <!-- 针对密钥生成邀请消息 -->
                         <div v-if="scope.row.type === 'keygen_invite'">
-                            <el-button type="success" size="mini" @click="handleKeygenInviteAccept(scope.row)">
+                            <el-button type="success" size="mini" :disabled="scope.row.responded"
+                                @click="handleKeygenInviteAccept(scope.row)">
                                 接受
                             </el-button>
-                            <el-button type="danger" size="mini" @click="handleKeygenInviteReject(scope.row)">
+                            <el-button type="danger" size="mini" :disabled="scope.row.responded"
+                                @click="handleKeygenInviteReject(scope.row)">
                                 拒绝
                             </el-button>
                         </div>
 
                         <!-- 针对签名邀请消息 -->
                         <div v-else-if="scope.row.type === 'sign_invite'">
-                            <el-button type="success" size="mini" @click="handleSignInviteAccept(scope.row)">
+                            <el-button type="success" size="mini" :disabled="scope.row.responded"
+                                @click="handleSignInviteAccept(scope.row)">
                                 接受
                             </el-button>
-                            <el-button type="danger" size="mini" @click="handleSignInviteReject(scope.row)">
+                            <el-button type="danger" size="mini" :disabled="scope.row.responded"
+                                @click="handleSignInviteReject(scope.row)">
                                 拒绝
                             </el-button>
                         </div>
 
                         <!-- 针对密钥销毁邀请消息 -->
                         <div v-else-if="scope.row.type === 'destroy_invite'">
-                            <el-button type="danger" size="mini" @click="handleDestroyInviteAccept(scope.row)">
+                            <el-button type="danger" size="mini" :disabled="scope.row.responded"
+                                @click="handleDestroyInviteAccept(scope.row)">
                                 确认销毁
                             </el-button>
-                            <el-button size="mini" @click="handleDestroyInviteReject(scope.row)">
+                            <el-button size="mini" :disabled="scope.row.responded" @click="handleDestroyInviteReject(scope.row)">
                                 拒绝
                             </el-button>
                         </div>
@@ -64,6 +69,11 @@
                         <el-tag v-else type="info">-</el-tag>
                     </template>
                 </el-table-column>
+                <el-table-column label="任务状态" width="150">
+                    <template slot-scope="scope">
+                        <el-tag :type="getTaskTagType(scope.row)">{{ getTaskStatusText(scope.row) }}</el-tag>
+                    </template>
+                </el-table-column>
             </el-table>
 
             <div v-if="notifications.length === 0" class="empty-state">
@@ -76,12 +86,12 @@
 <script>
 import { mapGetters } from 'vuex'
 import { seApi } from '../services/wails-api'
-import { sendWSMessage, WS_MESSAGE_TYPES } from '../services/ws'
+import { sendWSMessage, WS_MESSAGE_TYPES, mpcTaskKey } from '../services/ws'
 
 export default {
     name: 'Notifications',
     computed: {
-        ...mapGetters(['notifications'])
+        ...mapGetters(['notifications', 'mpcTasks'])
     },
     methods: {
         clearNotifications() {
@@ -124,15 +134,56 @@ export default {
             return type === 'keygen_invite' || type === 'sign_invite' || type === 'destroy_invite'
         },
 
+        taskKind(type) {
+            if (type.startsWith('keygen')) return 'keygen'
+            if (type.startsWith('sign')) return 'sign'
+            if (type.startsWith('destroy')) return 'destroy'
+            return ''
+        },
+
+        getTaskStatus(notification) {
+            const kind = this.taskKind(notification.type)
+            if (!kind) {
+                return ''
+            }
+            const task = this.mpcTasks[mpcTaskKey(kind, notification.content)] || {}
+            return task.status || ''
+        },
+
+        getTaskStatusText(notification) {
+            const statusMap = {
+                invited: '已收到邀请',
+                accepted: '已同意',
+                rejected: '已拒绝',
+                running: '执行中',
+                result_ready: '待回传',
+                result_sent: '结果已回传',
+                completed: '已完成',
+                interrupted: '已重置'
+            }
+            return statusMap[this.getTaskStatus(notification)] || '-'
+        },
+
+        getTaskTagType(notification) {
+            const status = this.getTaskStatus(notification)
+            if (status === 'running' || status === 'result_ready') return 'warning'
+            if (status === 'rejected') return 'danger'
+            if (status === 'result_sent' || status === 'completed' || status === 'accepted') return 'success'
+            return 'info'
+        },
+
         // 处理密钥生成邀请接受
         async handleKeygenInviteAccept(notification) {
+            if (notification.responded) {
+                return
+            }
             try {
                 // 获取当前用户的CPLC
                 const cplcResponse = await seApi.getCPLC()
                 const cplc = cplcResponse.data.cplc_info || ''
 
                 // 发送接受响应
-                sendWSMessage({
+                this.sendOrThrow({
                     type: WS_MESSAGE_TYPES.KEYGEN_RESPONSE,
                     session_key: notification.content.session_key,
                     party_index: notification.content.party_index,
@@ -143,13 +194,14 @@ export default {
 
                 // 标记该通知已响应
                 this.markNotificationResponded(notification)
+                this.markTaskResponded('keygen', notification, true, '', cplc)
                 this.$message.success('已接受密钥生成邀请')
             } catch (error) {
                 this.$message.error('接受密钥生成邀请失败: ' + error.message)
 
                 // 通知协调者该参与者无法接受邀请
                 try {
-                    sendWSMessage({
+                    this.sendOrThrow({
                         type: WS_MESSAGE_TYPES.KEYGEN_RESPONSE,
                         session_key: notification.content.session_key,
                         party_index: notification.content.party_index,
@@ -157,6 +209,8 @@ export default {
                         accept: false,
                         reason: '获取CPLC失败: ' + error.message
                     })
+                    this.markNotificationResponded(notification)
+                    this.markTaskResponded('keygen', notification, false, '获取CPLC失败: ' + error.message)
                 } catch {
                     // 忽略二次错误
                 }
@@ -165,9 +219,12 @@ export default {
 
         // 处理密钥生成邀请拒绝
         async handleKeygenInviteReject(notification) {
+            if (notification.responded) {
+                return
+            }
             try {
                 // 发送拒绝响应
-                sendWSMessage({
+                this.sendOrThrow({
                     type: WS_MESSAGE_TYPES.KEYGEN_RESPONSE,
                     session_key: notification.content.session_key,
                     party_index: notification.content.party_index,
@@ -178,6 +235,7 @@ export default {
 
                 // 标记该通知已响应
                 this.markNotificationResponded(notification)
+                this.markTaskResponded('keygen', notification, false, '用户拒绝')
                 this.$message.info('已拒绝密钥生成邀请')
             } catch (error) {
                 this.$message.error('拒绝密钥生成邀请失败: ' + error.message)
@@ -186,13 +244,16 @@ export default {
 
         // 处理签名邀请接受
         async handleSignInviteAccept(notification) {
+            if (notification.responded) {
+                return
+            }
             try {
                 // 获取当前用户的CPLC
                 const cplcResponse = await seApi.getCPLC()
                 const cplc = cplcResponse.data.cplc_info || ''
 
                 // 发送接受响应
-                sendWSMessage({
+                this.sendOrThrow({
                     type: WS_MESSAGE_TYPES.SIGN_RESPONSE,
                     session_key: notification.content.session_key,
                     party_index: notification.content.party_index,
@@ -203,13 +264,14 @@ export default {
 
                 // 标记该通知已响应
                 this.markNotificationResponded(notification)
+                this.markTaskResponded('sign', notification, true, '', cplc)
                 this.$message.success('已接受签名邀请')
             } catch (error) {
                 this.$message.error('接受签名邀请失败: ' + error.message)
 
                 // 通知协调者该参与者无法接受邀请
                 try {
-                    sendWSMessage({
+                    this.sendOrThrow({
                         type: WS_MESSAGE_TYPES.SIGN_RESPONSE,
                         session_key: notification.content.session_key,
                         party_index: notification.content.party_index,
@@ -217,6 +279,8 @@ export default {
                         accept: false,
                         reason: '获取CPLC失败: ' + error.message
                     })
+                    this.markNotificationResponded(notification)
+                    this.markTaskResponded('sign', notification, false, '获取CPLC失败: ' + error.message)
                 } catch {
                     // 忽略二次错误
                 }
@@ -225,9 +289,12 @@ export default {
 
         // 处理签名邀请拒绝
         async handleSignInviteReject(notification) {
+            if (notification.responded) {
+                return
+            }
             try {
                 // 发送拒绝响应
-                sendWSMessage({
+                this.sendOrThrow({
                     type: WS_MESSAGE_TYPES.SIGN_RESPONSE,
                     session_key: notification.content.session_key,
                     party_index: notification.content.party_index,
@@ -238,6 +305,7 @@ export default {
 
                 // 标记该通知已响应
                 this.markNotificationResponded(notification)
+                this.markTaskResponded('sign', notification, false, '用户拒绝')
                 this.$message.info('已拒绝签名邀请')
             } catch (error) {
                 this.$message.error('拒绝签名邀请失败: ' + error.message)
@@ -246,6 +314,9 @@ export default {
 
         // 处理密钥销毁邀请接受
         async handleDestroyInviteAccept(notification) {
+            if (notification.responded) {
+                return
+            }
             try {
                 await this.$confirm('确认对当前安全芯片执行密钥记录删除？', '销毁确认', { type: 'warning' })
             } catch {
@@ -255,7 +326,7 @@ export default {
                 const cplcResponse = await seApi.getCPLC()
                 const cplc = cplcResponse.data.cplc_info || ''
 
-                sendWSMessage({
+                this.sendOrThrow({
                     type: WS_MESSAGE_TYPES.DESTROY_RESPONSE,
                     session_key: notification.content.session_key,
                     party_index: notification.content.party_index,
@@ -265,11 +336,12 @@ export default {
                 })
 
                 this.markNotificationResponded(notification)
+                this.markTaskResponded('destroy', notification, true, '', cplc)
                 this.$message.success('已确认密钥销毁邀请')
             } catch (error) {
                 this.$message.error('确认销毁邀请失败: ' + error.message)
                 try {
-                    sendWSMessage({
+                    this.sendOrThrow({
                         type: WS_MESSAGE_TYPES.DESTROY_RESPONSE,
                         session_key: notification.content.session_key,
                         party_index: notification.content.party_index,
@@ -277,6 +349,8 @@ export default {
                         accept: false,
                         reason: '获取CPLC失败: ' + error.message
                     })
+                    this.markNotificationResponded(notification)
+                    this.markTaskResponded('destroy', notification, false, '获取CPLC失败: ' + error.message)
                 } catch {
                     // 忽略二次错误
                 }
@@ -285,8 +359,11 @@ export default {
 
         // 处理密钥销毁邀请拒绝
         async handleDestroyInviteReject(notification) {
+            if (notification.responded) {
+                return
+            }
             try {
-                sendWSMessage({
+                this.sendOrThrow({
                     type: WS_MESSAGE_TYPES.DESTROY_RESPONSE,
                     session_key: notification.content.session_key,
                     party_index: notification.content.party_index,
@@ -296,6 +373,7 @@ export default {
                 })
 
                 this.markNotificationResponded(notification)
+                this.markTaskResponded('destroy', notification, false, '用户拒绝')
                 this.$message.info('已拒绝密钥销毁邀请')
             } catch (error) {
                 this.$message.error('拒绝销毁邀请失败: ' + error.message)
@@ -309,6 +387,28 @@ export default {
                 timestamp: notification.timestamp,
                 type: notification.type,
                 responded: true
+            })
+        },
+
+        sendOrThrow(message) {
+            if (!sendWSMessage(message)) {
+                throw new Error('WebSocket未连接，无法回传响应')
+            }
+        },
+
+        markTaskResponded(kind, notification, accepted, reason = '', cplc = '') {
+            this.$store.commit('setMpcTask', {
+                key: mpcTaskKey(kind, notification.content),
+                patch: {
+                    kind,
+                    session_key: notification.content.session_key,
+                    party_index: notification.content.party_index,
+                    status: accepted ? 'accepted' : 'rejected',
+                    phase: notification.type,
+                    success: accepted,
+                    cplc,
+                    message: accepted ? '用户已确认邀请' : reason
+                }
             })
         }
     }

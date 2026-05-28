@@ -1,13 +1,48 @@
 import Vue from 'vue'
 import Vuex from 'vuex'
-import { Environment } from '../../wailsjs/runtime/runtime'
+import { clientConfigApi } from '../services/wails-api'
+import {
+    getServerWsUrl,
+    loadClientSettings,
+    saveClientSettings as persistClientSettings
+} from '../services/settings'
 
 Vue.use(Vuex)
+
+function loadMpcTasks() {
+    try {
+        const tasks = JSON.parse(localStorage.getItem('offline_client_mpc_tasks') || '{}')
+        Object.keys(tasks).forEach(key => {
+            if (tasks[key].status === 'running') {
+                tasks[key].status = 'interrupted'
+                tasks[key].message = '客户端重启后任务执行状态已重置'
+            }
+        })
+        return tasks
+    } catch {
+        return {}
+    }
+}
+
+function persistMpcTasks(tasks) {
+    localStorage.setItem('offline_client_mpc_tasks', JSON.stringify(tasks))
+}
+
+function notificationIdentity(notification) {
+    const content = notification.content || {}
+    return [
+        notification.type,
+        content.session_key || '',
+        content.party_index || content.signing_index || ''
+    ].join(':')
+}
 
 export default new Vuex.Store({
     state: {
         token: localStorage.getItem('token') || '',
         user: JSON.parse(localStorage.getItem('user')) || null,
+        clientSettings: loadClientSettings(),
+        mpcTasks: loadMpcTasks(),
         wsConnected: false,
         wsClient: null,
         notifications: [],
@@ -28,7 +63,9 @@ export default new Vuex.Store({
         isAuditor: state => state.user && state.user.role === 'auditor',
         wsConnected: state => state.wsConnected,
         notifications: state => state.notifications,
-        currentSession: state => state.currentSession
+        currentSession: state => state.currentSession,
+        clientSettings: state => state.clientSettings,
+        mpcTasks: state => state.mpcTasks
     },
     mutations: {
         setToken(state, token) {
@@ -38,6 +75,9 @@ export default new Vuex.Store({
         setUser(state, user) {
             state.user = user
             localStorage.setItem('user', JSON.stringify(user))
+            if (user && user.username) {
+                localStorage.setItem('last_username', user.username)
+            }
         },
         clearToken(state) {
             state.token = ''
@@ -52,6 +92,16 @@ export default new Vuex.Store({
             state.wsClient = client
         },
         addNotification(state, notification) {
+            const identity = notificationIdentity(notification)
+            const index = state.notifications.findIndex(item => notificationIdentity(item) === identity)
+            if (index !== -1) {
+                Vue.set(state.notifications, index, {
+                    ...state.notifications[index],
+                    ...notification,
+                    responded: state.notifications[index].responded || notification.responded
+                })
+                return
+            }
             state.notifications.push(notification)
         },
         clearNotifications(state) {
@@ -88,9 +138,48 @@ export default new Vuex.Store({
         },
         setWsConnectionLostTime(state, timestamp) {
             state.wsConnectionLostTime = timestamp
+        },
+        setClientSettings(state, settings) {
+            state.clientSettings = settings
+        },
+        setMpcTask(state, { key, patch }) {
+            const previous = state.mpcTasks[key] || {}
+            Vue.set(state.mpcTasks, key, {
+                ...previous,
+                ...patch,
+                updated_at: new Date().toISOString()
+            })
+            persistMpcTasks(state.mpcTasks)
+        },
+        clearMpcTasks(state) {
+            state.mpcTasks = {}
+            persistMpcTasks(state.mpcTasks)
         }
     },
     actions: {
+        async saveClientSettings({ commit, state, dispatch }, settings) {
+            const oldWsUrl = state.clientSettings.serverWsUrl
+            const saved = persistClientSettings(settings)
+            commit('setClientSettings', saved)
+
+            try {
+                await clientConfigApi.setCardReaderName(saved.cardReaderName)
+            } catch (error) {
+                console.warn('设置读卡器名称失败，可能不在 Wails 环境中:', error)
+            }
+
+            if (oldWsUrl !== saved.serverWsUrl && state.wsClient) {
+                dispatch('resetWebSocketConnection')
+            }
+            return saved
+        },
+        async applyClientRuntimeSettings({ state }) {
+            try {
+                await clientConfigApi.setCardReaderName(state.clientSettings.cardReaderName)
+            } catch (error) {
+                console.warn('应用读卡器名称失败，可能不在 Wails 环境中:', error)
+            }
+        },
         login({ commit }, user) {
             const token = user.token && user.token.startsWith('Bearer ')
                 ? user.token.substring(7)
@@ -137,19 +226,8 @@ export default new Vuex.Store({
 
             try {
                 console.log('正在创建新的WebSocket连接...')
-                
-                // 使用 Wails runtime.Environment() 来可靠地检测环境
-                let wsURL = `ws://localhost:8090/ws`; // 默认使用代理
-                try {
-                    const envInfo = await Environment();
-                    // 在 Wails 环境中直接连接远程服务器
-                    wsURL = 'wss://crypto-custody-offline-server.ceyewan.icu/ws';
-                    console.log(`[WS Debug] Wails Environment detected - buildType: ${envInfo.buildType}, platform: ${envInfo.platform}, WS URL: ${wsURL}`);
-                } catch (error) {
-                    // 不是 Wails 环境，使用代理
-                    console.log(`[WS Debug] Non-Wails Environment detected, using proxy: ${wsURL}`);
-                }
-                
+                const wsURL = state.clientSettings.serverWsUrl || getServerWsUrl()
+                console.log(`[WS Debug] 使用 WebSocket 地址: ${wsURL}`);
                 const ws = new WebSocket(wsURL)
 
                 const connectionTimeout = setTimeout(() => {
@@ -175,13 +253,20 @@ export default new Vuex.Store({
                     }
                 }, 10000);
 
-                ws.onopen = () => {
+                ws.onopen = async () => {
                     clearTimeout(connectionTimeout);
                     console.log('WebSocket连接已建立')
                     commit('setWsConnected', true)
                     commit('setWsConnecting', false)
                     commit('setWsReconnectAttempts', 0)
                     commit('setWsLastError', null)
+
+                    try {
+                        const { initWebSocketService } = await import('../services/ws')
+                        initWebSocketService()
+                    } catch (error) {
+                        console.error('初始化WebSocket消息处理失败:', error)
+                    }
 
                     if (state.user) {
                         const token = state.token && state.token.startsWith('Bearer ')
@@ -210,7 +295,8 @@ export default new Vuex.Store({
 
                     const isNormalClosure = event.code === 1000 && (
                         event.reason.includes("用户登出") ||
-                        event.reason.includes("主动关闭")
+                        event.reason.includes("主动关闭") ||
+                        event.reason.includes("重置连接")
                     );
 
                     if (!isNormalClosure && state.token && state.user) {

@@ -21,8 +21,9 @@ type WailsServices struct {
 	cfg             *config.Config
 	securityService *services.SecurityService
 	mpcService      *services.MPCService
-	initOnce        sync.Once
+	initMu          sync.Mutex
 	initialized     bool
+	cardReaderName  string
 }
 
 var wailsServices *WailsServices
@@ -37,35 +38,67 @@ func GetWailsServices() *WailsServices {
 
 // Init 初始化服务
 func (ws *WailsServices) Init() error {
-	var initErr error
+	ws.initMu.Lock()
+	defer ws.initMu.Unlock()
 
-	ws.initOnce.Do(func() {
-		var err error
+	if ws.initialized {
+		return nil
+	}
 
-		// 加载配置
-		ws.cfg, err = config.LoadConfig()
-		if err != nil {
-			clog.Error("加载配置失败", clog.String("error", err.Error()))
-			initErr = err
-			return
-		}
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		clog.Error("加载配置失败", clog.String("error", err.Error()))
+		return err
+	}
+	if ws.cardReaderName != "" {
+		cfg.CardReaderName = ws.cardReaderName
+	}
 
-		// 创建安全芯片服务
-		ws.securityService, err = services.NewSecurityService(ws.cfg)
-		if err != nil {
-			clog.Error("创建安全芯片服务失败", clog.String("error", err.Error()))
-			initErr = err
-			return
-		}
+	securityService, err := services.NewSecurityService(cfg)
+	if err != nil {
+		clog.Error("创建安全芯片服务失败", clog.String("error", err.Error()))
+		return err
+	}
 
-		// 创建MPC服务
-		ws.mpcService = services.NewMPCService(ws.cfg, ws.securityService)
+	ws.cfg = cfg
+	ws.securityService = securityService
+	ws.mpcService = services.NewMPCService(cfg, securityService)
+	ws.initialized = true
+	clog.Info("WailsServices初始化成功", clog.String("card_reader_name", cfg.CardReaderName))
+	return nil
+}
 
-		ws.initialized = true
-		clog.Info("WailsServices初始化成功")
-	})
+// SetCardReaderName 设置读卡器名称。已初始化后也会立即影响后续 SE 操作。
+func (ws *WailsServices) SetCardReaderName(name string) error {
+	ws.initMu.Lock()
+	defer ws.initMu.Unlock()
 
-	return initErr
+	name = strings.TrimSpace(name)
+	ws.cardReaderName = name
+	if ws.cfg != nil {
+		ws.cfg.CardReaderName = name
+	}
+	clog.Info("读卡器名称已更新", clog.String("card_reader_name", name))
+	return nil
+}
+
+// GetCardReaderName 返回当前读卡器名称。
+func (ws *WailsServices) GetCardReaderName() string {
+	ws.initMu.Lock()
+	defer ws.initMu.Unlock()
+
+	if ws.cardReaderName != "" {
+		return ws.cardReaderName
+	}
+	if ws.cfg != nil {
+		return ws.cfg.CardReaderName
+	}
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		clog.Warn("读取读卡器名称失败", clog.String("error", err.Error()))
+		return ""
+	}
+	return cfg.CardReaderName
 }
 
 // PerformKeyGeneration 执行密钥生成

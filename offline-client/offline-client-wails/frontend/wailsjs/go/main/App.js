@@ -6,6 +6,10 @@ export function GetCPLCInfo() {
   return window['go']['main']['App']['GetCPLCInfo']();
 }
 
+export function GetCardReaderName() {
+  return window['go']['main']['App']['GetCardReaderName']();
+}
+
 export function PerformDeleteMessage(arg1) {
   return window['go']['main']['App']['PerformDeleteMessage'](arg1);
 }
@@ -16,4 +20,8 @@ export function PerformKeyGeneration(arg1) {
 
 export function PerformSignMessage(arg1) {
   return window['go']['main']['App']['PerformSignMessage'](arg1);
+}
+
+export function SetCardReaderName(arg1) {
+  return window['go']['main']['App']['SetCardReaderName'](arg1);
 }

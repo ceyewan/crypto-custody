@@ -47,6 +47,10 @@
                             <el-badge v-if="notifications.length > 0" :value="notifications.length" class="item">
                             </el-badge>
                         </el-menu-item>
+                        <el-menu-item index="/settings">
+                            <i class="el-icon-setting"></i>
+                            <span>客户端设置</span>
+                        </el-menu-item>
                         <el-menu-item index="/test">
                             <i class="el-icon-cpu"></i>
                             <span>Wails MPC 测试</span>
@@ -138,7 +142,7 @@ export default {
         // 计算未响应的邀请通知数量
         pendingInvitations() {
             return this.notifications.filter(n =>
-                (n.type === 'keygen_invite' || n.type === 'sign_invite') &&
+                (n.type === 'keygen_invite' || n.type === 'sign_invite' || n.type === 'destroy_invite') &&
                 !n.responded
             )
         },
@@ -258,6 +262,9 @@ export default {
         wsConnected(connected) {
             if (connected) {
                 this.wsErrorCount = 0  // 重置错误计数
+                setTimeout(() => {
+                    initWebSocketService()
+                }, 100)
             }
         },
 

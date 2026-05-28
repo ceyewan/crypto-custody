@@ -53,7 +53,11 @@ func createAndRunTempExecutable(ctx context.Context, baseName string, args ...st
 	}
 
 	// 创建临时文件
-	tmpFile, err := os.CreateTemp("", "mpc-exec-")
+	tempPattern := "mpc-exec-*"
+	if runtime.GOOS == "windows" {
+		tempPattern += ".exe"
+	}
+	tmpFile, err := os.CreateTemp("", tempPattern)
 	if err != nil {
 		return "", fmt.Errorf("failed to create temp file: %w", err)
 	}

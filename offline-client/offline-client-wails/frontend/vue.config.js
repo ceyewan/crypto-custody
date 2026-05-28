@@ -1,3 +1,7 @@
+const devServerHttpUrl = process.env.VUE_APP_DEV_SERVER_HTTP_URL || 'http://127.0.0.1:8080'
+const devServerWsUrl = process.env.VUE_APP_DEV_SERVER_WS_URL ||
+    devServerHttpUrl.replace(/^https:\/\//i, 'wss://').replace(/^http:\/\//i, 'ws://')
+
 module.exports = {
     publicPath: './', // 设置为相对路径，适用于Wails
     devServer: {
@@ -5,7 +9,7 @@ module.exports = {
         open: true,
         proxy: {
             '/api': {
-                target: 'https://crypto-custody-offline-server.ceyewan.icu',
+                target: devServerHttpUrl,
                 ws: true,
                 changeOrigin: true,
                 pathRewrite: {
@@ -13,7 +17,7 @@ module.exports = {
                 }
             },
             '/ws': {
-                target: 'wss://crypto-custody-offline-server.ceyewan.icu',
+                target: devServerWsUrl,
                 ws: true,
                 changeOrigin: true,
                 pathRewrite: {

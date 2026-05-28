@@ -12,6 +12,7 @@ import ImportSE from '../views/ImportSE.vue'
 import OfflineTasks from '../views/OfflineTasks.vue'
 import KeyManagement from '../views/KeyManagement.vue'
 import AuditLogs from '../views/AuditLogs.vue'
+import ClientSettings from '../views/ClientSettings.vue'
 import store from '../store'
 
 Vue.use(VueRouter)
@@ -92,6 +93,12 @@ const routes = [
         name: 'Test',
         component: Test,
         meta: { requiresAuth: false } // 测试页面不需要认证
+    },
+    {
+        path: '/settings',
+        name: 'ClientSettings',
+        component: ClientSettings,
+        meta: { requiresAuth: true }
     }
 ]
 

@@ -13,6 +13,7 @@ import { userApi, keygenApi, signApi, offlineApi } from './services/api.js'
 import wailsMpcAPI from './services/wails-api.js'
 
 Vue.config.productionTip = false
+store.dispatch('applyClientRuntimeSettings')
 
 // 使用 ElementUI 组件库
 Vue.use(ElementUI)

@@ -16,6 +16,25 @@
                     </el-input>
                 </el-form-item>
 
+                <el-divider>连接设置</el-divider>
+
+                <el-form-item>
+                    <el-input v-model="settingsForm.serverHttpUrl" prefix-icon="el-icon-link" placeholder="服务器 HTTP 地址"
+                        @blur="syncWsUrl">
+                    </el-input>
+                </el-form-item>
+
+                <el-form-item>
+                    <el-input v-model="settingsForm.serverWsUrl" prefix-icon="el-icon-connection" placeholder="WebSocket 地址">
+                    </el-input>
+                </el-form-item>
+
+                <el-form-item>
+                    <el-input v-model="settingsForm.cardReaderName" prefix-icon="el-icon-cpu"
+                        placeholder="读卡器名称，留空自动选择">
+                    </el-input>
+                </el-form-item>
+
                 <el-form-item>
                     <el-button type="primary" :loading="loading" @click="handleLogin" style="width: 100%">
                         登录
@@ -25,7 +44,7 @@
                 <el-form-item>
                     <div class="register-link">
                         <span>没有账号?</span>
-                        <router-link to="/register">立即注册</router-link>
+                        <a href="#" @click.prevent="goRegister">立即注册</a>
                     </div>
                 </el-form-item>
             </el-form>
@@ -35,14 +54,21 @@
 
 <script>
 import { userApi } from '../services/api'
+import { deriveWsUrl } from '../services/settings'
 
 export default {
     name: 'Login',
     data() {
+        const clientSettings = this.$store.state.clientSettings
         return {
             loginForm: {
-                username: '',
+                username: localStorage.getItem('last_username') || '',
                 password: ''
+            },
+            settingsForm: {
+                serverHttpUrl: clientSettings.serverHttpUrl,
+                serverWsUrl: clientSettings.serverWsUrl,
+                cardReaderName: clientSettings.cardReaderName
             },
             rules: {
                 username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
@@ -52,6 +78,13 @@ export default {
         }
     },
     methods: {
+        syncWsUrl() {
+            this.settingsForm.serverWsUrl = deriveWsUrl(this.settingsForm.serverHttpUrl)
+        },
+        async goRegister() {
+            await this.$store.dispatch('saveClientSettings', this.settingsForm)
+            this.$router.push('/register')
+        },
         handleLogin() {
             this.$refs.loginForm.validate(async valid => {
                 if (!valid) {
@@ -61,6 +94,8 @@ export default {
                 this.loading = true
 
                 try {
+                    await this.$store.dispatch('saveClientSettings', this.settingsForm)
+
                     const response = await userApi.login({
                         username: this.loginForm.username,
                         password: this.loginForm.password
@@ -128,7 +163,7 @@ export default {
 }
 
 .login-card {
-    width: 400px;
+    width: 460px;
     border-radius: 8px;
 }
 

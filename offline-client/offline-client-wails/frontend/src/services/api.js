@@ -1,39 +1,16 @@
 import axios from 'axios'
 import store from '../store'
-import { Environment } from '../../wailsjs/runtime/runtime'
+import { getServerHttpUrl } from './settings'
 
-// API基础URL
-// 使用 Wails runtime.Environment() 来可靠地检测环境
-let API_URL = '/api'; // 默认使用代理
-
-// 异步检测 Wails 环境并设置正确的 API URL
-async function detectEnvironmentAndSetURL() {
-    try {
-        await Environment();
-        // 在 Wails 环境中直接连接远程服务器
-        API_URL = 'https://crypto-custody-offline-server.ceyewan.icu';
-
-        // 更新 axios 实例的 baseURL
-        apiClient.defaults.baseURL = API_URL;
-    } catch {
-        // 不是 Wails 环境，使用代理
-        API_URL = '/api';
-        apiClient.defaults.baseURL = API_URL;
-    }
-}
-
-// 初始化环境检测
-detectEnvironmentAndSetURL();
-
-// 创建axios实例
 const apiClient = axios.create({
-    baseURL: API_URL,
+    baseURL: getServerHttpUrl(),
     timeout: 10000
 })
 
 // axios请求拦截器
 apiClient.interceptors.request.use(
     config => {
+        config.baseURL = getServerHttpUrl()
         const token = localStorage.getItem('token')
         if (token) {
             // 如果token以Bearer开头，则去掉前缀，只发送裸token

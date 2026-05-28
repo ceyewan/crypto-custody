@@ -46,6 +46,98 @@ let wsConnectionStatus = {
     reconnectAttempts: 0   // 重连尝试次数
 }
 
+export function mpcTaskKey(kind, message) {
+    return `${kind}:${message.session_key || ''}`
+}
+
+function taskStatus(key) {
+    return store.state.mpcTasks[key] ? store.state.mpcTasks[key].status : ''
+}
+
+function commitTask(key, patch) {
+    store.commit('setMpcTask', { key, patch })
+}
+
+function isTerminalStatus(status) {
+    return status === 'result_sent' || status === 'rejected' || status === 'completed'
+}
+
+function markInvited(kind, message, patch) {
+    const key = mpcTaskKey(kind, message)
+    const status = taskStatus(key)
+    if (status && status !== 'invited' && status !== 'interrupted') {
+        console.log(`任务 ${key} 当前状态为 ${status}，保留已有状态`)
+        return
+    }
+    commitTask(key, patch)
+}
+
+function beginTask(kind, message) {
+    const key = mpcTaskKey(kind, message)
+    const status = taskStatus(key)
+
+    if (status === 'result_ready') {
+        resendPendingResult(key)
+        return { key, started: false }
+    }
+    if (status === 'running' || isTerminalStatus(status)) {
+        console.log(`任务 ${key} 当前状态为 ${status}，跳过重复执行`)
+        return { key, started: false }
+    }
+
+    commitTask(key, {
+        kind,
+        session_key: message.session_key,
+        party_index: message.party_index,
+        signing_index: message.signing_index,
+        status: 'running',
+        phase: `${kind}_params`,
+        message: 'MPC任务执行中'
+    })
+    return { key, started: true }
+}
+
+function sendTaskResult(key, resultMessage, successMessage, failureMessage) {
+    if (sendWSMessage(resultMessage)) {
+        commitTask(key, {
+            status: 'result_sent',
+            phase: resultMessage.type,
+            success: !!resultMessage.success,
+            result_message: null,
+            message: successMessage || resultMessage.message || '结果已回传'
+        })
+        return true
+    }
+
+    commitTask(key, {
+        status: 'result_ready',
+        phase: resultMessage.type,
+        success: !!resultMessage.success,
+        result_message: resultMessage,
+        message: failureMessage || '结果已生成，但 WebSocket 未连接，等待重连后回传'
+    })
+    Message.warning(failureMessage || '结果已生成，但 WebSocket 未连接，等待重连后回传')
+    return false
+}
+
+function resendPendingResult(key) {
+    const task = store.state.mpcTasks[key]
+    if (!task || task.status !== 'result_ready' || !task.result_message) {
+        return false
+    }
+    return sendTaskResult(key, task.result_message, '缓存结果已重新回传', '缓存结果回传失败，等待下次重连')
+}
+
+function resendPendingResults() {
+    Object.keys(store.state.mpcTasks).forEach(key => {
+        resendPendingResult(key)
+    })
+}
+
+function errorMessage(error) {
+    return error && error.message ? error.message : String(error)
+}
+
 // 初始化WebSocket服务
 export function initWebSocketService() {
     const ws = store.state.wsClient
@@ -121,9 +213,7 @@ export function initWebSocketService() {
                     break
 
                 case WS_MESSAGE_TYPES.KEYGEN_INVITE:
-                    // 不再自动弹窗，只添加通知
-                    console.log('收到密钥生成邀请:', message)
-                    Message.info(`收到来自 ${message.coordinator} 的密钥生成邀请，请在通知页面处理`)
+                    handleKeyGenInvite(message)
                     break
 
                 case WS_MESSAGE_TYPES.KEYGEN_PARAMS:
@@ -135,9 +225,7 @@ export function initWebSocketService() {
                     break
 
                 case WS_MESSAGE_TYPES.SIGN_INVITE:
-                    // 不再自动弹窗，只添加通知
-                    console.log('收到签名邀请:', message)
-                    Message.info(`收到签名邀请，地址: ${message.address}，请在通知页面处理`)
+                    handleSignInvite(message)
                     break
 
                 case WS_MESSAGE_TYPES.SIGN_PARAMS:
@@ -149,7 +237,7 @@ export function initWebSocketService() {
                     break
 
                 case WS_MESSAGE_TYPES.DESTROY_INVITE:
-                    Message.warning(`收到密钥销毁邀请，地址: ${message.address}，请在通知页面处理`)
+                    handleDestroyInvite(message)
                     break
 
                 case WS_MESSAGE_TYPES.DESTROY_PARAMS:
@@ -225,15 +313,60 @@ function handleRegisterComplete(message) {
         wsConnectionStatus.reconnectAttempts = 0
         console.log('WebSocket注册成功')
         Message.success('WebSocket连接成功')
+        resendPendingResults()
     } else {
         console.error('WebSocket注册失败:', message.message)
         Message.error('WebSocket注册失败: ' + message.message)
     }
 }
 
+function handleKeyGenInvite(message) {
+    console.log('收到密钥生成邀请:', message)
+    markInvited('keygen', message, {
+        kind: 'keygen',
+        session_key: message.session_key,
+        party_index: message.party_index,
+        status: 'invited',
+        phase: WS_MESSAGE_TYPES.KEYGEN_INVITE,
+        message: '等待用户确认密钥生成邀请'
+    })
+    Message.info(`收到来自 ${message.coordinator} 的密钥生成邀请，请在通知页面处理`)
+}
+
+function handleSignInvite(message) {
+    console.log('收到签名邀请:', message)
+    markInvited('sign', message, {
+        kind: 'sign',
+        session_key: message.session_key,
+        party_index: message.party_index,
+        status: 'invited',
+        phase: WS_MESSAGE_TYPES.SIGN_INVITE,
+        message: '等待用户确认签名邀请'
+    })
+    Message.info(`收到签名邀请，地址: ${message.address}，请在通知页面处理`)
+}
+
+function handleDestroyInvite(message) {
+    console.log('收到密钥销毁邀请:', message)
+    markInvited('destroy', message, {
+        kind: 'destroy',
+        session_key: message.session_key,
+        party_index: message.party_index,
+        status: 'invited',
+        phase: WS_MESSAGE_TYPES.DESTROY_INVITE,
+        message: '等待用户确认密钥销毁邀请'
+    })
+    Message.warning(`收到密钥销毁邀请，地址: ${message.address}，请在通知页面处理`)
+}
+
 
 // 处理密钥生成参数
 async function handleKeyGenParams(message) {
+    const task = beginTask('keygen', message)
+    if (!task.started) {
+        return
+    }
+
     try {
         // 调用MPC服务进行密钥生成，使用与 models 匹配的字段名
         const keygenResponse = await mpcApi.keyGen({
@@ -247,17 +380,21 @@ async function handleKeyGenParams(message) {
         })
 
         if (keygenResponse.data.success) {
-            // 尝试获取CPLC，即使出错也继续处理
-            let cplc = ''
-            try {
-                const cplcResponse = await seApi.getCPLC()
-                cplc = cplcResponse.data.cplc_info || ''
-            } catch (cplcError) {
-                console.error('获取CPLC失败:', cplcError)
+            let cplc = (store.state.mpcTasks[task.key] || {}).cplc || ''
+            if (!cplc) {
+                try {
+                    const cplcResponse = await seApi.getCPLC()
+                    cplc = cplcResponse.data.cplc_info || ''
+                } catch (cplcError) {
+                    throw new Error('获取CPLC失败: ' + errorMessage(cplcError))
+                }
+            }
+            if (!cplc) {
+                throw new Error('获取CPLC失败: 返回为空')
             }
 
             // 发送密钥生成结果
-            sendWSMessage({
+            const resultMessage = {
                 type: WS_MESSAGE_TYPES.KEYGEN_RESULT,
                 session_key: message.session_key,
                 party_index: message.party_index,
@@ -268,7 +405,8 @@ async function handleKeyGenParams(message) {
                 encrypted_shard: keygenResponse.data.encrypted_shard,
                 success: true,
                 message: '密钥生成成功'
-            })
+            }
+            sendTaskResult(task.key, resultMessage, '密钥生成成功，结果已回传')
 
             Message.success('密钥生成成功')
         } else {
@@ -277,7 +415,7 @@ async function handleKeyGenParams(message) {
     } catch (error) {
         console.error('密钥生成失败:', error)
         // 发送失败结果
-        sendWSMessage({
+        const resultMessage = {
             type: WS_MESSAGE_TYPES.KEYGEN_RESULT,
             session_key: message.session_key,
             party_index: message.party_index,
@@ -287,15 +425,22 @@ async function handleKeyGenParams(message) {
             record_id: message.record_id,
             encrypted_shard: '',
             success: false,
-            message: '密钥生成失败: ' + error.message
-        })
+            message: '密钥生成失败: ' + errorMessage(error)
+        }
+        sendTaskResult(task.key, resultMessage, '密钥生成失败，错误已回传')
 
-        Message.error('密钥生成失败: ' + error.message)
+        Message.error('密钥生成失败: ' + errorMessage(error))
     }
 }
 
 // 处理密钥生成完成消息
 function handleKeyGenComplete(message) {
+    commitTask(mpcTaskKey('keygen', message), {
+        status: 'completed',
+        phase: WS_MESSAGE_TYPES.KEYGEN_COMPLETE,
+        success: !!message.success,
+        message: message.message || (message.success ? '密钥生成完成' : '密钥生成失败')
+    })
     if (message.success) {
         MessageBox.alert(
             `密钥生成成功! 地址: ${message.address}`,
@@ -314,6 +459,11 @@ function handleKeyGenComplete(message) {
 
 // 处理签名参数
 async function handleSignParams(message) {
+    const task = beginTask('sign', message)
+    if (!task.started) {
+        return
+    }
+
     try {
         // 调用MPC签名服务，使用与 models 匹配的字段名
         const signResponse = await mpcApi.sign({
@@ -331,14 +481,15 @@ async function handleSignParams(message) {
 
         if (signResponse.data.success) {
             // 发送签名结果
-            sendWSMessage({
+            const resultMessage = {
                 type: WS_MESSAGE_TYPES.SIGN_RESULT,
                 session_key: message.session_key,
                 signing_index: message.signing_index,
                 success: true,
                 signature: signResponse.data.signature,
                 message: '签名成功'
-            })
+            }
+            sendTaskResult(task.key, resultMessage, '签名成功，结果已回传')
 
             Message.success('签名成功')
         } else {
@@ -347,21 +498,28 @@ async function handleSignParams(message) {
     } catch (error) {
         console.error('签名失败:', error)
         // 发送失败结果
-        sendWSMessage({
+        const resultMessage = {
             type: WS_MESSAGE_TYPES.SIGN_RESULT,
             session_key: message.session_key,
             signing_index: message.signing_index,
             success: false,
             signature: '',
-            message: '签名失败: ' + error.message
-        })
+            message: '签名失败: ' + errorMessage(error)
+        }
+        sendTaskResult(task.key, resultMessage, '签名失败，错误已回传')
 
-        Message.error('签名失败: ' + error.message)
+        Message.error('签名失败: ' + errorMessage(error))
     }
 }
 
 // 处理签名完成消息
 function handleSignComplete(message) {
+    commitTask(mpcTaskKey('sign', message), {
+        status: 'completed',
+        phase: WS_MESSAGE_TYPES.SIGN_COMPLETE,
+        success: !!message.success,
+        message: message.message || (message.success ? '签名完成' : '签名失败')
+    })
     if (message.success) {
         MessageBox.alert(
             `签名成功! 签名结果: ${message.signature}`,
@@ -379,6 +537,11 @@ function handleSignComplete(message) {
 
 // 处理密钥销毁参数
 async function handleDestroyParams(message) {
+    const task = beginTask('destroy', message)
+    if (!task.started) {
+        return
+    }
+
     try {
         await mpcApi.delete({
             record_id: message.record_id,
@@ -386,30 +549,38 @@ async function handleDestroyParams(message) {
             signature: message.signature
         })
 
-        sendWSMessage({
+        const resultMessage = {
             type: WS_MESSAGE_TYPES.DESTROY_RESULT,
             session_key: message.session_key,
             party_index: message.party_index,
             success: true,
             message: 'SE记录已删除并验证不可读取'
-        })
+        }
+        sendTaskResult(task.key, resultMessage, 'SE记录销毁成功，结果已回传')
 
         Message.success('SE记录销毁成功')
     } catch (error) {
-        sendWSMessage({
+        const resultMessage = {
             type: WS_MESSAGE_TYPES.DESTROY_RESULT,
             session_key: message.session_key,
             party_index: message.party_index,
             success: false,
-            message: 'SE记录销毁失败: ' + error.message
-        })
+            message: 'SE记录销毁失败: ' + errorMessage(error)
+        }
+        sendTaskResult(task.key, resultMessage, 'SE记录销毁失败，错误已回传')
 
-        Message.error('SE记录销毁失败: ' + error.message)
+        Message.error('SE记录销毁失败: ' + errorMessage(error))
     }
 }
 
 // 处理密钥销毁完成消息
 function handleDestroyComplete(message) {
+    commitTask(mpcTaskKey('destroy', message), {
+        status: 'completed',
+        phase: WS_MESSAGE_TYPES.DESTROY_COMPLETE,
+        success: !!message.success,
+        message: message.message || (message.success ? '密钥销毁完成' : '密钥销毁失败')
+    })
     if (message.success) {
         MessageBox.alert(
             `密钥销毁完成，已销毁分片数: ${message.destroyed}`,
