@@ -5,6 +5,8 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -53,6 +55,10 @@ func (ws *WailsServices) Init() error {
 	if ws.cardReaderName != "" {
 		cfg.CardReaderName = ws.cardReaderName
 	}
+	if err := applyDesktopRuntimePaths(cfg); err != nil {
+		clog.Error("准备桌面端运行目录失败", clog.String("error", err.Error()))
+		return err
+	}
 
 	securityService, err := services.NewSecurityService(cfg)
 	if err != nil {
@@ -64,7 +70,32 @@ func (ws *WailsServices) Init() error {
 	ws.securityService = securityService
 	ws.mpcService = services.NewMPCService(cfg, securityService)
 	ws.initialized = true
-	clog.Info("WailsServices初始化成功", clog.String("card_reader_name", cfg.CardReaderName))
+	clog.Info("WailsServices初始化成功",
+		clog.String("card_reader_name", cfg.CardReaderName),
+		clog.String("temp_dir", cfg.TempDir),
+		clog.String("log_dir", cfg.LogDir))
+	return nil
+}
+
+func applyDesktopRuntimePaths(cfg *config.Config) error {
+	baseDir, err := os.UserCacheDir()
+	if err != nil || strings.TrimSpace(baseDir) == "" {
+		baseDir = os.TempDir()
+	}
+
+	appDir := filepath.Join(baseDir, "crypto-custody", "offline-client")
+	if strings.TrimSpace(cfg.TempDir) == "" || !filepath.IsAbs(cfg.TempDir) {
+		cfg.TempDir = filepath.Join(appDir, "mpc-temp", fmt.Sprintf("pid-%d", os.Getpid()))
+	}
+	if strings.TrimSpace(cfg.LogDir) == "" || !filepath.IsAbs(cfg.LogDir) {
+		cfg.LogDir = filepath.Join(appDir, "logs")
+	}
+
+	for _, dir := range []string{cfg.TempDir, cfg.LogDir} {
+		if err := os.MkdirAll(dir, 0700); err != nil {
+			return fmt.Errorf("创建运行目录失败 %s: %w", dir, err)
+		}
+	}
 	return nil
 }
 
