@@ -1,184 +1,46 @@
 <template>
-    <div class="keygen-container">
-        <el-card>
-            <div slot="header">
-                <span>密钥生成</span>
+    <div class="page task-entry-page">
+        <div class="page-header">
+            <div>
+                <h2 class="page-title">密钥生成</h2>
+                <p class="page-subtitle">优先导入在线系统导出的托管钱包生成任务包，再发起 2-of-3 等 MPC keygen。</p>
             </div>
+            <el-button type="primary" icon="el-icon-upload2" @click="$router.push('/offline-tasks')">
+                导入 JSON 任务包
+            </el-button>
+        </div>
 
-            <el-form :model="keygenForm" :rules="keygenRules" ref="keygenForm" label-width="120px">
-                <el-form-item label="门限值" prop="threshold">
-                    <el-input-number v-model="keygenForm.threshold" :min="1" :max="keygenForm.totalParts"
-                        @change="handleThresholdChange">
-                    </el-input-number>
-                </el-form-item>
+        <el-card>
+            <el-alert
+                type="info"
+                :closable="false"
+                title="keygen 主流程已经收敛到“离线任务”页面。">
+            </el-alert>
 
-                <el-form-item label="总分片数" prop="totalParts">
-                    <el-input-number v-model="keygenForm.totalParts" :min="keygenForm.threshold" :max="10">
-                    </el-input-number>
-                </el-form-item>
+            <el-steps :active="0" simple class="steps">
+                <el-step title="导入 offline_task JSON"></el-step>
+                <el-step title="选择管理员/警员参与方"></el-step>
+                <el-step title="警员确认并执行 MPC"></el-step>
+                <el-step title="下载 offline_result JSON"></el-step>
+            </el-steps>
 
-                <el-form-item label="参与者" prop="participants">
-                    <el-select v-model="keygenForm.participants" multiple placeholder="请选择参与者" style="width: 100%">
-                        <el-option v-for="p in availableParticipants" :key="p" :label="p" :value="p">
-                        </el-option>
-                    </el-select>
-                </el-form-item>
-
-                <el-form-item>
-                    <el-button type="primary" :loading="keygenLoading" @click="handleKeyGenSubmit">
-                        发起密钥生成
-                    </el-button>
-                </el-form-item>
-            </el-form>
-
-            <!-- 结果显示区域 -->
-            <el-card v-if="keygenResult" style="margin-top: 20px;">
-                <div slot="header">
-                    <span>密钥生成结果</span>
-                </div>
-                <el-row>
-                    <el-col :span="24">
-                        <p><strong>状态:</strong> 
-                            <el-tag :type="keygenResult.success ? 'success' : 'danger'">
-                                {{ keygenResult.success ? '成功' : '失败' }}
-                            </el-tag>
-                        </p>
-                        <p v-if="keygenResult.success && keygenResult.data">
-                            <strong>以太坊地址:</strong> {{ keygenResult.data.address }}
-                        </p>
-                        <p v-if="!keygenResult.success">
-                            <strong>错误信息:</strong> {{ keygenResult.error }}
-                        </p>
-                    </el-col>
-                </el-row>
-            </el-card>
+            <el-descriptions :column="1" border>
+                <el-descriptions-item label="任务包类型">custody_keygen</el-descriptions-item>
+                <el-descriptions-item label="结果包类型">custody_keygen_result</el-descriptions-item>
+                <el-descriptions-item label="推荐文件名">offline_result_&lt;task_no&gt;.json</el-descriptions-item>
+            </el-descriptions>
         </el-card>
     </div>
 </template>
 
 <script>
-import { sendWSMessage, WS_MESSAGE_TYPES } from '../services/ws'
-
 export default {
-    name: 'KeyGen',
-    data() {
-        return {
-            keygenForm: {
-                threshold: 2,
-                totalParts: 3,
-                participants: []
-            },
-            keygenRules: {
-                threshold: [
-                    { required: true, message: '请输入门限值', trigger: 'blur' }
-                ],
-                totalParts: [
-                    { required: true, message: '请输入总分片数', trigger: 'blur' }
-                ],
-                participants: [
-                    { required: true, message: '请选择参与者', trigger: 'change' },
-                    { validator: this.validateParticipants, trigger: 'change' }
-                ]
-            },
-            availableParticipants: [],
-            keygenLoading: false,
-            keygenResult: null
-        }
-    },
-    created() {
-        this.fetchAvailableParticipants()
-    },
-    methods: {
-        // 验证参与者选择是否满足门限要求
-        validateParticipants(rule, value, callback) {
-            if (!value || value.length < this.keygenForm.threshold) {
-                callback(new Error(`至少需要选择${this.keygenForm.threshold}个参与者`))
-            } else {
-                callback()
-            }
-        },
-
-        // 门限值变更处理
-        handleThresholdChange(val) {
-            if (val > this.keygenForm.totalParts) {
-                this.keygenForm.totalParts = val
-            }
-        },
-
-        // 获取可用参与者列表（从云端服务器）
-        async fetchAvailableParticipants() {
-            try {
-                const response = await this.$keygenApi.getAvailableUsers()
-                this.availableParticipants = response.data.data.filter(user =>
-                    user.role === 'participant'
-                ).map(user => user.username)
-
-                // 默认选择前n个参与者
-                if (this.availableParticipants.length >= this.keygenForm.threshold) {
-                    this.keygenForm.participants = this.availableParticipants.slice(0, this.keygenForm.totalParts)
-                }
-            } catch (error) {
-                console.error('获取参与者列表失败:', error)
-
-                // 检查错误类型
-                let errorMsg = '获取参与者列表失败'
-                if (error.response && error.response.status === 401) {
-                    errorMsg = '认证已过期，请重新登录'
-                    setTimeout(() => {
-                        this.$store.dispatch('logout')
-                        this.$router.push('/login')
-                    }, 1000)
-                } else if (error.response) {
-                    errorMsg = error.response.data?.error || error.response.data?.message || errorMsg
-                }
-
-                this.$message.error(errorMsg)
-            }
-        },
-
-        // 发起密钥生成请求（通过云端服务器协调）
-        handleKeyGenSubmit() {
-            this.$refs.keygenForm.validate(async valid => {
-                if (!valid) {
-                    return false
-                }
-
-                this.keygenLoading = true
-
-                try {
-                    // 创建密钥生成会话（与云端服务器通信）
-                    const response = await this.$keygenApi.createSession(this.$store.getters.currentUser.username)
-                    const sessionKey = response.data.session_key
-
-                    // 存储当前会话
-                    this.$store.commit('setCurrentSession', sessionKey)
-
-                    // 发送WebSocket消息给云端服务器
-                    sendWSMessage({
-                        type: WS_MESSAGE_TYPES.KEYGEN_REQUEST,
-                        session_key: sessionKey,
-                        required_signers: this.keygenForm.threshold,
-                        total_parties: this.keygenForm.totalParts,
-                        participants: this.keygenForm.participants
-                    })
-
-                    this.$message.success('密钥生成请求已发送到云端服务器')
-                    // 自动跳转到通知页面等待云端服务器响应
-                    this.$router.push('/notifications')
-                } catch (error) {
-                    console.error('发起密钥生成请求失败:', error)
-                    this.$message.error('发起密钥生成请求失败')
-                } finally {
-                    this.keygenLoading = false
-                }
-            })
-        }
-    }
+    name: 'KeyGen'
 }
 </script>
 
 <style scoped>
-.keygen-container {
-    padding: 20px;
+.steps {
+    margin: 18px 0;
 }
 </style>

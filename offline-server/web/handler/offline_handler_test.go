@@ -8,12 +8,12 @@ import (
 	"offline-server/storage/model"
 )
 
-func TestHashPayloadUsesCompactJSON(t *testing.T) {
+func TestHashPayloadUsesCanonicalJSON(t *testing.T) {
 	hashA, err := hashPayload(json.RawMessage(`{ "case_no": "CASE-1", "n": 2 }`))
 	if err != nil {
 		t.Fatalf("hashPayload failed: %v", err)
 	}
-	hashB, err := hashPayload(json.RawMessage(`{"case_no":"CASE-1","n":2}`))
+	hashB, err := hashPayload(json.RawMessage(`{"n":2,"case_no":"CASE-1"}`))
 	if err != nil {
 		t.Fatalf("hashPayload failed: %v", err)
 	}

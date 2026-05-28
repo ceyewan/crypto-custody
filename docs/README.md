@@ -6,10 +6,11 @@
 
 1. [当前系统框架设计说明](architecture/当前系统框架设计说明.md)
 2. [在线系统全量设计方案](architecture/在线系统全量设计方案.md)
-3. [离线系统详细设计](../offline-server/docs/offline_system_detailed_design.md)
-4. [在线/离线数据包与 MPC 边界设计](../offline-server/docs/online_offline_mpc_contract.md)
-5. [安全芯片设计文档](../offline-client/secured/SECURITY_CHIP_DESIGN.md)
-6. [ZenGo GG20 使用说明](../offline-server/docs/zengo_multi_party_ecdsa_usage.md)
+3. [离线系统前端交互重设计方案](architecture/离线系统前端交互重设计方案.md)
+4. [离线系统详细设计](../offline-server/docs/offline_system_detailed_design.md)
+5. [在线/离线数据包与 MPC 边界设计](../offline-server/docs/online_offline_mpc_contract.md)
+6. [安全芯片设计文档](../offline-client/secured/SECURITY_CHIP_DESIGN.md)
+7. [ZenGo GG20 使用说明](../offline-server/docs/zengo_multi_party_ecdsa_usage.md)
 
 ## 测试和验收
 

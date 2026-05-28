@@ -32,26 +32,33 @@ func Register() *gin.Engine {
 
 func initOfflineRouter(r *gin.Engine) {
 	offlineGroup := r.Group("/offline")
-	offlineGroup.Use(KeyAuthMiddleware())
+	offlineGroup.Use(AuthMiddleware())
 	{
-		offlineGroup.POST("/tasks/import", handler.ImportOfflineTask)
 		offlineGroup.GET("/tasks/:task_no", handler.GetOfflineTask)
-		offlineGroup.POST("/tasks/:task_no/keygen/start", handler.BuildKeygenTaskRequest)
-		offlineGroup.POST("/tasks/:task_no/sign/start", handler.BuildSignTaskRequest)
-		offlineGroup.GET("/results/:task_no/download", handler.DownloadOfflineResult)
 		offlineGroup.GET("/keys/:offline_key_id", handler.GetOfflineKey)
+		offlineGroup.GET("/shards/mine", handler.ListMyKeyShards)
+		offlineGroup.GET("/participation/mine", handler.ListMyParticipationRecords)
 	}
 
 	offlineAdminGroup := r.Group("/offline")
 	offlineAdminGroup.Use(AdminAuthMiddleware())
 	{
+		offlineAdminGroup.POST("/tasks/import", handler.ImportOfflineTask)
+		offlineAdminGroup.POST("/tasks/:task_no/keygen/start", handler.BuildKeygenTaskRequest)
+		offlineAdminGroup.POST("/tasks/:task_no/sign/start", handler.BuildSignTaskRequest)
+		offlineAdminGroup.GET("/results/:task_no/download", handler.DownloadOfflineResult)
+		offlineAdminGroup.POST("/shards/:shard_id/transfer", handler.TransferKeyShard)
 		offlineAdminGroup.POST("/keys/:offline_key_id/transfer", handler.TransferOfflineKey)
 		offlineAdminGroup.POST("/keys/:offline_key_id/destroy", handler.DestroyOfflineKey)
+		offlineAdminGroup.GET("/backup/download", handler.DownloadBackup)
 	}
 
 	offlineAuditGroup := r.Group("/offline")
 	offlineAuditGroup.Use(AuditAuthMiddleware())
 	{
+		offlineAuditGroup.GET("/tasks", handler.ListOfflineTasks)
+		offlineAuditGroup.GET("/keys", handler.ListOfflineKeys)
+		offlineAuditGroup.GET("/shards", handler.ListKeyShards)
 		offlineAuditGroup.GET("/audit", handler.ListAuditLogs)
 		offlineAuditGroup.GET("/approvals", handler.ListApprovals)
 	}
@@ -71,7 +78,7 @@ func initUserRouter(r *gin.Engine) {
 
 	// 管理员API - 需要admin权限
 	adminGroup := userGroup.Group("/admin")
-	adminGroup.Use(AuthMiddleware())
+	adminGroup.Use(AdminAuthMiddleware())
 	{
 		adminGroup.GET("/users", handler.ListUsers)               // 获取用户列表
 		adminGroup.PUT("/users/:id/role", handler.UpdateUserRole) // 更新用户角色
@@ -122,6 +129,7 @@ func initSeRouter(r *gin.Engine) {
 	seGroup := r.Group("/se")
 	seGroup.Use(AdminAuthMiddleware()) // 需要管理员权限
 	{
+		seGroup.GET("/list", handler.ListSe)      // 获取安全芯片列表
 		seGroup.POST("/create", handler.CreateSe) // 创建安全芯片记录
 	}
 }
@@ -167,9 +175,9 @@ func KeyAuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// 检查是否为Coordinator或Admin角色
-		if role != "coordinator" && role != "admin" {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "权限不足，需要Coordinator或Admin角色"})
+		// 只有管理员可以发起 keygen/sign，管理员本人也可以作为参与方。
+		if role != "admin" {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "权限不足，需要管理员角色"})
 			return
 		}
 
@@ -195,8 +203,8 @@ func AuditAuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		if role != "admin" && role != "coordinator" && role != "auditor" {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "权限不足，需要Admin、Coordinator或Auditor角色"})
+		if role != "admin" && role != "auditor" {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "权限不足，需要管理员或审计员角色"})
 			return
 		}
 

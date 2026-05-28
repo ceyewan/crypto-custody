@@ -2,36 +2,30 @@
     <div class="login-container">
         <el-card class="login-card">
             <div slot="header" class="card-header">
-                <h2>多方门限签名系统</h2>
+                <h2>离线存管提控系统</h2>
+                <el-button type="text" icon="el-icon-setting" @click="$router.push('/server-settings')">
+                    服务器设置
+                </el-button>
             </div>
 
+            <el-alert
+                type="info"
+                :closable="false"
+                :title="serverSummary"
+                class="server-alert">
+            </el-alert>
+
             <el-form :model="loginForm" :rules="rules" ref="loginForm" label-width="0px">
-                <el-form-item prop="username">
-                    <el-input v-model="loginForm.username" prefix-icon="el-icon-user" placeholder="用户名">
+                <el-form-item prop="identifier">
+                    <el-input
+                        v-model="loginForm.identifier"
+                        prefix-icon="el-icon-user"
+                        placeholder="手机号 / 警号 / 身份证号">
                     </el-input>
                 </el-form-item>
 
                 <el-form-item prop="password">
                     <el-input v-model="loginForm.password" prefix-icon="el-icon-lock" placeholder="密码" show-password>
-                    </el-input>
-                </el-form-item>
-
-                <el-divider>连接设置</el-divider>
-
-                <el-form-item>
-                    <el-input v-model="settingsForm.serverHttpUrl" prefix-icon="el-icon-link" placeholder="服务器 HTTP 地址"
-                        @blur="syncWsUrl">
-                    </el-input>
-                </el-form-item>
-
-                <el-form-item>
-                    <el-input v-model="settingsForm.serverWsUrl" prefix-icon="el-icon-connection" placeholder="WebSocket 地址">
-                    </el-input>
-                </el-form-item>
-
-                <el-form-item>
-                    <el-input v-model="settingsForm.cardReaderName" prefix-icon="el-icon-cpu"
-                        placeholder="读卡器名称，留空自动选择">
                     </el-input>
                 </el-form-item>
 
@@ -44,7 +38,7 @@
                 <el-form-item>
                     <div class="register-link">
                         <span>没有账号?</span>
-                        <a href="#" @click.prevent="goRegister">立即注册</a>
+                        <a href="#" @click.prevent="$router.push('/register')">立即注册</a>
                     </div>
                 </el-form-item>
             </el-form>
@@ -54,37 +48,28 @@
 
 <script>
 import { userApi } from '../services/api'
-import { deriveWsUrl } from '../services/settings'
 
 export default {
     name: 'Login',
     data() {
-        const clientSettings = this.$store.state.clientSettings
         return {
             loginForm: {
-                username: localStorage.getItem('last_username') || '',
+                identifier: localStorage.getItem('last_username') || '',
                 password: ''
             },
-            settingsForm: {
-                serverHttpUrl: clientSettings.serverHttpUrl,
-                serverWsUrl: clientSettings.serverWsUrl,
-                cardReaderName: clientSettings.cardReaderName
-            },
             rules: {
-                username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
+                identifier: [{ required: true, message: '请输入手机号、警号或身份证号', trigger: 'blur' }],
                 password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
             },
             loading: false
         }
     },
+    computed: {
+        serverSummary() {
+            return `当前服务器：${this.$store.state.clientSettings.serverHttpUrl}`
+        }
+    },
     methods: {
-        syncWsUrl() {
-            this.settingsForm.serverWsUrl = deriveWsUrl(this.settingsForm.serverHttpUrl)
-        },
-        async goRegister() {
-            await this.$store.dispatch('saveClientSettings', this.settingsForm)
-            this.$router.push('/register')
-        },
         handleLogin() {
             this.$refs.loginForm.validate(async valid => {
                 if (!valid) {
@@ -92,62 +77,40 @@ export default {
                 }
 
                 this.loading = true
-
                 try {
-                    await this.$store.dispatch('saveClientSettings', this.settingsForm)
-
                     const response = await userApi.login({
-                        username: this.loginForm.username,
+                        identifier: this.loginForm.identifier,
+                        username: this.loginForm.identifier,
                         password: this.loginForm.password
                     })
 
-                    // 验证响应数据
                     if (!response.data || !response.data.token) {
                         throw new Error('服务器响应异常：缺少认证令牌')
                     }
 
-                    // 确保token格式正确
-                    const token = response.data.token.startsWith('Bearer ') 
-                        ? response.data.token 
+                    const token = response.data.token.startsWith('Bearer ')
+                        ? response.data.token
                         : `Bearer ${response.data.token}`
-                    
-                    // 保存格式化后的token和用户信息
-                    const userData = {
-                        token: token,
+
+                    this.$store.dispatch('login', {
+                        token,
                         user: response.data.user
-                    }
+                    })
 
-                    // 保存用户信息和令牌
-                    this.$store.dispatch('login', userData)
-
-                    // 调试信息
-                    console.log('用户登录成功', userData.user.username, userData.user.role)
-
-                    // 连接WebSocket
                     this.$store.dispatch('connectWebSocket')
-
-                    // 延迟一点时间以确保WebSocket连接建立
                     setTimeout(() => {
-                        // 跳转到仪表板
                         this.$router.push('/dashboard')
-
                         this.$message.success('登录成功')
-                    }, 500)
+                    }, 300)
                 } catch (error) {
-                    console.error('登录失败:', error)
-                    let errorMsg = '登录失败，请检查用户名和密码'
-                    
-                    if (error.response) {
-                        errorMsg = error.response.data?.error || error.response.data?.message || errorMsg
-                    } else if (error.message) {
-                        errorMsg = error.message
-                    }
-                    
-                    this.$message.error(errorMsg)
+                    this.$message.error(this.apiError(error, '登录失败，请检查账号和密码'))
                 } finally {
                     this.loading = false
                 }
             })
+        },
+        apiError(error, fallback) {
+            return error.response?.data?.error || error.response?.data?.message || error.message || fallback
         }
     }
 }
@@ -159,21 +122,28 @@ export default {
     justify-content: center;
     align-items: center;
     height: 100vh;
-    background-color: #f5f7fa;
+    background-color: #f0f2f5;
 }
 
 .login-card {
-    width: 460px;
+    width: 420px;
     border-radius: 8px;
 }
 
 .card-header {
-    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
 }
 
 .card-header h2 {
     margin: 0;
-    color: #409EFF;
+    color: #304156;
+    font-size: 20px;
+}
+
+.server-alert {
+    margin-bottom: 18px;
 }
 
 .register-link {

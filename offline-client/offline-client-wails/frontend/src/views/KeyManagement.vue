@@ -1,158 +1,292 @@
 <template>
-    <div class="key-management-container">
-        <el-card>
-            <div slot="header">
-                <span>密钥管理</span>
+    <div class="page key-management-page">
+        <div class="page-header">
+            <div>
+                <h2 class="page-title">密钥与分片</h2>
+                <p class="page-subtitle">围绕地址和单个分片管理移交、销毁与查询，不再表达成账户所有权变更。</p>
             </div>
+            <el-button icon="el-icon-refresh" :loading="loading" @click="loadAll">刷新</el-button>
+        </div>
 
-            <el-form :model="queryForm" label-width="120px">
-                <el-form-item label="密钥ID或地址">
-                    <el-input v-model="queryForm.id"></el-input>
+        <el-card>
+            <el-form :inline="true" :model="filters" class="filters">
+                <el-form-item label="地址">
+                    <el-input v-model="filters.address" clearable placeholder="可粘贴地址筛选"></el-input>
+                </el-form-item>
+                <el-form-item label="持有人">
+                    <el-select v-model="filters.username" clearable filterable placeholder="全部">
+                        <el-option v-for="user in participantUsers" :key="user.username" :label="participantLabel(user)" :value="user.username"></el-option>
+                    </el-select>
+                </el-form-item>
+                <el-form-item label="状态">
+                    <el-select v-model="filters.status" clearable placeholder="全部">
+                        <el-option label="active" value="active"></el-option>
+                        <el-option label="transferred" value="transferred"></el-option>
+                        <el-option label="destroyed" value="destroyed"></el-option>
+                    </el-select>
                 </el-form-item>
                 <el-form-item>
-                    <el-button type="primary" :loading="loading" @click="queryKey">
-                        查询
-                    </el-button>
+                    <el-button type="primary" @click="loadShards">查询分片</el-button>
                 </el-form-item>
             </el-form>
 
-            <el-descriptions v-if="keyInfo" :column="2" border>
-                <el-descriptions-item label="离线密钥ID">{{ keyInfo.offline_key_id }}</el-descriptions-item>
-                <el-descriptions-item label="地址">{{ keyInfo.address }}</el-descriptions-item>
-                <el-descriptions-item label="币种">{{ keyInfo.coin_type }}</el-descriptions-item>
-                <el-descriptions-item label="算法">{{ keyInfo.algorithm }}</el-descriptions-item>
-                <el-descriptions-item label="门限">{{ keyInfo.required_signers }} / {{ keyInfo.total_parties }}</el-descriptions-item>
-                <el-descriptions-item label="归属">{{ keyInfo.logical_owner }}</el-descriptions-item>
-                <el-descriptions-item label="状态">
-                    <el-tag :type="statusTag(keyInfo.status)">{{ keyInfo.status }}</el-tag>
-                </el-descriptions-item>
-                <el-descriptions-item label="任务编号">{{ keyInfo.task_no }}</el-descriptions-item>
+            <el-tabs v-model="activeTab">
+                <el-tab-pane label="地址/密钥列表" name="keys">
+                    <el-table :data="keys" v-loading="loadingKeys" style="width: 100%">
+                        <el-table-column prop="address" label="地址" min-width="220"></el-table-column>
+                        <el-table-column prop="case_no" label="案件编号" width="150"></el-table-column>
+                        <el-table-column prop="task_no" label="任务编号" width="170"></el-table-column>
+                        <el-table-column label="门限" width="100">
+                            <template slot-scope="scope">
+                                {{ scope.row.required_signers }} / {{ scope.row.total_parties }}
+                            </template>
+                        </el-table-column>
+                        <el-table-column prop="offline_key_id" label="离线密钥编号" min-width="180"></el-table-column>
+                        <el-table-column prop="status" label="状态" width="110">
+                            <template slot-scope="scope">
+                                <el-tag :type="statusTag(scope.row.status)">{{ scope.row.status }}</el-tag>
+                            </template>
+                        </el-table-column>
+                        <el-table-column label="操作" width="190">
+                            <template slot-scope="scope">
+                                <el-button size="mini" @click="showKey(scope.row)">分片</el-button>
+                                <el-button
+                                    v-if="isAdmin"
+                                    type="danger"
+                                    size="mini"
+                                    :disabled="scope.row.status !== 'active'"
+                                    @click="destroyKey(scope.row)">
+                                    销毁
+                                </el-button>
+                            </template>
+                        </el-table-column>
+                    </el-table>
+                </el-tab-pane>
+
+                <el-tab-pane label="分片列表" name="shards">
+                    <el-table :data="shards" v-loading="loadingShards" style="width: 100%">
+                        <el-table-column prop="address" label="地址" min-width="220"></el-table-column>
+                        <el-table-column prop="case_no" label="案件编号" width="150"></el-table-column>
+                        <el-table-column prop="shard_index" label="分片" width="80"></el-table-column>
+                        <el-table-column label="门限" width="100">
+                            <template slot-scope="scope">
+                                {{ thresholdText(scope.row) }}
+                            </template>
+                        </el-table-column>
+                        <el-table-column prop="username" label="持有人" width="130"></el-table-column>
+                        <el-table-column prop="record_id" label="Record ID" min-width="220"></el-table-column>
+                        <el-table-column prop="se_cplc" label="SE CPLC" min-width="220"></el-table-column>
+                        <el-table-column prop="encrypted_blob_sha256" label="密文摘要" min-width="220"></el-table-column>
+                        <el-table-column prop="status" label="状态" width="110">
+                            <template slot-scope="scope">
+                                <el-tag :type="statusTag(scope.row.status)">{{ scope.row.status }}</el-tag>
+                            </template>
+                        </el-table-column>
+                        <el-table-column v-if="isAdmin" label="操作" width="120">
+                            <template slot-scope="scope">
+                                <el-button
+                                    size="mini"
+                                    type="primary"
+                                    :disabled="scope.row.status !== 'active'"
+                                    @click="openTransfer(scope.row)">
+                                    移交
+                                </el-button>
+                            </template>
+                        </el-table-column>
+                    </el-table>
+                </el-tab-pane>
+            </el-tabs>
+        </el-card>
+
+        <el-dialog title="分片移交" :visible.sync="transferDialogVisible" width="560px">
+            <el-descriptions v-if="transferShard" :column="1" border size="small">
+                <el-descriptions-item label="地址">{{ transferShard.address }}</el-descriptions-item>
+                <el-descriptions-item label="分片">{{ transferShard.shard_index }}</el-descriptions-item>
+                <el-descriptions-item label="当前持有人">{{ transferShard.username }}</el-descriptions-item>
+                <el-descriptions-item label="Record ID">{{ transferShard.record_id }}</el-descriptions-item>
             </el-descriptions>
 
-            <el-table v-if="keyInfo && keyInfo.shards" :data="keyInfo.shards" style="width: 100%; margin-top: 20px">
-                <el-table-column prop="shard_index" label="分片" width="80"></el-table-column>
-                <el-table-column prop="username" label="参与者" width="120"></el-table-column>
-                <el-table-column prop="se_cplc" label="SE CPLC"></el-table-column>
-                <el-table-column prop="record_id" label="Record ID"></el-table-column>
-                <el-table-column prop="encrypted_blob_sha256" label="密文摘要"></el-table-column>
-                <el-table-column prop="status" label="状态" width="110">
-                    <template slot-scope="scope">
-                        <el-tag :type="statusTag(scope.row.status)">{{ scope.row.status }}</el-tag>
-                    </template>
-                </el-table-column>
-            </el-table>
-
-            <el-divider v-if="keyInfo && isAdmin"></el-divider>
-
-            <el-form v-if="keyInfo && isAdmin" :model="transferForm" label-width="120px">
-                <el-form-item label="新归属">
-                    <el-input v-model="transferForm.newOwner"></el-input>
+            <el-form :model="transferForm" label-width="120px" class="transfer-form">
+                <el-form-item label="接收警员">
+                    <el-select v-model="transferForm.toUsername" filterable placeholder="请选择接收警员" style="width: 100%">
+                        <el-option
+                            v-for="user in participantUsers"
+                            :key="user.username"
+                            :disabled="transferShard && user.username === transferShard.username"
+                            :label="participantLabel(user)"
+                            :value="user.username">
+                        </el-option>
+                    </el-select>
                 </el-form-item>
                 <el-form-item label="原因">
-                    <el-input v-model="transferForm.reason"></el-input>
-                </el-form-item>
-                <el-form-item>
-                    <el-button type="primary" :loading="transferring" @click="transferKey">
-                        移交
-                    </el-button>
-                    <el-button type="danger" :loading="destroying" @click="destroyKey">
-                        销毁
-                    </el-button>
+                    <el-input v-model="transferForm.reason" placeholder="例如 人员离职交接"></el-input>
                 </el-form-item>
             </el-form>
-        </el-card>
+
+            <span slot="footer">
+                <el-button @click="transferDialogVisible = false">取消</el-button>
+                <el-button type="primary" :loading="transferring" @click="transferSelectedShard">确认移交</el-button>
+            </span>
+        </el-dialog>
     </div>
 </template>
 
 <script>
 import { mapGetters } from 'vuex'
 import { sendWSMessage } from '../services/ws'
+import { userApi } from '../services/api'
 
 export default {
     name: 'KeyManagement',
     data() {
         return {
-            queryForm: {
-                id: ''
+            activeTab: 'keys',
+            filters: {
+                address: '',
+                username: '',
+                status: ''
             },
-            transferForm: {
-                newOwner: '',
-                reason: ''
-            },
-            keyInfo: null,
+            keys: [],
+            shards: [],
+            participantUsers: [],
             loading: false,
+            loadingKeys: false,
+            loadingShards: false,
             transferring: false,
-            destroying: false
+            destroying: false,
+            transferDialogVisible: false,
+            transferShard: null,
+            transferForm: {
+                toUsername: '',
+                reason: ''
+            }
         }
     },
     computed: {
         ...mapGetters(['isAdmin'])
     },
+    created() {
+        this.loadAll()
+    },
     methods: {
-        async queryKey() {
-            if (!this.queryForm.id) {
-                this.$message.warning('请输入密钥ID或地址')
-                return
-            }
+        async loadAll() {
             this.loading = true
             try {
-                const response = await this.$offlineApi.getKey(this.queryForm.id)
-                this.keyInfo = response.data.key
-                this.transferForm.newOwner = this.keyInfo.logical_owner || ''
-            } catch (error) {
-                this.keyInfo = null
-                this.$message.error(this.apiError(error, '查询失败'))
+                await Promise.all([this.loadKeys(), this.loadShards(), this.loadUsers()])
             } finally {
                 this.loading = false
             }
         },
 
-        async transferKey() {
-            if (!this.keyInfo || !this.transferForm.newOwner) {
-                this.$message.warning('请输入新归属')
+        async loadKeys() {
+            this.loadingKeys = true
+            try {
+                const response = await this.$offlineApi.listKeys()
+                this.keys = response.data.keys || []
+            } catch (error) {
+                this.$message.error(this.apiError(error, '查询密钥列表失败'))
+            } finally {
+                this.loadingKeys = false
+            }
+        },
+
+        async loadShards() {
+            this.loadingShards = true
+            try {
+                const params = Object.fromEntries(Object.entries(this.filters).filter(([, value]) => value))
+                const response = await this.$offlineApi.listShards(params)
+                this.shards = response.data.shards || []
+            } catch (error) {
+                this.$message.error(this.apiError(error, '查询分片列表失败'))
+            } finally {
+                this.loadingShards = false
+            }
+        },
+
+        async loadUsers() {
+            try {
+                const response = await userApi.getUsers()
+                const users = response.data.users || response.data.data || []
+                this.participantUsers = users.filter(user => ['admin', 'officer'].includes(user.role))
+            } catch {
+                this.participantUsers = []
+            }
+        },
+
+        showKey(key) {
+            this.filters.address = key.address
+            this.activeTab = 'shards'
+            this.loadShards()
+        },
+
+        openTransfer(shard) {
+            this.transferShard = shard
+            this.transferForm = {
+                toUsername: '',
+                reason: ''
+            }
+            this.transferDialogVisible = true
+        },
+
+        async transferSelectedShard() {
+            if (!this.transferShard || !this.transferForm.toUsername) {
+                this.$message.warning('请选择接收警员')
                 return
             }
             this.transferring = true
             try {
-                await this.$offlineApi.transferKey(this.keyInfo.offline_key_id, {
-                    new_owner: this.transferForm.newOwner,
+                const response = await this.$offlineApi.transferShard(this.transferShard.shard_id, {
+                    to_username: this.transferForm.toUsername,
                     reason: this.transferForm.reason
                 })
-                this.$message.success('移交完成')
-                await this.queryKey()
+                const message = response.data.message
+                if (!sendWSMessage(message)) {
+                    throw new Error('WebSocket 未连接')
+                }
+                this.$store.commit('setCurrentSession', message.session_key)
+                this.$message.success('分片移交邀请已发送，等待移出和接收双方确认')
+                this.transferDialogVisible = false
+                this.$router.push('/notifications')
             } catch (error) {
-                this.$message.error(this.apiError(error, '移交失败'))
+                this.$message.error(this.apiError(error, '分片移交失败'))
             } finally {
                 this.transferring = false
             }
         },
 
-        async destroyKey() {
-            if (!this.keyInfo) {
-                return
-            }
+        async destroyKey(key) {
             try {
-                await this.$confirm('确认销毁该离线密钥？', '销毁确认', { type: 'warning' })
+                await this.$confirm('确认发起该地址的分片销毁流程？参与警员仍需在各自客户端确认。', '销毁确认', { type: 'warning' })
             } catch {
                 return
             }
             this.destroying = true
             try {
-                const response = await this.$offlineApi.destroyKey(this.keyInfo.offline_key_id, {
-                    reason: this.transferForm.reason
+                const response = await this.$offlineApi.destroyKey(key.offline_key_id, {
+                    reason: '管理员发起地址销毁'
                 })
                 const message = response.data.message
                 if (!sendWSMessage(message)) {
-                    throw new Error('WebSocket未连接')
+                    throw new Error('WebSocket 未连接')
                 }
                 this.$store.commit('setCurrentSession', message.session_key)
-                this.$message.success('销毁请求已发送，请等待参与方执行SE删除')
+                this.$message.success('销毁请求已发送，请等待分片持有人确认')
                 this.$router.push('/notifications')
             } catch (error) {
                 this.$message.error(this.apiError(error, '销毁失败'))
             } finally {
                 this.destroying = false
             }
+        },
+
+        participantLabel(user) {
+            const roleText = user.role === 'admin' ? '管理员' : '警员'
+            return `${user.nickname || user.username} (${user.username}, ${roleText})`
+        },
+
+        thresholdText(row) {
+            if (!row.required_signers || !row.total_parties) return '-'
+            return `${row.required_signers} / ${row.total_parties}`
         },
 
         statusTag(status) {
@@ -169,7 +303,11 @@ export default {
 </script>
 
 <style scoped>
-.key-management-container {
-    padding: 20px;
+.filters {
+    margin-bottom: 10px;
+}
+
+.transfer-form {
+    margin-top: 16px;
 }
 </style>

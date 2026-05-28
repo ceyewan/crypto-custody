@@ -67,11 +67,35 @@ func Init() error {
 		return fmt.Errorf("数据库迁移失败: %w", err)
 	}
 
+	if err := migrateLegacyUserRoles(); err != nil {
+		return fmt.Errorf("迁移用户角色失败: %w", err)
+	}
+
 	// 检查并创建管理员用户
 	if err := ensureAdminUser(); err != nil {
 		return fmt.Errorf("创建管理员用户失败: %w", err)
 	}
 
+	return nil
+}
+
+func migrateLegacyUserRoles() error {
+	if instance == nil {
+		return fmt.Errorf("数据库未初始化")
+	}
+
+	updates := map[string]model.Role{
+		"coordinator": model.RoleAdmin,
+		"participant": model.RoleOfficer,
+		"guest":       model.RoleOfficer,
+	}
+	for oldRole, newRole := range updates {
+		if err := instance.Model(&model.User{}).
+			Where("role = ?", oldRole).
+			Update("role", newRole).Error; err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -162,6 +186,7 @@ func ensureAdminUser() error {
 		// 创建默认admin用户
 		admin := model.User{
 			Username: "admin",
+			Nickname: "系统管理员",
 			Password: string(hashedPassword),
 			Email:    "admin@example.com",
 			Role:     model.RoleAdmin,

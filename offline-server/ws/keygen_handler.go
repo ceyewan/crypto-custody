@@ -83,6 +83,10 @@ func (h *KeyGenHandler) handleKeyGenRequest(msg KeyGenRequestMessage, sender *Cl
 	if offlineKeyID == "" {
 		offlineKeyID = "key_" + msg.SessionKey
 	}
+	coinType := msg.CoinType
+	if coinType == "" {
+		coinType = "ETH"
+	}
 	managerSession, err := h.managerRuntime.StartSession(msg.SessionKey)
 	if err != nil {
 		return h.failSender(sender, "启动 MPC manager 失败", err.Error())
@@ -97,7 +101,9 @@ func (h *KeyGenHandler) handleKeyGenRequest(msg KeyGenRequestMessage, sender *Cl
 	session := model.KeyGenSession{
 		SessionKey:      msg.SessionKey,
 		TaskNo:          msg.TaskNo,
+		CaseNo:          msg.CaseNo,
 		OfflineKeyID:    offlineKeyID,
+		CoinType:        coinType,
 		Initiator:       sender.GetUserName(),
 		RequiredSigners: msg.RequiredSigners,
 		TotalParties:    msg.TotalParties,
@@ -125,12 +131,16 @@ func (h *KeyGenHandler) handleKeyGenRequest(msg KeyGenRequestMessage, sender *Cl
 		inviteMsg := KeyGenInviteMessage{
 			BaseMessage:     BaseMessage{Type: MsgKeyGenInvite},
 			SessionKey:      msg.SessionKey,
-			Coordinator:     sender.GetUserName(),
+			TaskNo:          msg.TaskNo,
+			CaseNo:          msg.CaseNo,
+			Initiator:       sender.GetUserName(),
+			CoinType:        coinType,
 			RequiredSigners: msg.RequiredSigners,
 			TotalParties:    msg.TotalParties,
 			PartyIndex:      i + 1,
 			SeID:            seIDs[i],
 			Participants:    msg.Participants,
+			Summary:         "密钥生成邀请",
 		}
 
 		client, exists := sender.Hub().GetClient(participant)
@@ -288,8 +298,9 @@ func (h *KeyGenHandler) handleKeyGenResult(msg KeyGenResultMessage, sender *Clie
 	if _, err := h.offlineKeyStorage.CreateOfflineKey(model.OfflineKey{
 		OfflineKeyID:    session.OfflineKeyID,
 		TaskNo:          session.TaskNo,
+		CaseNo:          session.CaseNo,
 		Address:         session.AccountAddr,
-		CoinType:        "ETH",
+		CoinType:        session.CoinType,
 		Algorithm:       model.AlgorithmGG20ECDSASECP256K1,
 		RequiredSigners: session.RequiredSigners,
 		TotalParties:    session.TotalParties,

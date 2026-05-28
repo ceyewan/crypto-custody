@@ -1,133 +1,182 @@
 <template>
-    <div class="import-se-container">
-        <el-card>
-            <div slot="header">
-                <span>导入安全芯片</span>
+    <div class="page se-page">
+        <div class="page-header">
+            <div>
+                <h2 class="page-title">安全芯片管理</h2>
+                <p class="page-subtitle">SE 统一管理，不归属个人；分片归属由用户名和 record_id 表达。</p>
             </div>
+            <div>
+                <el-button icon="el-icon-refresh" :loading="loadingList" @click="loadSecurityElements">刷新列表</el-button>
+                <el-button type="primary" icon="el-icon-cpu" :loading="reading" @click="readCurrentSe">读取当前 SE</el-button>
+            </div>
+        </div>
 
-            <el-form @submit.native.prevent="handleImport" label-width="120px">
-                <el-form-item label="安全芯片ID (SEID)" required>
-                    <el-input v-model="seid" placeholder="请输入芯片上贴着的名称 (例如 SExxx)"></el-input>
+        <el-card>
+            <el-form :inline="true" :model="filters" class="filters">
+                <el-form-item label="SEID">
+                    <el-input v-model="filters.seid" clearable placeholder="按 SEID 筛选"></el-input>
                 </el-form-item>
-
-                <el-form-item>
-                    <el-button type="primary" @click="handleImport" :loading="loading">
-                        {{ loading ? '导入中...' : '获取CPLC并导入' }}
-                    </el-button>
+                <el-form-item label="CPLC">
+                    <el-input v-model="filters.cplc" clearable placeholder="按 CPLC 筛选"></el-input>
+                </el-form-item>
+                <el-form-item label="状态">
+                    <el-select v-model="filters.status" clearable placeholder="全部">
+                        <el-option label="active" value="active"></el-option>
+                        <el-option label="disabled" value="disabled"></el-option>
+                        <el-option label="lost" value="lost"></el-option>
+                        <el-option label="destroyed" value="destroyed"></el-option>
+                    </el-select>
                 </el-form-item>
             </el-form>
 
-            <div v-if="cplc" class="result-display">
-                <h4>获取到的 CPLC:</h4>
-                <pre>{{ cplc }}</pre>
-            </div>
+            <el-form :model="form" label-width="120px" class="import-form">
+                <el-form-item label="安全芯片 ID">
+                    <el-input v-model="form.seid" placeholder="系统自动建议，可按贴纸编号调整"></el-input>
+                </el-form-item>
+                <el-form-item label="CPLC">
+                    <el-input v-model="form.cplc" type="textarea" :rows="3" readonly placeholder="点击读取当前 SE"></el-input>
+                </el-form-item>
+                <el-form-item label="保管位置">
+                    <el-input v-model="form.custodyLocation" placeholder="例如 保险柜 A-01，可留空"></el-input>
+                </el-form-item>
+                <el-form-item>
+                    <el-button type="primary" :loading="importing" @click="importCurrentSe">导入当前 SE</el-button>
+                </el-form-item>
+            </el-form>
 
+            <el-table :data="filteredSeList" v-loading="loadingList" style="width: 100%">
+                <el-table-column prop="se_id" label="SEID" width="170"></el-table-column>
+                <el-table-column prop="cplc" label="CPLC" min-width="260"></el-table-column>
+                <el-table-column prop="status" label="状态" width="100">
+                    <template slot-scope="scope">
+                        <el-tag :type="scope.row.status === 'active' ? 'success' : 'warning'">{{ scope.row.status }}</el-tag>
+                    </template>
+                </el-table-column>
+                <el-table-column prop="registered_by" label="登记人" width="130"></el-table-column>
+                <el-table-column prop="remark" label="备注/位置" min-width="160"></el-table-column>
+                <el-table-column prop="created_at" label="登记时间" width="170">
+                    <template slot-scope="scope">
+                        {{ formatTime(scope.row.created_at) }}
+                    </template>
+                </el-table-column>
+                <el-table-column prop="last_used_at" label="最近使用时间" width="170">
+                    <template slot-scope="scope">
+                        {{ formatTime(scope.row.last_used_at) }}
+                    </template>
+                </el-table-column>
+            </el-table>
         </el-card>
     </div>
 </template>
 
 <script>
 import { seApi as wailsSeApi } from '../services/wails-api'
-import { seApi as cloudSeApi } from '../services/api'
+import { seApi as serverSeApi } from '../services/api'
 
 export default {
     name: 'ImportSE',
     data() {
         return {
-            seid: '',
-            cplc: '',
-            loading: false
+            form: {
+                seid: '',
+                cplc: '',
+                custodyLocation: ''
+            },
+            filters: {
+                seid: '',
+                cplc: '',
+                status: ''
+            },
+            seList: [],
+            reading: false,
+            importing: false,
+            loadingList: false
+        }
+    },
+    created() {
+        this.loadSecurityElements()
+    },
+    computed: {
+        filteredSeList() {
+            return this.seList.filter(item => {
+                if (this.filters.seid && !String(item.se_id || '').includes(this.filters.seid)) return false
+                if (this.filters.cplc && !String(item.cplc || '').includes(this.filters.cplc)) return false
+                if (this.filters.status && item.status !== this.filters.status) return false
+                return true
+            })
         }
     },
     methods: {
-        async handleImport() {
-            // 验证输入
-            if (!this.seid || this.seid.trim().length === 0) {
-                this.$message.error('请输入有效的安全芯片ID (SEID)')
+        async loadSecurityElements() {
+            this.loadingList = true
+            try {
+                const response = await serverSeApi.listSecurityElements()
+                this.seList = response.data.data || []
+            } catch (error) {
+                this.$message.error(error.response?.data?.error || '查询安全芯片失败')
+            } finally {
+                this.loadingList = false
+            }
+        },
+
+        async readCurrentSe() {
+            this.reading = true
+            try {
+                const cplcResponse = await wailsSeApi.getCPLC()
+                this.form.cplc = cplcResponse.data?.cplc_info || ''
+                if (!this.form.cplc) {
+                    throw new Error('未读取到 CPLC')
+                }
+                this.form.seid = this.suggestSeId()
+                this.$message.success('已读取当前 SE')
+            } catch (error) {
+                this.$message.error('读取 SE 失败: ' + error.message)
+            } finally {
+                this.reading = false
+            }
+        },
+
+        async importCurrentSe() {
+            if (!this.form.seid || !this.form.cplc) {
+                this.$message.warning('请先读取当前 SE，并确认 SEID')
                 return
             }
-
-            // 验证 SEID 格式 (SE + 数字)
-            if (!/^SE\d+$/i.test(this.seid.trim())) {
-                this.$message.warning('SEID 格式应为 SExxx (SE + 数字)')
-            }
-
-            this.loading = true
-            this.cplc = ''
-
+            this.importing = true
             try {
-                // 步骤1: 从安全芯片获取 CPLC 数据
-                console.log('正在从安全芯片获取 CPLC 数据...')
-                const cplcResponse = await wailsSeApi.getCPLC()
-                
-                const cplc = cplcResponse.data && cplcResponse.data.cplc_info
-                if (!cplc) {
-                    throw new Error('未能从安全芯片获取到 CPLC 数据')
-                }
-
-                this.cplc = cplc
-                console.log('成功获取 CPLC:', this.cplc)
-
-                // 步骤2: 调用云端后端创建安全芯片记录
-                console.log('正在调用后端创建安全芯片记录...')
-                await cloudSeApi.createSecurityElement(this.seid.trim(), this.cplc)
-
-                // 成功
-                this.$message.success(`安全芯片 ${this.seid} 导入成功！`)
-                
-                // 重置表单
-                this.seid = ''
-                this.cplc = ''
-
+                await serverSeApi.createSecurityElement(this.form.seid.trim(), this.form.cplc, this.form.custodyLocation)
+                this.$message.success('安全芯片已导入')
+                this.form = { seid: '', cplc: '', custodyLocation: '' }
+                await this.loadSecurityElements()
             } catch (error) {
-                console.error('导入安全芯片失败:', error)
-                
-                // 根据错误类型提供不同的错误信息
-                let errorMessage = '导入失败: '
-                
-                if (error.response) {
-                    // HTTP 错误响应
-                    errorMessage += error.response.data?.error || error.response.data?.message || '服务器错误'
-                    
-                    if (error.response.status === 401) {
-                        errorMessage = '认证失败，请重新登录'
-                    } else if (error.response.status === 403) {
-                        errorMessage = '权限不足，请联系管理员'
-                    } else if (error.response.status >= 500) {
-                        errorMessage = '服务器内部错误，请稍后重试'
-                    }
-                } else if (error.message) {
-                    // Wails 或其他错误
-                    errorMessage += error.message
-                } else {
-                    errorMessage += '未知错误'
-                }
-                
-                this.$message.error(errorMessage)
+                this.$message.error(error.response?.data?.error || '导入安全芯片失败')
             } finally {
-                this.loading = false
+                this.importing = false
             }
+        },
+
+        suggestSeId() {
+            const date = new Date()
+            const yyyy = date.getFullYear()
+            const mm = String(date.getMonth() + 1).padStart(2, '0')
+            const dd = String(date.getDate()).padStart(2, '0')
+            const count = this.seList.length + 1
+            return `SE-${yyyy}${mm}${dd}-${String(count).padStart(3, '0')}`
+        },
+
+        formatTime(value) {
+            return value ? new Date(value).toLocaleString() : '-'
         }
     }
 }
 </script>
 
 <style scoped>
-.import-se-container {
-    padding: 20px;
+.import-form {
+    max-width: 720px;
+    margin-bottom: 18px;
 }
 
-.result-display {
-    margin-top: 20px;
-    padding: 15px;
-    background-color: #f5f7fa;
-    border: 1px solid #e4e7ed;
-    border-radius: 4px;
-}
-
-pre {
-    white-space: pre-wrap;
-    word-wrap: break-word;
-    color: #606266;
+.filters {
+    margin-bottom: 12px;
 }
 </style>

@@ -15,37 +15,34 @@ var userStorage storage.IUserStorage = storage.GetUserStorage()
 func LoginUser(username, password string) (*model.User, error) {
 	// 输入验证
 	if strings.TrimSpace(username) == "" || strings.TrimSpace(password) == "" {
-		return nil, errors.New("用户名和密码不能为空")
+		return nil, errors.New("登录标识和密码不能为空")
 	}
 
 	// 调用存储接口验证用户凭证
 	user, err := userStorage.GetUserByCredentials(username, password)
 	if err != nil {
-		return nil, errors.New("用户名或密码错误")
+		return nil, errors.New("登录标识或密码错误")
 	}
 
 	return user, nil
 }
 
 // RegisterUser 用户注册服务
-func RegisterUser(username, password, email string) (*model.User, error) {
+func RegisterUser(username, password, nickname string) (*model.User, error) {
 	// 输入验证
 	if strings.TrimSpace(username) == "" {
-		return nil, errors.New("用户名不能为空")
+		return nil, errors.New("登录标识不能为空")
 	}
 	if strings.TrimSpace(password) == "" {
 		return nil, errors.New("密码不能为空")
 	}
-	if strings.TrimSpace(email) == "" {
-		return nil, errors.New("邮箱不能为空")
-	}
 
 	// 调用存储接口创建用户
-	user, err := userStorage.CreateUser(username, password, email)
+	user, err := userStorage.CreateUser(username, password, nickname)
 	if err != nil {
 		// 根据错误类型返回友好的错误信息
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
-			return nil, errors.New("用户名已存在")
+			return nil, errors.New("登录标识已存在")
 		}
 		return nil, errors.New("用户注册失败: " + err.Error())
 	}
@@ -57,7 +54,7 @@ func RegisterUser(username, password, email string) (*model.User, error) {
 func GetUserByUserName(username string) (*model.User, error) {
 	// 输入验证
 	if strings.TrimSpace(username) == "" {
-		return nil, errors.New("用户名不能为空")
+		return nil, errors.New("登录标识不能为空")
 	}
 
 	// 调用存储接口获取用户信息
@@ -84,7 +81,7 @@ func UpdateUserRole(userName, role string) error {
 
 	// 验证角色是否有效（使用 model.Role 类型）
 	isValid := false
-	validRoles := []model.Role{model.RoleAdmin, model.RoleCoordinator, model.RoleParticipant, model.RoleAuditor, model.RoleGuest}
+	validRoles := []model.Role{model.RoleAdmin, model.RoleOfficer, model.RoleAuditor}
 	for _, validRole := range validRoles {
 		if role == string(validRole) {
 			isValid = true
@@ -120,17 +117,17 @@ func UpdateUserRole(userName, role string) error {
 	return userStorage.UpdateUserRole(userName, role)
 }
 
-// GetAvailableUsers 获取可以参与密钥生成的用户列表（协调者和参与者）
+// GetAvailableUsers 获取可以参与密钥生成和签名的用户列表（管理员和警员）
 func GetAvailableUsers() ([]model.User, error) {
 	users, err := userStorage.GetAllUsers()
 	if err != nil {
 		return nil, err
 	}
 
-	// 筛选出只有协调者和参与者角色的用户
+	// 管理员可以发起也可以参与；警员只能参与；审计员不参与 MPC。
 	availableUsers := []model.User{}
 	for _, user := range users {
-		if user.Role == model.RoleCoordinator || user.Role == model.RoleParticipant {
+		if user.Role == model.RoleAdmin || user.Role == model.RoleOfficer {
 			availableUsers = append(availableUsers, user)
 		}
 	}
@@ -153,7 +150,7 @@ func GetUsersByAddress(address string) ([]model.User, error) {
 	// 查询拥有该地址分片的所有用户名
 	var usernames []string
 	if err := database.Model(&model.KeyShard{}).
-		Where("address = ?", address).
+		Where("address = ? AND status = ?", address, model.KeyShardStatusActive).
 		Pluck("username", &usernames).Error; err != nil {
 		return nil, errors.New("查询密钥分片失败: " + err.Error())
 	}
@@ -164,7 +161,7 @@ func GetUsersByAddress(address string) ([]model.User, error) {
 
 	// 获取这些用户的详细信息
 	var users []model.User
-	if err := database.Where("username IN ?", usernames).Find(&users).Error; err != nil {
+	if err := database.Where("username IN ? AND role IN ?", usernames, []model.Role{model.RoleAdmin, model.RoleOfficer}).Find(&users).Error; err != nil {
 		return nil, errors.New("查询用户信息失败: " + err.Error())
 	}
 

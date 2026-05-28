@@ -117,6 +117,22 @@ func (s *OfflineKeyStorage) GetOfflineKeyByTaskNo(taskNo string) (*model.Offline
 	return &key, nil
 }
 
+func (s *OfflineKeyStorage) ListOfflineKeys() ([]model.OfflineKey, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	database := db.GetDB()
+	if database == nil {
+		return nil, ErrDatabaseNotInitialized
+	}
+	var keys []model.OfflineKey
+	if err := database.Order("updated_at DESC").Find(&keys).Error; err != nil {
+		log.Printf("查询离线密钥列表失败: %v", err)
+		return nil, ErrOperationFailed
+	}
+	return keys, nil
+}
+
 func (s *OfflineKeyStorage) UpdateOfflineKeyOwner(offlineKeyID, logicalOwner string) error {
 	if offlineKeyID == "" || logicalOwner == "" {
 		return ErrInvalidParameter

@@ -41,15 +41,16 @@ func TestKeyGenProtocolUsesServerOwnedManagerAndRecordIDs(t *testing.T) {
 	handler := NewKeyGenHandler(shareStore, seStore, offlineKeyStore, keyGenStore, fakeAuditStorage{}, sessionManager, runtime)
 
 	hub := newTestHub()
-	coordinator := addTestClient(hub, "coordinator", RoleCoordinator)
+	coordinator := addTestClient(hub, "coordinator", RoleAdmin)
 	clients := map[string]*Client{}
 	for _, participant := range participants {
-		clients[participant] = addTestClient(hub, participant, RoleParticipant)
+		clients[participant] = addTestClient(hub, participant, RoleOfficer)
 	}
 
 	err := handler.handleKeyGenRequest(KeyGenRequestMessage{
 		SessionKey:      "kg-session",
 		OfflineKeyID:    "offline-key-1",
+		CoinType:        "ETH",
 		RequiredSigners: 2,
 		TotalParties:    3,
 		Participants:    participants,
@@ -63,7 +64,7 @@ func TestKeyGenProtocolUsesServerOwnedManagerAndRecordIDs(t *testing.T) {
 
 	for i, participant := range participants {
 		invite := readMessage[KeyGenInviteMessage](t, clients[participant])
-		if invite.Type != MsgKeyGenInvite || invite.PartyIndex != i+1 || invite.SeID == "" {
+		if invite.Type != MsgKeyGenInvite || invite.PartyIndex != i+1 || invite.SeID == "" || invite.CoinType != "ETH" {
 			t.Fatalf("bad invite for %s: %+v", participant, invite)
 		}
 	}
@@ -127,6 +128,9 @@ func TestKeyGenProtocolUsesServerOwnedManagerAndRecordIDs(t *testing.T) {
 	}
 	if offlineKeyStore.created.RequiredSigners != 2 || offlineKeyStore.created.TotalParties != 3 {
 		t.Fatalf("bad offline key metadata: %+v", offlineKeyStore.created)
+	}
+	if offlineKeyStore.created.CoinType != "ETH" {
+		t.Fatalf("offline key coin_type = %q", offlineKeyStore.created.CoinType)
 	}
 	if !reflect.DeepEqual(runtime.stops, []string{"kg-session"}) {
 		t.Fatalf("manager stops = %v", runtime.stops)
@@ -200,10 +204,10 @@ func TestSignProtocolUsesOriginalShardIndexesForAllTwoOfThreeCombinations(t *tes
 			handler := NewSignHandler(shareStore, seStore, offlineKeyStore, signStore, fakeAuditStorage{}, sessionManager, runtime)
 
 			hub := newTestHub()
-			coordinator := addTestClient(hub, "coordinator", RoleCoordinator)
+			coordinator := addTestClient(hub, "coordinator", RoleAdmin)
 			clients := map[string]*Client{}
 			for _, username := range []string{"u1", "u2", "u3"} {
-				clients[username] = addTestClient(hub, username, RoleParticipant)
+				clients[username] = addTestClient(hub, username, RoleOfficer)
 			}
 
 			err := handler.handleSignRequest(SignRequestMessage{
@@ -297,9 +301,9 @@ func TestSignProtocolRejectsMismatchedFinalSignatures(t *testing.T) {
 	}
 
 	hub := newTestHub()
-	coordinator := addTestClient(hub, "coordinator", RoleCoordinator)
-	u1 := addTestClient(hub, "u1", RoleParticipant)
-	u2 := addTestClient(hub, "u2", RoleParticipant)
+	coordinator := addTestClient(hub, "coordinator", RoleAdmin)
+	u1 := addTestClient(hub, "u1", RoleOfficer)
+	u2 := addTestClient(hub, "u2", RoleOfficer)
 	_ = coordinator
 
 	if err := handler.handleSignResult(SignResultMessage{
@@ -381,10 +385,10 @@ func TestDestroyProtocolDeletesAllActiveShardsBeforeMarkingKeyDestroyed(t *testi
 	handler := NewDestroyHandler(shareStore, seStore, offlineKeyStore, fakeAuditStorage{}, sessionManager)
 
 	hub := newTestHub()
-	admin := addTestClient(hub, "admin", RoleCoordinator)
+	admin := addTestClient(hub, "admin", RoleAdmin)
 	clients := map[string]*Client{}
 	for _, username := range []string{"u1", "u2", "u3"} {
-		clients[username] = addTestClient(hub, username, RoleParticipant)
+		clients[username] = addTestClient(hub, username, RoleOfficer)
 	}
 
 	if err := handler.handleDestroyRequest(DestroyRequestMessage{
@@ -449,6 +453,88 @@ func TestDestroyProtocolDeletesAllActiveShardsBeforeMarkingKeyDestroyed(t *testi
 	complete := readMessage[DestroyCompleteMessage](t, admin)
 	if complete.Type != MsgDestroyComplete || !complete.Success || complete.Destroyed != 3 {
 		t.Fatalf("bad destroy complete message: %+v", complete)
+	}
+}
+
+func TestTransferProtocolRequiresBothSidesBeforeMovingShard(t *testing.T) {
+	shareStore := newFakeShareStorage()
+	shareStore.shards[shardKey("u1", testAddress)] = model.KeyShard{
+		ShardID:       "shard-u1",
+		OfflineKeyID:  "offline-key-1",
+		Username:      "u1",
+		Address:       testAddress,
+		ShardIndex:    2,
+		RecordID:      "record-u1",
+		SeCPLC:        "CPLC01",
+		EncryptedBlob: "encrypted-share-u1",
+		BlobType:      model.BlobTypeMPCShare,
+		KeyVersion:    1,
+		Status:        model.KeyShardStatusActive,
+	}
+
+	sessionManager := mem_storage.NewSessionManager()
+	handler := NewTransferHandler(shareStore, fakeAuditStorage{}, sessionManager)
+
+	hub := newTestHub()
+	admin := addTestClient(hub, "admin", RoleAdmin)
+	u1 := addTestClient(hub, "u1", RoleOfficer)
+	u2 := addTestClient(hub, "u2", RoleOfficer)
+
+	if err := handler.handleTransferRequest(TransferRequestMessage{
+		SessionKey:   "transfer-session",
+		ShardID:      "shard-u1",
+		CaseNo:       "CASE-1",
+		FromUsername: "u1",
+		ToUsername:   "u2",
+		Reason:       "handover",
+	}, admin); err != nil {
+		t.Fatalf("handleTransferRequest failed: %v", err)
+	}
+
+	for username, client := range map[string]*Client{"u1": u1, "u2": u2} {
+		invite := readMessage[TransferInviteMessage](t, client)
+		if invite.Type != MsgTransferInvite || invite.ShardID != "shard-u1" ||
+			invite.FromUsername != "u1" || invite.ToUsername != "u2" ||
+			invite.CaseNo != "CASE-1" || invite.ShardIndex != 2 {
+			t.Fatalf("bad transfer invite for %s: %+v", username, invite)
+		}
+	}
+
+	if err := handler.handleTransferResponse(TransferResponseMessage{
+		SessionKey: "transfer-session",
+		ShardID:    "shard-u1",
+		Accept:     true,
+	}, u1); err != nil {
+		t.Fatalf("first transfer response failed: %v", err)
+	}
+	if _, err := shareStore.GetKeyShardForParticipant("u1", testAddress); err != nil {
+		t.Fatalf("shard should still belong to u1 before both confirmations: %v", err)
+	}
+
+	if err := handler.handleTransferResponse(TransferResponseMessage{
+		SessionKey: "transfer-session",
+		ShardID:    "shard-u1",
+		Accept:     true,
+	}, u2); err != nil {
+		t.Fatalf("second transfer response failed: %v", err)
+	}
+
+	if _, err := shareStore.GetKeyShardForParticipant("u1", testAddress); err == nil {
+		t.Fatal("u1 should no longer hold the shard after transfer")
+	}
+	updated, err := shareStore.GetKeyShardForParticipant("u2", testAddress)
+	if err != nil {
+		t.Fatalf("u2 should hold transferred shard: %v", err)
+	}
+	if updated.RecordID != "record-u1" || updated.SeCPLC != "CPLC01" {
+		t.Fatalf("transfer should not change SE record or CPLC: %+v", updated)
+	}
+
+	for username, client := range map[string]*Client{"admin": admin, "u1": u1, "u2": u2} {
+		complete := readMessage[TransferCompleteMessage](t, client)
+		if complete.Type != MsgTransferComplete || !complete.Success || complete.ShardID != "shard-u1" {
+			t.Fatalf("bad transfer completion for %s: %+v", username, complete)
+		}
 	}
 }
 
@@ -564,6 +650,15 @@ func (f *fakeShareStorage) GetKeyShardForParticipant(username, address string) (
 	return &shard, nil
 }
 
+func (f *fakeShareStorage) GetKeyShardByID(shardID string) (*model.KeyShard, error) {
+	for _, shard := range f.shards {
+		if shard.ShardID == shardID {
+			return &shard, nil
+		}
+	}
+	return nil, storage.ErrRecordNotFound
+}
+
 func (f *fakeShareStorage) ListActiveKeyShardsByAddress(address string) ([]model.KeyShard, error) {
 	var shards []model.KeyShard
 	for _, shard := range f.shards {
@@ -584,6 +679,24 @@ func (f *fakeShareStorage) ListKeyShardsByAddress(address string) ([]model.KeySh
 	return shards, nil
 }
 
+func (f *fakeShareStorage) ListKeyShardsByUsername(username string) ([]model.KeyShard, error) {
+	var shards []model.KeyShard
+	for _, shard := range f.shards {
+		if shard.Username == username {
+			shards = append(shards, shard)
+		}
+	}
+	return shards, nil
+}
+
+func (f *fakeShareStorage) ListKeyShards() ([]model.KeyShard, error) {
+	shards := make([]model.KeyShard, 0, len(f.shards))
+	for _, shard := range f.shards {
+		shards = append(shards, shard)
+	}
+	return shards, nil
+}
+
 func (f *fakeShareStorage) UpdateKeyShardStatus(shardID string, status model.KeyShardStatus) error {
 	for key, shard := range f.shards {
 		if shard.ShardID == shardID {
@@ -593,6 +706,18 @@ func (f *fakeShareStorage) UpdateKeyShardStatus(shardID string, status model.Key
 		}
 	}
 	return storage.ErrRecordNotFound
+}
+
+func (f *fakeShareStorage) TransferKeyShard(shardID, newUsername string) (*model.KeyShard, error) {
+	for key, shard := range f.shards {
+		if shard.ShardID == shardID {
+			delete(f.shards, key)
+			shard.Username = newUsername
+			f.shards[shardKey(newUsername, shard.Address)] = shard
+			return &shard, nil
+		}
+	}
+	return nil, storage.ErrRecordNotFound
 }
 
 func shardKey(username, address string) string {
@@ -706,6 +831,14 @@ func (f *fakeOfflineKeyStorage) GetOfflineKeyByTaskNo(taskNo string) (*model.Off
 		}
 	}
 	return nil, storage.ErrRecordNotFound
+}
+
+func (f *fakeOfflineKeyStorage) ListOfflineKeys() ([]model.OfflineKey, error) {
+	keys := make([]model.OfflineKey, 0, len(f.byAddress))
+	for _, key := range f.byAddress {
+		keys = append(keys, key)
+	}
+	return keys, nil
 }
 
 func (f *fakeOfflineKeyStorage) UpdateOfflineKeyOwner(offlineKeyID, logicalOwner string) error {

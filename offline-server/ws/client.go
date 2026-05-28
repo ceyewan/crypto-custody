@@ -337,6 +337,17 @@ func (c *Client) handleMessage(message []byte) error {
 
 		return c.handler.destroyHandler.ProcessMessage(baseMsg.Type, message, c)
 
+	case MsgTransferRequest, MsgTransferResponse:
+		if c.username == "" {
+			return fmt.Errorf("客户端尚未注册，请先发送注册消息")
+		}
+
+		clog.Debug("转发分片移交消息到处理器",
+			clog.String("username", c.username),
+			clog.String("msg_type", string(baseMsg.Type)))
+
+		return c.handler.transferHandler.ProcessMessage(baseMsg.Type, message, c)
+
 	default:
 		if c.username == "" {
 			return fmt.Errorf("客户端尚未注册，请先发送注册消息")

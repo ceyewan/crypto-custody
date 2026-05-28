@@ -20,9 +20,10 @@ type MessageHandler struct {
 	managerRuntime    manager.SessionRuntime
 
 	// 拆分后的消息处理器
-	keygenHandler  *KeyGenHandler  // 密钥生成消息处理器
-	signHandler    *SignHandler    // 签名消息处理器
-	destroyHandler *DestroyHandler // 密钥销毁消息处理器
+	keygenHandler   *KeyGenHandler   // 密钥生成消息处理器
+	signHandler     *SignHandler     // 签名消息处理器
+	destroyHandler  *DestroyHandler  // 密钥销毁消息处理器
+	transferHandler *TransferHandler // 分片移交消息处理器
 }
 
 // NewMessageHandler 创建新的消息处理器
@@ -82,6 +83,7 @@ func NewMessageHandlerWithDependencies(
 	handler.keygenHandler = NewKeyGenHandler(shareStorage, seStorage, offlineKeyStorage, keyGenStorage, auditStorage, sessionManager, managerRuntime)
 	handler.signHandler = NewSignHandler(shareStorage, seStorage, offlineKeyStorage, signStorage, auditStorage, sessionManager, managerRuntime)
 	handler.destroyHandler = NewDestroyHandler(shareStorage, seStorage, offlineKeyStorage, auditStorage, sessionManager)
+	handler.transferHandler = NewTransferHandler(shareStorage, auditStorage, sessionManager)
 
 	clog.Debug("创建消息处理器实例")
 	return handler

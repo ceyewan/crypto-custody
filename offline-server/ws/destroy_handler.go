@@ -116,9 +116,12 @@ func (h *DestroyHandler) handleDestroyRequest(msg DestroyRequestMessage, sender 
 			BaseMessage:  BaseMessage{Type: MsgDestroyInvite},
 			SessionKey:   session.SessionKey,
 			OfflineKeyID: session.OfflineKeyID,
+			CaseNo:       key.CaseNo,
+			Initiator:    sender.GetUserName(),
 			Address:      session.Address,
 			PartyIndex:   shard.ShardIndex,
 			SeID:         se.SeID,
+			Summary:      "分片销毁确认",
 			Reason:       session.Reason,
 		}
 		client, exists := sender.Hub().GetClient(shard.Username)

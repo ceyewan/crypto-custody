@@ -96,9 +96,18 @@ export const signApi = {
 
 // 安全芯片API (云端)
 export const seApi = {
+    // 查询安全芯片列表
+    listSecurityElements() {
+        return apiClient.get(`/se/list`)
+    },
+
     // 创建安全芯片记录
-    createSecurityElement(seid, cplc) {
-        return apiClient.post(`/se/create`, { se_id: seid, cplc: cplc })
+    createSecurityElement(seid, cplc, custodyLocation = '') {
+        return apiClient.post(`/se/create`, {
+            se_id: seid,
+            cplc: cplc,
+            custody_location: custodyLocation
+        })
     }
 }
 
@@ -108,8 +117,20 @@ export const offlineApi = {
         return apiClient.post(`/offline/tasks/import`, taskPackage)
     },
 
+    importTaskFile(file) {
+        const formData = new FormData()
+        formData.append('file', file)
+        return apiClient.post(`/offline/tasks/import`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        })
+    },
+
     getTask(taskNo) {
         return apiClient.get(`/offline/tasks/${taskNo}`)
+    },
+
+    listTasks() {
+        return apiClient.get(`/offline/tasks`)
     },
 
     buildKeygenRequest(taskNo, data) {
@@ -124,8 +145,28 @@ export const offlineApi = {
         return apiClient.get(`/offline/results/${taskNo}/download`)
     },
 
+    listKeys() {
+        return apiClient.get(`/offline/keys`)
+    },
+
     getKey(offlineKeyID) {
         return apiClient.get(`/offline/keys/${offlineKeyID}`)
+    },
+
+    listShards(params = {}) {
+        return apiClient.get(`/offline/shards`, { params })
+    },
+
+    listMyShards() {
+        return apiClient.get(`/offline/shards/mine`)
+    },
+
+    listMyParticipation(limit = 200) {
+        return apiClient.get(`/offline/participation/mine`, { params: { limit } })
+    },
+
+    transferShard(shardID, data) {
+        return apiClient.post(`/offline/shards/${encodeURIComponent(shardID)}/transfer`, data)
     },
 
     transferKey(offlineKeyID, data) {
@@ -142,5 +183,9 @@ export const offlineApi = {
 
     listApprovals(limit = 100) {
         return apiClient.get(`/offline/approvals`, { params: { limit } })
+    },
+
+    downloadBackup() {
+        return apiClient.get(`/offline/backup/download`, { responseType: 'blob' })
     }
 }

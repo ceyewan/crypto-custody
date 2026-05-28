@@ -33,6 +33,12 @@ const (
 	MsgDestroyResult   MessageType = "destroy_result"   // 密钥销毁结果
 	MsgDestroyComplete MessageType = "destroy_complete" // 密钥销毁完成
 
+	// 分片移交相关
+	MsgTransferRequest  MessageType = "transfer_request"  // 发起分片移交
+	MsgTransferInvite   MessageType = "transfer_invite"   // 邀请双方确认移交
+	MsgTransferResponse MessageType = "transfer_response" // 双方回复移交邀请
+	MsgTransferComplete MessageType = "transfer_complete" // 分片移交完成
+
 	// 错误消息
 	MsgError MessageType = "error" // 错误消息
 )
@@ -41,8 +47,9 @@ const (
 type ClientRole string
 
 const (
-	RoleCoordinator ClientRole = "coordinator" // 协调者角色
-	RoleParticipant ClientRole = "participant" // 参与者角色
+	RoleAdmin   ClientRole = "admin"   // 管理员角色
+	RoleOfficer ClientRole = "officer" // 警员角色
+	RoleAuditor ClientRole = "auditor" // 审计员角色
 )
 
 // 通用消息接口，所有消息类型都应实现此接口
@@ -88,7 +95,9 @@ type KeyGenRequestMessage struct {
 	BaseMessage
 	SessionKey      string   `json:"session_key"`              // 会话唯一标识
 	TaskNo          string   `json:"task_no,omitempty"`        // 在线任务编号
+	CaseNo          string   `json:"case_no,omitempty"`        // 案件编号
 	OfflineKeyID    string   `json:"offline_key_id,omitempty"` // 离线密钥编号
+	CoinType        string   `json:"coin_type,omitempty"`      // 币种
 	RequiredSigners int      `json:"required_signers"`         // 业务门限人数
 	TotalParties    int      `json:"total_parties"`            // 总分片数n
 	Participants    []string `json:"participants"`             // 参与者用户名列表
@@ -97,13 +106,17 @@ type KeyGenRequestMessage struct {
 // 密钥生成邀请消息 - 服务器发送给参与方
 type KeyGenInviteMessage struct {
 	BaseMessage
-	SessionKey      string   `json:"session_key"`      // 会话唯一标识
-	Coordinator     string   `json:"coordinator"`      // 发起协调者用户名
-	RequiredSigners int      `json:"required_signers"` // 业务门限人数
-	TotalParties    int      `json:"total_parties"`    // 总分片数n
-	PartyIndex      int      `json:"party_index"`      // keygen 原始 party index
-	SeID            string   `json:"se_id"`            // 安全芯片标识符
-	Participants    []string `json:"participants"`     // 所有参与者用户名列表
+	SessionKey      string   `json:"session_key"`         // 会话唯一标识
+	TaskNo          string   `json:"task_no,omitempty"`   // 在线任务编号
+	CaseNo          string   `json:"case_no,omitempty"`   // 案件编号
+	Initiator       string   `json:"initiator"`           // 发起人用户名
+	CoinType        string   `json:"coin_type,omitempty"` // 币种
+	RequiredSigners int      `json:"required_signers"`    // 业务门限人数
+	TotalParties    int      `json:"total_parties"`       // 总分片数n
+	PartyIndex      int      `json:"party_index"`         // keygen 原始 party index
+	SeID            string   `json:"se_id"`               // 安全芯片标识符
+	Participants    []string `json:"participants"`        // 所有参与者用户名列表
+	Summary         string   `json:"summary,omitempty"`   // 展示摘要
 }
 
 // 密钥生成响应消息 - 参与方回应邀请
@@ -159,6 +172,7 @@ type SignRequestMessage struct {
 	BaseMessage
 	SessionKey    string            `json:"session_key"`              // 会话唯一标识
 	TaskNo        string            `json:"task_no,omitempty"`        // 在线任务编号
+	CaseNo        string            `json:"case_no,omitempty"`        // 案件编号
 	OfflineKeyID  string            `json:"offline_key_id,omitempty"` // 离线密钥编号
 	TransactionNo string            `json:"transaction_no,omitempty"` // 交易编号
 	MessageHash   string            `json:"message_hash"`             // 要签名的数据(32字节的哈希值)
@@ -170,13 +184,21 @@ type SignRequestMessage struct {
 // 签名邀请消息 - 服务器发送给参与方
 type SignInviteMessage struct {
 	BaseMessage
-	SessionKey   string            `json:"session_key"`  // 会话唯一标识
-	MessageHash  string            `json:"message_hash"` // 要签名的数据(32字节的哈希值)
-	Address      string            `json:"address"`      // 账户地址
-	PartyIndex   int               `json:"party_index"`  // keygen 原始 party index
-	SeID         string            `json:"se_id"`        // 安全芯片标识符
-	Participants []string          `json:"participants"` // 参与签名的所有用户名
-	Display      map[string]string `json:"display,omitempty"`
+	SessionKey      string            `json:"session_key"` // 会话唯一标识
+	TaskNo          string            `json:"task_no,omitempty"`
+	CaseNo          string            `json:"case_no,omitempty"`
+	TransactionNo   string            `json:"transaction_no,omitempty"`
+	OfflineKeyID    string            `json:"offline_key_id,omitempty"`
+	Initiator       string            `json:"initiator"`
+	MessageHash     string            `json:"message_hash"` // 要签名的数据(32字节的哈希值)
+	Address         string            `json:"address"`      // 账户地址
+	RequiredSigners int               `json:"required_signers"`
+	TotalParties    int               `json:"total_parties"`
+	PartyIndex      int               `json:"party_index"`  // keygen 原始 party index
+	SeID            string            `json:"se_id"`        // 安全芯片标识符
+	Participants    []string          `json:"participants"` // 参与签名的所有用户名
+	Summary         string            `json:"summary,omitempty"`
+	Display         map[string]string `json:"display,omitempty"`
 }
 
 // 签名响应消息 - 参与方回应邀请
@@ -241,9 +263,12 @@ type DestroyInviteMessage struct {
 	BaseMessage
 	SessionKey   string `json:"session_key"`    // 会话唯一标识
 	OfflineKeyID string `json:"offline_key_id"` // 离线密钥编号
-	Address      string `json:"address"`        // 账户地址
-	PartyIndex   int    `json:"party_index"`    // keygen 原始 party index
-	SeID         string `json:"se_id"`          // 安全芯片标识符
+	CaseNo       string `json:"case_no,omitempty"`
+	Initiator    string `json:"initiator"`
+	Address      string `json:"address"`     // 账户地址
+	PartyIndex   int    `json:"party_index"` // keygen 原始 party index
+	SeID         string `json:"se_id"`       // 安全芯片标识符
+	Summary      string `json:"summary,omitempty"`
 	Reason       string `json:"reason,omitempty"`
 }
 
@@ -286,4 +311,55 @@ type DestroyCompleteMessage struct {
 	Destroyed    int    `json:"destroyed"`      // 已销毁分片数
 	Success      bool   `json:"success"`        // 销毁是否成功
 	Message      string `json:"message"`        // 成功或失败的消息
+}
+
+// 分片移交请求消息 - 管理员发起。
+type TransferRequestMessage struct {
+	BaseMessage
+	SessionKey   string `json:"session_key"`
+	ShardID      string `json:"shard_id"`
+	OfflineKeyID string `json:"offline_key_id,omitempty"`
+	Address      string `json:"address,omitempty"`
+	CaseNo       string `json:"case_no,omitempty"`
+	ShardIndex   int    `json:"shard_index,omitempty"`
+	FromUsername string `json:"from_username"`
+	ToUsername   string `json:"to_username"`
+	Reason       string `json:"reason,omitempty"`
+}
+
+// TransferInviteMessage 是发给移出和接收双方的确认邀请。
+type TransferInviteMessage struct {
+	BaseMessage
+	SessionKey   string `json:"session_key"`
+	ShardID      string `json:"shard_id"`
+	OfflineKeyID string `json:"offline_key_id,omitempty"`
+	Address      string `json:"address"`
+	CaseNo       string `json:"case_no,omitempty"`
+	ShardIndex   int    `json:"shard_index"`
+	FromUsername string `json:"from_username"`
+	ToUsername   string `json:"to_username"`
+	Initiator    string `json:"initiator"`
+	Reason       string `json:"reason,omitempty"`
+	Summary      string `json:"summary,omitempty"`
+}
+
+// TransferResponseMessage 是移出或接收方对分片移交的回复。
+type TransferResponseMessage struct {
+	BaseMessage
+	SessionKey string `json:"session_key"`
+	ShardID    string `json:"shard_id"`
+	Accept     bool   `json:"accept"`
+	Reason     string `json:"reason,omitempty"`
+}
+
+// TransferCompleteMessage 表示分片移交已完成或失败。
+type TransferCompleteMessage struct {
+	BaseMessage
+	SessionKey   string `json:"session_key"`
+	ShardID      string `json:"shard_id"`
+	Address      string `json:"address"`
+	FromUsername string `json:"from_username"`
+	ToUsername   string `json:"to_username"`
+	Success      bool   `json:"success"`
+	Message      string `json:"message"`
 }

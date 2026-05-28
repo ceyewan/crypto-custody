@@ -2,6 +2,7 @@
 package storage
 
 import (
+	"fmt"
 	"log"
 	"sync"
 
@@ -33,15 +34,15 @@ func GetUserStorage() IUserStorage {
 
 // CreateUser 创建新用户
 // 参数：
-//   - username: 用户名，唯一标识一个用户
+//   - username: 登录标识，唯一标识一个用户
 //   - password: 用户密码，会被加密存储
-//   - email: 用户邮箱，也作为唯一标识
+//   - nickname: 昵称或姓名
 //
 // 返回：
 //   - 创建的用户对象指针
 //   - 如果创建失败则返回错误信息
-func (s *UserStorage) CreateUser(username, password, email string) (*model.User, error) {
-	if username == "" || password == "" || email == "" {
+func (s *UserStorage) CreateUser(username, password, nickname string) (*model.User, error) {
+	if username == "" || password == "" {
 		return nil, ErrInvalidParameter
 	}
 
@@ -53,9 +54,11 @@ func (s *UserStorage) CreateUser(username, password, email string) (*model.User,
 		return nil, ErrDatabaseNotInitialized
 	}
 
-	// 检查用户名或邮箱是否已存在
+	email := legacyEmailForIdentifier(username)
+
+	// 检查登录标识是否已存在。Email 是历史字段，只保存自动生成值。
 	var count int64
-	if err := database.Model(&model.User{}).Where("username = ? OR email = ?", username, email).Count(&count).Error; err != nil {
+	if err := database.Model(&model.User{}).Where("username = ?", username).Count(&count).Error; err != nil {
 		log.Printf("查询用户失败: %v", err)
 		return nil, ErrOperationFailed
 	}
@@ -73,9 +76,10 @@ func (s *UserStorage) CreateUser(username, password, email string) (*model.User,
 	// 创建用户
 	user := model.User{
 		Username: username,
+		Nickname: nickname,
 		Password: string(hashedPassword),
 		Email:    email,
-		Role:     model.RoleGuest, // 默认角色为游客
+		Role:     model.RoleOfficer,
 	}
 
 	if err := database.Create(&user).Error; err != nil {
@@ -86,9 +90,13 @@ func (s *UserStorage) CreateUser(username, password, email string) (*model.User,
 	return &user, nil
 }
 
+func legacyEmailForIdentifier(identifier string) string {
+	return fmt.Sprintf("%s@offline.local", identifier)
+}
+
 // GetUserByCredentials 通过用户名和密码获取用户
 // 参数：
-//   - username: 用户名
+//   - username: 登录标识
 //   - password: 用户密码（明文）
 //
 // 返回：
@@ -126,7 +134,7 @@ func (s *UserStorage) GetUserByCredentials(username, password string) (*model.Us
 
 // GetUserByUsername 根据用户名获取用户信息
 // 参数：
-//   - username: 用户名
+//   - username: 登录标识
 //
 // 返回：
 //   - 匹配的用户对象指针
@@ -193,7 +201,7 @@ func (s *UserStorage) UpdateUserRole(username string, role string) error {
 	// 验证角色是否有效
 	validRole := false
 	switch model.Role(role) {
-	case model.RoleAdmin, model.RoleCoordinator, model.RoleParticipant, model.RoleGuest:
+	case model.RoleAdmin, model.RoleOfficer, model.RoleAuditor:
 		validRole = true
 	}
 

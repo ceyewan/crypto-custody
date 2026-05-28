@@ -10,10 +10,11 @@ import (
 
 // SessionManager 提供对会话的内存缓存和操作
 type SessionManager struct {
-	mu           sync.RWMutex
-	keyGenCache  map[string]*model.KeyGenSession
-	signCache    map[string]*model.SignSession
-	destroyCache map[string]*DestroySession
+	mu            sync.RWMutex
+	keyGenCache   map[string]*model.KeyGenSession
+	signCache     map[string]*model.SignSession
+	destroyCache  map[string]*DestroySession
+	transferCache map[string]*TransferSession
 }
 
 // DestroySession 是密钥销毁 WebSocket 流程的内存会话。
@@ -25,6 +26,23 @@ type DestroySession struct {
 	Participants model.StringSlice
 	Responses    model.StringSlice
 	Shards       []model.KeyShard
+	Status       model.SessionStatus
+	Reason       string
+}
+
+// TransferSession 是分片移交 WebSocket 双确认会话。
+type TransferSession struct {
+	SessionKey   string
+	ShardID      string
+	OfflineKeyID string
+	Initiator    string
+	Address      string
+	CaseNo       string
+	ShardIndex   int
+	FromUsername string
+	ToUsername   string
+	Participants model.StringSlice
+	Responses    model.StringSlice
 	Status       model.SessionStatus
 	Reason       string
 }
@@ -45,9 +63,10 @@ func GetSessionManager() *SessionManager {
 // NewSessionManager 创建独立的内存会话管理器，主要用于测试或显式依赖注入。
 func NewSessionManager() *SessionManager {
 	return &SessionManager{
-		keyGenCache:  make(map[string]*model.KeyGenSession),
-		signCache:    make(map[string]*model.SignSession),
-		destroyCache: make(map[string]*DestroySession),
+		keyGenCache:   make(map[string]*model.KeyGenSession),
+		signCache:     make(map[string]*model.SignSession),
+		destroyCache:  make(map[string]*DestroySession),
+		transferCache: make(map[string]*TransferSession),
 	}
 }
 
@@ -118,6 +137,27 @@ func (m *SessionManager) CreateDestroySession(session DestroySession) (*DestroyS
 	return &session, nil
 }
 
+// CreateTransferSession 在内存中创建分片移交会话。
+func (m *SessionManager) CreateTransferSession(session TransferSession) (*TransferSession, error) {
+	if session.SessionKey == "" || session.ShardID == "" || session.Initiator == "" ||
+		session.Address == "" || session.FromUsername == "" || session.ToUsername == "" ||
+		len(session.Participants) != 2 {
+		return nil, storage.ErrInvalidParameter
+	}
+	if len(session.Responses) == 0 {
+		session.Responses = makeWaitingResponses(session.Participants)
+	}
+	if session.Status == "" {
+		session.Status = model.StatusCreated
+	}
+
+	m.mu.Lock()
+	m.transferCache[session.SessionKey] = &session
+	m.mu.Unlock()
+
+	return &session, nil
+}
+
 // GetKeyGenSession 获取密钥生成会话，如果不在内存则从数据库加载
 func (m *SessionManager) GetKeyGenSession(sessionKey string) *model.KeyGenSession {
 	if sessionKey == "" {
@@ -162,6 +202,21 @@ func (m *SessionManager) GetDestroySession(sessionKey string) *DestroySession {
 	session, exists := m.destroyCache[sessionKey]
 	m.mu.RUnlock()
 
+	if !exists {
+		return nil
+	}
+	return session
+}
+
+// GetTransferSession 获取分片移交会话。
+func (m *SessionManager) GetTransferSession(sessionKey string) *TransferSession {
+	if sessionKey == "" {
+		return nil
+	}
+
+	m.mu.RLock()
+	session, exists := m.transferCache[sessionKey]
+	m.mu.RUnlock()
 	if !exists {
 		return nil
 	}

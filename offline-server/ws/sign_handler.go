@@ -157,14 +157,22 @@ func (h *SignHandler) handleSignRequest(msg SignRequestMessage, sender *Client) 
 	for i, participant := range msg.Participants {
 		shard := shardsByUser[participant]
 		inviteMsg := SignInviteMessage{
-			BaseMessage:  BaseMessage{Type: MsgSignInvite},
-			SessionKey:   msg.SessionKey,
-			MessageHash:  msg.MessageHash,
-			Address:      msg.Address,
-			PartyIndex:   shard.ShardIndex,
-			SeID:         seIDs[i],
-			Participants: msg.Participants,
-			Display:      msg.Display,
+			BaseMessage:     BaseMessage{Type: MsgSignInvite},
+			SessionKey:      msg.SessionKey,
+			TaskNo:          msg.TaskNo,
+			CaseNo:          msg.CaseNo,
+			TransactionNo:   msg.TransactionNo,
+			OfflineKeyID:    offlineKeyID,
+			Initiator:       sender.GetUserName(),
+			MessageHash:     msg.MessageHash,
+			Address:         msg.Address,
+			RequiredSigners: key.RequiredSigners,
+			TotalParties:    key.TotalParties,
+			PartyIndex:      shard.ShardIndex,
+			SeID:            seIDs[i],
+			Participants:    msg.Participants,
+			Summary:         "交易签名邀请",
+			Display:         msg.Display,
 		}
 		client, exists := sender.Hub().GetClient(participant)
 		if !exists {

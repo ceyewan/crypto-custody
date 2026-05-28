@@ -90,6 +90,32 @@ func (s *ShareStorage) GetKeyShardForParticipant(username, address string) (*mod
 	return &shard, nil
 }
 
+// GetKeyShardByID 根据分片编号获取分片。
+func (s *ShareStorage) GetKeyShardByID(shardID string) (*model.KeyShard, error) {
+	if shardID == "" {
+		return nil, ErrInvalidParameter
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	database := db.GetDB()
+	if database == nil {
+		return nil, ErrDatabaseNotInitialized
+	}
+
+	var shard model.KeyShard
+	if err := database.Where("shard_id = ?", shardID).First(&shard).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, ErrRecordNotFound
+		}
+		log.Printf("查找密钥分片失败: %v", err)
+		return nil, ErrOperationFailed
+	}
+
+	return &shard, nil
+}
+
 // ListActiveKeyShardsByAddress 获取地址下所有可用分片。
 func (s *ShareStorage) ListActiveKeyShardsByAddress(address string) ([]model.KeyShard, error) {
 	if address == "" {
@@ -140,6 +166,51 @@ func (s *ShareStorage) ListKeyShardsByAddress(address string) ([]model.KeyShard,
 	return shards, nil
 }
 
+// ListKeyShardsByUsername 获取某个用户持有的全部分片。
+func (s *ShareStorage) ListKeyShardsByUsername(username string) ([]model.KeyShard, error) {
+	if username == "" {
+		return nil, ErrInvalidParameter
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	database := db.GetDB()
+	if database == nil {
+		return nil, ErrDatabaseNotInitialized
+	}
+
+	var shards []model.KeyShard
+	if err := database.
+		Where("username = ?", username).
+		Order("updated_at DESC").
+		Find(&shards).Error; err != nil {
+		log.Printf("查询用户全部分片失败: %v", err)
+		return nil, ErrOperationFailed
+	}
+	return shards, nil
+}
+
+// ListKeyShards 获取全部分片。
+func (s *ShareStorage) ListKeyShards() ([]model.KeyShard, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	database := db.GetDB()
+	if database == nil {
+		return nil, ErrDatabaseNotInitialized
+	}
+
+	var shards []model.KeyShard
+	if err := database.
+		Order("updated_at DESC").
+		Find(&shards).Error; err != nil {
+		log.Printf("查询全部分片失败: %v", err)
+		return nil, ErrOperationFailed
+	}
+	return shards, nil
+}
+
 // UpdateKeyShardStatus 更新分片状态。
 func (s *ShareStorage) UpdateKeyShardStatus(shardID string, status model.KeyShardStatus) error {
 	if shardID == "" || status == "" {
@@ -165,4 +236,49 @@ func (s *ShareStorage) UpdateKeyShardStatus(shardID string, status model.KeyShar
 		return ErrRecordNotFound
 	}
 	return nil
+}
+
+// TransferKeyShard 调整单个分片持有人，不改变安全芯片、record_id 或密文。
+func (s *ShareStorage) TransferKeyShard(shardID, newUsername string) (*model.KeyShard, error) {
+	if shardID == "" || newUsername == "" {
+		return nil, ErrInvalidParameter
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	database := db.GetDB()
+	if database == nil {
+		return nil, ErrDatabaseNotInitialized
+	}
+
+	var shard model.KeyShard
+	if err := database.Where("shard_id = ?", shardID).First(&shard).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, ErrRecordNotFound
+		}
+		log.Printf("查找待移交分片失败: %v", err)
+		return nil, ErrOperationFailed
+	}
+	if shard.Status != model.KeyShardStatusActive {
+		return nil, ErrInvalidParameter
+	}
+
+	var existing int64
+	if err := database.Model(&model.KeyShard{}).
+		Where("address = ? AND username = ? AND status = ? AND shard_id <> ?", shard.Address, newUsername, model.KeyShardStatusActive, shardID).
+		Count(&existing).Error; err != nil {
+		log.Printf("检查目标用户分片失败: %v", err)
+		return nil, ErrOperationFailed
+	}
+	if existing > 0 {
+		return nil, ErrInvalidParameter
+	}
+
+	shard.Username = newUsername
+	if err := database.Save(&shard).Error; err != nil {
+		log.Printf("移交分片失败: %v", err)
+		return nil, ErrOperationFailed
+	}
+	return &shard, nil
 }

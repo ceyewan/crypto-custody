@@ -34,7 +34,11 @@ export function normalizeHttpUrl(value) {
     if (/^https?:\/\//i.test(url)) {
         return trimTrailingSlash(url)
     }
-    return trimTrailingSlash(`http://${url}`)
+    const parsed = new URL(`http://${url}`)
+    if (!parsed.port) {
+        parsed.port = '8080'
+    }
+    return trimTrailingSlash(parsed.toString())
 }
 
 export function deriveWsUrl(httpUrl) {

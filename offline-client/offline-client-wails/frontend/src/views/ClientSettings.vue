@@ -6,17 +6,35 @@
             </div>
 
             <el-form label-width="140px" :model="form">
-                <el-form-item label="服务器 HTTP 地址">
-                    <el-input v-model="form.serverHttpUrl" @blur="syncWsUrl"></el-input>
+                <el-form-item label="服务器 IP/域名">
+                    <el-input
+                        v-model="serverHost"
+                        placeholder="例如 192.168.1.20"
+                        @input="hostDirty = true"
+                        @blur="syncFromHost">
+                    </el-input>
                 </el-form-item>
 
-                <el-form-item label="WebSocket 地址">
-                    <el-input v-model="form.serverWsUrl"></el-input>
-                </el-form-item>
+                <el-descriptions :column="1" border size="small" class="derived">
+                    <el-descriptions-item label="HTTP 地址">{{ form.serverHttpUrl }}</el-descriptions-item>
+                    <el-descriptions-item label="WebSocket 地址">{{ form.serverWsUrl }}</el-descriptions-item>
+                </el-descriptions>
 
                 <el-form-item label="读卡器名称">
                     <el-input v-model="form.cardReaderName" placeholder="留空则自动选择可用读卡器"></el-input>
                 </el-form-item>
+
+                <el-collapse class="advanced">
+                    <el-collapse-item title="高级连接设置" name="advanced">
+                        <el-form-item label="服务器 HTTP 地址">
+                            <el-input v-model="form.serverHttpUrl" @blur="syncWsUrl"></el-input>
+                        </el-form-item>
+
+                        <el-form-item label="WebSocket 地址">
+                            <el-input v-model="form.serverWsUrl"></el-input>
+                        </el-form-item>
+                    </el-collapse-item>
+                </el-collapse>
 
                 <el-form-item label="当前用户">
                     <el-input :value="currentUsername" disabled></el-input>
@@ -38,16 +56,18 @@
 
 <script>
 import { mapGetters } from 'vuex'
-import { deriveWsUrl } from '../services/settings'
+import { deriveWsUrl, normalizeHttpUrl } from '../services/settings'
 import { seApi } from '../services/wails-api'
 
 export default {
     name: 'ClientSettings',
     data() {
         return {
+            serverHost: this.hostFromHttp(this.$store.state.clientSettings.serverHttpUrl),
             form: {
                 ...this.$store.state.clientSettings
             },
+            hostDirty: false,
             saving: false,
             testingSe: false
         }
@@ -69,12 +89,44 @@ export default {
         }
     },
     methods: {
-        syncWsUrl() {
+        hostFromHttp(value) {
+            try {
+                const url = new URL(value)
+                return url.hostname
+            } catch {
+                return ''
+            }
+        },
+        syncFromHost() {
+            const host = (this.serverHost || '').trim()
+            if (!host) {
+                return
+            }
+            this.form.serverHttpUrl = normalizeHttpUrl(host)
             this.form.serverWsUrl = deriveWsUrl(this.form.serverHttpUrl)
+            this.hostDirty = false
+        },
+        syncWsUrl() {
+            this.form.serverHttpUrl = normalizeHttpUrl(this.form.serverHttpUrl)
+            this.form.serverWsUrl = deriveWsUrl(this.form.serverHttpUrl)
+            this.serverHost = this.hostFromHttp(this.form.serverHttpUrl)
+            this.hostDirty = false
+        },
+        normalizeFormForSave() {
+            if (this.hostDirty) {
+                this.syncFromHost()
+                return
+            }
+            this.form.serverHttpUrl = normalizeHttpUrl(this.form.serverHttpUrl || this.serverHost)
+            if (!this.form.serverWsUrl) {
+                this.form.serverWsUrl = deriveWsUrl(this.form.serverHttpUrl)
+            }
+            this.serverHost = this.hostFromHttp(this.form.serverHttpUrl)
         },
         async save() {
             this.saving = true
             try {
+                this.normalizeFormForSave()
                 const saved = await this.$store.dispatch('saveClientSettings', this.form)
                 this.form = { ...saved }
                 this.$message.success('客户端设置已保存')
@@ -108,5 +160,10 @@ export default {
 <style scoped>
 .client-settings-container {
     padding: 20px;
+}
+
+.derived,
+.advanced {
+    margin-bottom: 18px;
 }
 </style>

@@ -5,6 +5,7 @@ import (
 	"offline-server/storage/model"
 	"offline-server/tools"
 	"offline-server/web/service"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -12,15 +13,17 @@ import (
 
 // 登录请求结构
 type LoginRequest struct {
-	Username string `json:"username" binding:"required"`
-	Password string `json:"password" binding:"required"`
+	Username   string `json:"username"`
+	Identifier string `json:"identifier"`
+	Password   string `json:"password" binding:"required"`
 }
 
 // 注册请求结构
 type RegisterRequest struct {
-	Username string `json:"username" binding:"required"`
-	Password string `json:"password" binding:"required"`
-	Email    string `json:"email" binding:"required,email"`
+	Username   string `json:"username"`
+	Identifier string `json:"identifier"`
+	Nickname   string `json:"nickname"`
+	Password   string `json:"password" binding:"required"`
 }
 
 // 角色更新请求结构
@@ -35,10 +38,16 @@ func Login(c *gin.Context) {
 		return
 	}
 
+	identifier := firstNonEmpty(req.Identifier, req.Username)
+	if identifier == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "登录标识不能为空"})
+		return
+	}
+
 	// 调用服务层进行用户登录验证
-	user, err := service.LoginUser(req.Username, req.Password)
+	user, err := service.LoginUser(identifier, req.Password)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "用户名或密码错误"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "登录标识或密码错误"})
 		return
 	}
 
@@ -52,10 +61,11 @@ func Login(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"token": token,
 		"user": gin.H{
-			"id":       user.ID,
-			"username": user.Username,
-			"email":    user.Email,
-			"role":     user.Role,
+			"id":         user.ID,
+			"username":   user.Username,
+			"identifier": user.Username,
+			"nickname":   user.Nickname,
+			"role":       user.Role,
 		},
 	})
 }
@@ -67,8 +77,14 @@ func Register(c *gin.Context) {
 		return
 	}
 
+	identifier := firstNonEmpty(req.Identifier, req.Username)
+	if identifier == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "登录标识不能为空"})
+		return
+	}
+
 	// 调用服务层创建新用户
-	user, err := service.RegisterUser(req.Username, req.Password, req.Email)
+	user, err := service.RegisterUser(identifier, req.Password, req.Nickname)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -77,10 +93,11 @@ func Register(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "注册成功",
 		"user": gin.H{
-			"id":       user.ID,
-			"username": user.Username,
-			"email":    user.Email,
-			"role":     user.Role,
+			"id":         user.ID,
+			"username":   user.Username,
+			"identifier": user.Username,
+			"nickname":   user.Nickname,
+			"role":       user.Role,
 		},
 	})
 }
@@ -121,10 +138,12 @@ func ListUsers(c *gin.Context) {
 	var usersResponse []gin.H
 	for _, user := range users {
 		usersResponse = append(usersResponse, gin.H{
-			"id":       user.ID,
-			"username": user.Username,
-			"email":    user.Email,
-			"role":     user.Role,
+			"id":         user.ID,
+			"username":   user.Username,
+			"identifier": user.Username,
+			"nickname":   user.Nickname,
+			"role":       user.Role,
+			"status":     user.Status,
 		})
 	}
 
@@ -168,10 +187,8 @@ func UpdateUserRole(c *gin.Context) {
 func isValidRole(role string) bool {
 	validRoles := []string{
 		string(model.RoleAdmin),
-		string(model.RoleCoordinator),
-		string(model.RoleParticipant),
 		string(model.RoleAuditor),
-		string(model.RoleGuest),
+		string(model.RoleOfficer),
 	}
 
 	for _, validRole := range validRoles {
@@ -195,10 +212,11 @@ func GetAvailableUsers(c *gin.Context) {
 	var response []gin.H
 	for _, user := range users {
 		response = append(response, gin.H{
-			"id":       user.ID,
-			"username": user.Username,
-			"email":    user.Email,
-			"role":     user.Role,
+			"id":         user.ID,
+			"username":   user.Username,
+			"identifier": user.Username,
+			"nickname":   user.Nickname,
+			"role":       user.Role,
 		})
 	}
 
@@ -228,10 +246,11 @@ func GetUsersByAddress(c *gin.Context) {
 	var response []gin.H
 	for _, user := range users {
 		response = append(response, gin.H{
-			"id":       user.ID,
-			"username": user.Username,
-			"email":    user.Email,
-			"role":     user.Role,
+			"id":         user.ID,
+			"username":   user.Username,
+			"identifier": user.Username,
+			"nickname":   user.Nickname,
+			"role":       user.Role,
 		})
 	}
 
@@ -239,4 +258,14 @@ func GetUsersByAddress(c *gin.Context) {
 		"code": 0,
 		"data": response,
 	})
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }

@@ -71,6 +71,22 @@ func (s *OfflineTaskStorage) GetTask(taskNo string) (*model.OfflineTask, error) 
 	return &task, nil
 }
 
+func (s *OfflineTaskStorage) ListTasks() ([]model.OfflineTask, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	database := db.GetDB()
+	if database == nil {
+		return nil, ErrDatabaseNotInitialized
+	}
+	var tasks []model.OfflineTask
+	if err := database.Order("updated_at DESC").Find(&tasks).Error; err != nil {
+		log.Printf("查询离线任务列表失败: %v", err)
+		return nil, ErrOperationFailed
+	}
+	return tasks, nil
+}
+
 func (s *OfflineTaskStorage) UpdateTaskStatus(taskNo string, status model.OfflineTaskStatus) error {
 	if taskNo == "" || status == "" {
 		return ErrInvalidParameter

@@ -71,7 +71,9 @@ type KeyGenSession struct {
 	gorm.Model
 	SessionKey      string        `gorm:"column:session_key;uniqueIndex;size:100;comment:会话密钥"`
 	TaskNo          string        `gorm:"column:task_no;index;size:100;comment:在线任务编号"`
+	CaseNo          string        `gorm:"column:case_no;index;size:100;comment:案件编号"`
 	OfflineKeyID    string        `gorm:"column:offline_key_id;index;size:100;comment:离线密钥编号"`
+	CoinType        string        `gorm:"column:coin_type;size:32;comment:币种"`
 	Initiator       string        `gorm:"column:initiator;size:100;comment:发起者用户名"`
 	RequiredSigners int           `gorm:"column:required_signers;comment:业务门限人数"`
 	TotalParties    int           `gorm:"column:total_parties;comment:总分片数量"`

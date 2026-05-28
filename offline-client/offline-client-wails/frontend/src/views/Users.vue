@@ -1,35 +1,51 @@
 <template>
-    <div class="users-container">
-        <el-card>
-            <div slot="header">
-                <span>用户管理</span>
+    <div class="page users-page">
+        <div class="page-header">
+            <div>
+                <h2 class="page-title">账户管理</h2>
+                <p class="page-subtitle">只保留管理员、警员、审计员三类角色；警员和管理员可以参与 MPC。</p>
             </div>
+            <el-button icon="el-icon-refresh" :loading="loading" @click="fetchUserList">刷新</el-button>
+        </div>
 
+        <el-card>
             <el-table :data="userList" v-loading="loading" style="width: 100%">
-                <el-table-column prop="username" label="用户名" width="180"></el-table-column>
-                <el-table-column prop="email" label="邮箱" width="220"></el-table-column>
-                <el-table-column prop="role" label="当前角色" width="120"></el-table-column>
-                <el-table-column label="操作">
+                <el-table-column prop="identifier" label="登录标识" min-width="180">
+                    <template slot-scope="scope">
+                        {{ scope.row.identifier || scope.row.username }}
+                    </template>
+                </el-table-column>
+                <el-table-column prop="nickname" label="昵称" min-width="160">
+                    <template slot-scope="scope">
+                        {{ scope.row.nickname || '-' }}
+                    </template>
+                </el-table-column>
+                <el-table-column label="当前角色" width="120">
+                    <template slot-scope="scope">
+                        <el-tag :type="roleTag(scope.row.role)">{{ roleText(scope.row.role) }}</el-tag>
+                    </template>
+                </el-table-column>
+                <el-table-column prop="status" label="状态" width="120"></el-table-column>
+                <el-table-column label="操作" width="320">
                     <template slot-scope="scope">
                         <el-select v-model="scope.row.newRole" placeholder="选择角色" size="small">
                             <el-option label="管理员" value="admin"></el-option>
-                            <el-option label="协调者" value="coordinator"></el-option>
-                            <el-option label="参与者" value="participant"></el-option>
+                            <el-option label="警员" value="officer"></el-option>
                             <el-option label="审计员" value="auditor"></el-option>
-                            <el-option label="访客" value="guest"></el-option>
                         </el-select>
-                        <el-button type="primary" size="small" :disabled="scope.row.role === scope.row.newRole"
-                            @click="updateUserRole(scope.row)" style="margin-left: 10px">
+                        <el-button
+                            type="primary"
+                            size="small"
+                            :disabled="scope.row.role === scope.row.newRole"
+                            @click="updateUserRole(scope.row)"
+                            style="margin-left: 10px">
                             更新角色
                         </el-button>
                     </template>
                 </el-table-column>
             </el-table>
 
-            <div v-if="userList.length === 0 && !loading" class="empty-state">
-                <p>暂无用户数据</p>
-                <el-button type="primary" size="small" @click="fetchUserList">刷新</el-button>
-            </div>
+            <el-empty v-if="userList.length === 0 && !loading" description="暂无用户数据" :image-size="90"></el-empty>
         </el-card>
     </div>
 </template>
@@ -53,16 +69,11 @@ export default {
             this.loading = true
             try {
                 const response = await userApi.getUsers()
-                // 检查响应格式，适配后端API的返回格式
                 const users = response.data.users || response.data.data || []
                 this.userList = users.map(user => ({
                     ...user,
                     newRole: user.role
                 }))
-
-                if (this.userList.length === 0) {
-                    this.$message.warning('未找到用户数据')
-                }
             } catch (error) {
                 this.$message.error('获取用户列表失败: ' + (error.response?.data?.error || error.message))
             } finally {
@@ -72,26 +83,24 @@ export default {
 
         async updateUserRole(user) {
             try {
-                await userApi.updateUserRole(user.username, user.newRole)
-                this.$message.success(`用户 ${user.username} 角色已更新为 ${user.newRole}`)
-                // 更新当前角色
+                await userApi.updateUserRole(user.username || user.identifier, user.newRole)
+                this.$message.success(`用户 ${user.nickname || user.username} 角色已更新`)
                 user.role = user.newRole
             } catch (error) {
-                this.$message.error('更新用户角色失败')
+                this.$message.error(error.response?.data?.error || '更新用户角色失败')
             }
+        },
+
+        roleText(role) {
+            const map = { admin: '管理员', officer: '警员', auditor: '审计员' }
+            return map[role] || role
+        },
+
+        roleTag(role) {
+            if (role === 'admin') return 'danger'
+            if (role === 'auditor') return 'info'
+            return 'success'
         }
     }
 }
 </script>
-
-<style scoped>
-.users-container {
-    padding: 20px;
-}
-
-.empty-state {
-    text-align: center;
-    padding: 40px 0;
-    color: #606266;
-}
-</style>

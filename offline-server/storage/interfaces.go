@@ -8,7 +8,7 @@ import (
 // IUserStorage 定义用户账号存储接口
 type IUserStorage interface {
 	// CreateUser 创建新用户
-	CreateUser(username, password, email string) (*model.User, error)
+	CreateUser(username, password, nickname string) (*model.User, error)
 
 	// GetUserByCredentials 通过用户名和密码获取用户
 	GetUserByCredentials(username, password string) (*model.User, error)
@@ -31,14 +31,26 @@ type IShareStorage interface {
 	// GetKeyShardForParticipant 根据用户名和地址获取可用分片
 	GetKeyShardForParticipant(username, address string) (*model.KeyShard, error)
 
+	// GetKeyShardByID 根据分片编号获取分片
+	GetKeyShardByID(shardID string) (*model.KeyShard, error)
+
 	// ListActiveKeyShardsByAddress 获取地址下所有可用分片
 	ListActiveKeyShardsByAddress(address string) ([]model.KeyShard, error)
 
 	// ListKeyShardsByAddress 获取地址下全部分片
 	ListKeyShardsByAddress(address string) ([]model.KeyShard, error)
 
+	// ListKeyShardsByUsername 获取某个用户持有的全部分片
+	ListKeyShardsByUsername(username string) ([]model.KeyShard, error)
+
+	// ListKeyShards 获取全部分片
+	ListKeyShards() ([]model.KeyShard, error)
+
 	// UpdateKeyShardStatus 更新分片状态
 	UpdateKeyShardStatus(shardID string, status model.KeyShardStatus) error
+
+	// TransferKeyShard 调整单个分片持有人，不改变 SE CPLC、record_id 或密文
+	TransferKeyShard(shardID, newUsername string) (*model.KeyShard, error)
 }
 
 // IOfflineKeyStorage 定义离线密钥元数据存储接口
@@ -47,6 +59,7 @@ type IOfflineKeyStorage interface {
 	GetOfflineKeyByID(offlineKeyID string) (*model.OfflineKey, error)
 	GetOfflineKeyByAddress(address string) (*model.OfflineKey, error)
 	GetOfflineKeyByTaskNo(taskNo string) (*model.OfflineKey, error)
+	ListOfflineKeys() ([]model.OfflineKey, error)
 	UpdateOfflineKeyOwner(offlineKeyID, logicalOwner string) error
 	UpdateOfflineKeyStatus(offlineKeyID string, status model.OfflineKeyStatus) error
 }
@@ -172,6 +185,7 @@ type ISeStorage interface {
 type IOfflineTaskStorage interface {
 	CreateTask(task model.OfflineTask) (*model.OfflineTask, error)
 	GetTask(taskNo string) (*model.OfflineTask, error)
+	ListTasks() ([]model.OfflineTask, error)
 	UpdateTaskStatus(taskNo string, status model.OfflineTaskStatus) error
 	UpdateTaskResultHash(taskNo, resultHash string) error
 }

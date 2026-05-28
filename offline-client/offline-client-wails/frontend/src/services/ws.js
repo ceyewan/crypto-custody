@@ -35,6 +35,12 @@ export const WS_MESSAGE_TYPES = {
     DESTROY_RESULT: 'destroy_result',
     DESTROY_COMPLETE: 'destroy_complete',
 
+    // 分片移交相关
+    TRANSFER_REQUEST: 'transfer_request',
+    TRANSFER_INVITE: 'transfer_invite',
+    TRANSFER_RESPONSE: 'transfer_response',
+    TRANSFER_COMPLETE: 'transfer_complete',
+
     // 错误消息
     ERROR: 'error'
 }
@@ -248,6 +254,14 @@ export function initWebSocketService() {
                     handleDestroyComplete(message)
                     break
 
+                case WS_MESSAGE_TYPES.TRANSFER_INVITE:
+                    handleTransferInvite(message)
+                    break
+
+                case WS_MESSAGE_TYPES.TRANSFER_COMPLETE:
+                    handleTransferComplete(message)
+                    break
+
                 case WS_MESSAGE_TYPES.ERROR:
                     handleError(message)
                     break
@@ -325,12 +339,14 @@ function handleKeyGenInvite(message) {
     markInvited('keygen', message, {
         kind: 'keygen',
         session_key: message.session_key,
+        task_no: message.task_no,
+        case_no: message.case_no,
         party_index: message.party_index,
         status: 'invited',
         phase: WS_MESSAGE_TYPES.KEYGEN_INVITE,
         message: '等待用户确认密钥生成邀请'
     })
-    Message.info(`收到来自 ${message.coordinator} 的密钥生成邀请，请在通知页面处理`)
+    Message.info(`收到来自 ${message.initiator || '管理员'} 的密钥生成邀请，请在通知页面处理`)
 }
 
 function handleSignInvite(message) {
@@ -338,6 +354,9 @@ function handleSignInvite(message) {
     markInvited('sign', message, {
         kind: 'sign',
         session_key: message.session_key,
+        task_no: message.task_no,
+        case_no: message.case_no,
+        address: message.address,
         party_index: message.party_index,
         status: 'invited',
         phase: WS_MESSAGE_TYPES.SIGN_INVITE,
@@ -351,12 +370,29 @@ function handleDestroyInvite(message) {
     markInvited('destroy', message, {
         kind: 'destroy',
         session_key: message.session_key,
+        case_no: message.case_no,
+        address: message.address,
         party_index: message.party_index,
         status: 'invited',
         phase: WS_MESSAGE_TYPES.DESTROY_INVITE,
         message: '等待用户确认密钥销毁邀请'
     })
     Message.warning(`收到密钥销毁邀请，地址: ${message.address}，请在通知页面处理`)
+}
+
+function handleTransferInvite(message) {
+    console.log('收到分片移交邀请:', message)
+    markInvited('transfer', message, {
+        kind: 'transfer',
+        session_key: message.session_key,
+        shard_id: message.shard_id,
+        address: message.address,
+        case_no: message.case_no,
+        status: 'invited',
+        phase: WS_MESSAGE_TYPES.TRANSFER_INVITE,
+        message: '等待用户确认分片移交邀请'
+    })
+    Message.warning(`收到分片移交邀请，地址: ${message.address}，请在通知页面处理`)
 }
 
 
@@ -593,6 +629,20 @@ function handleDestroyComplete(message) {
             '密钥销毁失败',
             { type: 'error' }
         )
+    }
+}
+
+function handleTransferComplete(message) {
+    commitTask(mpcTaskKey('transfer', message), {
+        status: 'completed',
+        phase: WS_MESSAGE_TYPES.TRANSFER_COMPLETE,
+        success: !!message.success,
+        message: message.message || (message.success ? '分片移交完成' : '分片移交失败')
+    })
+    if (message.success) {
+        Message.success(message.message || '分片移交完成')
+    } else {
+        Message.error(message.message || '分片移交失败')
     }
 }
 

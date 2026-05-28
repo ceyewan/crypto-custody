@@ -1,367 +1,286 @@
 <template>
-    <div class="dashboard-container">
-        <el-container>
-            <el-header class="header">
-                <div class="logo">MPC密钥管理系统</div>
-                <div class="user-info">
-                    <span>欢迎, {{ user.username }} ({{ roleText }})</span>
-                    <el-button type="text" @click="handleLogout">退出登录</el-button>
-                </div>
-            </el-header>
+    <div class="page">
+        <div class="page-header">
+            <div>
+                <h2 class="page-title">{{ title }}</h2>
+                <p class="page-subtitle">{{ subtitle }}</p>
+            </div>
+            <el-button v-if="isAdmin" type="primary" icon="el-icon-upload2" @click="$router.push('/offline-tasks')">
+                导入任务包
+            </el-button>
+        </div>
 
-            <el-container>
-                <el-aside width="250px">
-                    <el-menu :default-active="activeMenu" router class="menu" background-color="#304156"
-                        text-color="#bfcbd9" active-text-color="#409EFF">
-                        <el-menu-item v-if="isAdmin" index="/users">
-                            <i class="el-icon-user"></i>
-                            <span>用户管理</span>
-                        </el-menu-item>
-                        <el-menu-item v-if="isAdmin" index="/import-se">
-                            <i class="el-icon-cpu"></i>
-                            <span>导入安全芯片</span>
-                        </el-menu-item>
-                        <el-menu-item v-if="isAdmin || isCoordinator" index="/keygen">
-                            <i class="el-icon-key"></i>
-                            <span>密钥生成</span>
-                        </el-menu-item>
-                        <el-menu-item v-if="isAdmin || isCoordinator" index="/sign">
-                            <i class="el-icon-edit"></i>
-                            <span>交易签名</span>
-                        </el-menu-item>
-                        <el-menu-item v-if="isAdmin || isCoordinator" index="/offline-tasks">
-                            <i class="el-icon-document"></i>
-                            <span>离线任务</span>
-                        </el-menu-item>
-                        <el-menu-item v-if="isAdmin || isCoordinator" index="/keys">
-                            <i class="el-icon-wallet"></i>
-                            <span>密钥管理</span>
-                        </el-menu-item>
-                        <el-menu-item v-if="isAdmin || isCoordinator || isAuditor" index="/audit">
-                            <i class="el-icon-document-checked"></i>
-                            <span>审计记录</span>
-                        </el-menu-item>
-                        <el-menu-item index="/notifications">
-                            <i class="el-icon-bell"></i>
-                            <span>通知消息</span>
-                            <el-badge v-if="notifications.length > 0" :value="notifications.length" class="item">
-                            </el-badge>
-                        </el-menu-item>
-                        <el-menu-item index="/settings">
-                            <i class="el-icon-setting"></i>
-                            <span>客户端设置</span>
-                        </el-menu-item>
-                        <el-menu-item index="/test">
-                            <i class="el-icon-cpu"></i>
-                            <span>Wails MPC 测试</span>
-                        </el-menu-item>
-                    </el-menu>
-                </el-aside>
+        <el-row :gutter="16">
+            <el-col :span="6">
+                <el-card class="metric-card">
+                    <div class="metric-value">{{ pendingInvitations.length }}</div>
+                    <div class="metric-label">待处理邀请</div>
+                </el-card>
+            </el-col>
+            <el-col :span="6">
+                <el-card class="metric-card">
+                    <div class="metric-value">{{ taskCount }}</div>
+                    <div class="metric-label">本机任务记录</div>
+                </el-card>
+            </el-col>
+            <el-col :span="6">
+                <el-card class="metric-card">
+                    <div class="metric-value">{{ wsConnected ? '正常' : '断开' }}</div>
+                    <div class="metric-label">WebSocket</div>
+                </el-card>
+            </el-col>
+            <el-col :span="6">
+                <el-card class="metric-card">
+                    <div class="metric-value small">{{ currentUser && currentUser.username }}</div>
+                    <div class="metric-label">登录标识</div>
+                </el-card>
+            </el-col>
+        </el-row>
 
-                <el-main>
-                    <router-view></router-view>
+        <el-row v-if="isOfficer" :gutter="16" class="section-row">
+            <el-col :span="12">
+                <el-card>
+                    <div slot="header" class="card-header">
+                        <span>我的分片</span>
+                        <el-button type="text" @click="$router.push('/my-shards')">查看全部</el-button>
+                    </div>
+                    <el-table :data="myShardSummary" v-loading="loadingOfficerSnapshot" size="mini" style="width: 100%">
+                        <el-table-column prop="address" label="地址" min-width="160">
+                            <template slot-scope="scope">
+                                {{ short(scope.row.address) }}
+                            </template>
+                        </el-table-column>
+                        <el-table-column prop="case_no" label="案件" width="120"></el-table-column>
+                        <el-table-column prop="shard_index" label="分片" width="70"></el-table-column>
+                        <el-table-column label="门限" width="80">
+                            <template slot-scope="scope">
+                                {{ thresholdText(scope.row) }}
+                            </template>
+                        </el-table-column>
+                        <el-table-column prop="status" label="状态" width="90"></el-table-column>
+                    </el-table>
+                    <el-empty v-if="!loadingOfficerSnapshot && myShardSummary.length === 0" description="暂无分片" :image-size="70"></el-empty>
+                </el-card>
+            </el-col>
 
-                    <div v-if="$route.path === '/dashboard'" class="welcome-container">
-                        <div class="welcome-message">
-                            <i class="el-icon-s-home welcome-icon"></i>
-                            <h2>欢迎使用多方门限签名系统</h2>
-                            <p>请根据您的角色和需求，使用左侧菜单选择相应功能</p>
+            <el-col :span="12">
+                <el-card>
+                    <div slot="header" class="card-header">
+                        <span>最近参与记录</span>
+                        <el-button type="text" @click="$router.push('/participation')">查看全部</el-button>
+                    </div>
+                    <el-table :data="participationSummary" v-loading="loadingOfficerSnapshot" size="mini" style="width: 100%">
+                        <el-table-column prop="type" label="类型" width="90">
+                            <template slot-scope="scope">
+                                {{ participationTypeText(scope.row.type) }}
+                            </template>
+                        </el-table-column>
+                        <el-table-column prop="resource_id" label="资源" min-width="150">
+                            <template slot-scope="scope">
+                                {{ short(scope.row.resource_id) }}
+                            </template>
+                        </el-table-column>
+                        <el-table-column prop="result" label="结果" width="90"></el-table-column>
+                    </el-table>
+                    <el-empty v-if="!loadingOfficerSnapshot && participationSummary.length === 0" description="暂无参与记录" :image-size="70"></el-empty>
+                </el-card>
+            </el-col>
+        </el-row>
 
-                            <div v-if="isAdmin" class="feature-box">
-                                <h3>管理员功能</h3>
-                                <el-button type="primary" @click="$router.push('/users')">用户管理</el-button>
-                                <el-button type="primary" @click="$router.push('/offline-tasks')">离线任务</el-button>
-                                <el-button type="primary" @click="$router.push('/keys')">密钥管理</el-button>
-                                <el-button type="primary" @click="$router.push('/audit')">审计记录</el-button>
-                                <el-button type="primary" @click="$router.push('/keygen')">密钥生成</el-button>
-                                <el-button type="primary" @click="$router.push('/sign')">交易签名</el-button>
+        <el-row :gutter="16" class="section-row">
+            <el-col :span="isAdmin ? 14 : 24">
+                <el-card>
+                    <div slot="header" class="card-header">
+                        <span>{{ isOfficer ? '待处理邀请' : '最近任务状态' }}</span>
+                        <el-button type="text" @click="$router.push(statusRoute)">查看全部</el-button>
+                    </div>
+                    <div v-if="pendingInvitations.length" class="invite-list">
+                        <div v-for="item in pendingInvitations.slice(0, 4)" :key="notificationKey(item)" class="invite-item">
+                            <div>
+                                <strong>{{ inviteTitle(item) }}</strong>
+                                <p>{{ inviteSummary(item) }}</p>
                             </div>
-
-                            <div v-else-if="isCoordinator" class="feature-box">
-                                <h3>协调者功能</h3>
-                                <el-button type="primary" @click="$router.push('/offline-tasks')">离线任务</el-button>
-                                <el-button type="primary" @click="$router.push('/keys')">密钥管理</el-button>
-                                <el-button type="primary" @click="$router.push('/audit')">审计记录</el-button>
-                                <el-button type="primary" @click="$router.push('/keygen')">密钥生成</el-button>
-                                <el-button type="primary" @click="$router.push('/sign')">交易签名</el-button>
-                            </div>
-
-                            <div v-else-if="isAuditor" class="feature-box">
-                                <h3>审计员功能</h3>
-                                <el-button type="primary" @click="$router.push('/audit')">审计记录</el-button>
-                            </div>
-
-                            <div v-else-if="isParticipant" class="feature-box">
-                                <h3>参与者功能</h3>
-                                <p>作为参与者，您将收到密钥生成和签名请求的邀请</p>
-                                <el-button type="primary" @click="$router.push('/notifications')">查看通知</el-button>
-                            </div>
+                            <el-button size="mini" type="primary" @click="$router.push(statusRoute)">处理</el-button>
                         </div>
                     </div>
-                </el-main>
-            </el-container>
-        </el-container>
+                    <el-empty v-else description="暂无待处理邀请"></el-empty>
+                </el-card>
+            </el-col>
+
+            <el-col v-if="isAdmin" :span="10">
+                <el-card>
+                    <div slot="header">管理员快捷操作</div>
+                    <div class="quick-actions">
+                        <el-button icon="el-icon-upload2" @click="$router.push('/offline-tasks')">导入 JSON 任务包</el-button>
+                        <el-button icon="el-icon-key" @click="$router.push('/keygen')">密钥生成</el-button>
+                        <el-button icon="el-icon-s-finance" @click="$router.push('/sign')">交易签名</el-button>
+                        <el-button icon="el-icon-cpu" @click="$router.push('/security-elements')">安全芯片管理</el-button>
+                    </div>
+                </el-card>
+            </el-col>
+        </el-row>
     </div>
 </template>
 
 <script>
 import { mapGetters } from 'vuex'
-import { initWebSocketService } from '../services/ws'
 
 export default {
     name: 'Dashboard',
     data() {
         return {
-            activeMenu: this.$route.path,
-            wsCheckInterval: null,
-            wsErrorCount: 0,
-            lastWsReset: 0,
-            healthCheckInterval: null
+            myShardSummary: [],
+            participationSummary: [],
+            loadingOfficerSnapshot: false
         }
     },
     computed: {
-        ...mapGetters([
-            'currentUser',
-            'isAdmin',
-            'isCoordinator',
-            'isParticipant',
-            'isAuditor',
-            'notifications',
-            'wsConnected'
-        ]),
-        user() {
-            return this.currentUser || {}
+        ...mapGetters(['currentUser', 'isAdmin', 'isOfficer', 'isAuditor', 'notifications', 'mpcTasks', 'wsConnected']),
+        title() {
+            if (this.isOfficer) return '我的工作台'
+            if (this.isAuditor) return '审计工作台'
+            return '离线工作台'
         },
-        roleText() {
-            if (this.isAdmin) return '管理员'
-            if (this.isCoordinator) return '协调者'
-            if (this.isAuditor) return '审计员'
-            if (this.isParticipant) return '参与者'
-            return '访客'
+        subtitle() {
+            if (this.isOfficer) return '处理 MPC 邀请，查看自己的分片和参与记录。'
+            if (this.isAuditor) return '查看离线系统任务、密钥和安全操作审计。'
+            return '通过 JSON 任务包发起密钥生成和签名，导出 JSON 结果包回传在线系统。'
         },
-        // 计算未响应的邀请通知数量
         pendingInvitations() {
             return this.notifications.filter(n =>
-                (n.type === 'keygen_invite' || n.type === 'sign_invite' || n.type === 'destroy_invite') &&
+                ['keygen_invite', 'sign_invite', 'destroy_invite', 'transfer_invite'].includes(n.type) &&
                 !n.responded
             )
         },
-        // 是否有需要处理的通知
-        hasUnhandledNotifications() {
-            return this.pendingInvitations.length > 0
+        taskCount() {
+            return Object.keys(this.mpcTasks || {}).length
+        },
+        statusRoute() {
+            if (this.isAuditor && !this.isOfficer && !this.isAdmin) {
+                return '/audit'
+            }
+            return '/notifications'
         }
     },
     created() {
-        // 初始化WebSocket
-        this.ensureWebSocketConnection()
-
-        // 设置定时检查WebSocket连接
-        this.wsCheckInterval = setInterval(() => {
-            this.checkWsConnection()
-        }, 10000) // 每10秒检查一次
-
-        // 检查是否有未处理的通知，如果有则自动跳转到通知页面
-        this.checkPendingNotifications()
-    },
-    mounted() {
-        // 如果是参与者，每分钟检查一次未处理的通知
-        if (this.isParticipant) {
-            this.notificationCheckInterval = setInterval(() => {
-                this.checkPendingNotifications()
-            }, 60000) // 每分钟检查一次
-        }
-
-        // 添加页面可见性监听
-        document.addEventListener('visibilitychange', this.handleVisibilityChange)
-        
-        // 设置定期的连接健康检查
-        this.healthCheckInterval = setInterval(() => {
-            this.checkWsConnection()
-        }, 60000) // 每分钟检查一次连接状态
-    },
-    beforeDestroy() {
-        // 清除定时器
-        if (this.wsCheckInterval) {
-            clearInterval(this.wsCheckInterval)
-        }
-        if (this.notificationCheckInterval) {
-            clearInterval(this.notificationCheckInterval)
-        }
-
-        // 移除页面可见性监听
-        document.removeEventListener('visibilitychange', this.handleVisibilityChange)
-        
-        // 清除健康检查定时器
-        if (this.healthCheckInterval) {
-            clearInterval(this.healthCheckInterval)
+        if (this.isOfficer) {
+            this.loadOfficerSnapshot()
         }
     },
     methods: {
-        // 处理页面可见性变化
-        handleVisibilityChange() {
-            if (!document.hidden) {
-                this.checkWsConnection()
+        async loadOfficerSnapshot() {
+            this.loadingOfficerSnapshot = true
+            try {
+                const [shards, records] = await Promise.all([
+                    this.$offlineApi.listMyShards(),
+                    this.$offlineApi.listMyParticipation(20)
+                ])
+                this.myShardSummary = (shards.data.shards || []).slice(0, 5)
+                this.participationSummary = (records.data.records || []).slice(0, 5)
+            } catch (error) {
+                this.$message.error(error.response?.data?.error || error.message || '加载警员工作台失败')
+            } finally {
+                this.loadingOfficerSnapshot = false
             }
         },
-
-        // 检查WebSocket连接状态
-        checkWsConnection() {
-            // 使用store的健康检查方法
-            this.$store.dispatch('checkWebSocketHealth')
+        notificationKey(item) {
+            return `${item.type}:${item.content && item.content.session_key}:${item.timestamp}`
         },
-
-        // 重置WebSocket连接
-        resetWsConnection() {
-            // 使用动态导入，确保使用最新版本的服务
-            import('../services/ws').then(({ resetWebSocketService }) => {
-                resetWebSocketService()
-                this.$store.dispatch('resetWebSocketConnection')
-            })
-        },
-
-        // 确保WebSocket连接
-        ensureWebSocketConnection() {
-            this.$store.dispatch('connectWebSocket')
-
-            // 初始化WebSocket消息处理
-            setTimeout(() => {
-                initWebSocketService()
-            }, 1000)  // 等待1秒确保连接已建立
-        },
-
-        // 检查未处理的通知
-        checkPendingNotifications() {
-            if (this.hasUnhandledNotifications && this.$route.path !== '/notifications') {
-                this.$notify({
-                    title: '未处理的邀请',
-                    message: `您有 ${this.pendingInvitations.length} 个未处理的邀请，即将跳转到通知页面`,
-                    type: 'warning',
-                    duration: 5000
-                })
-
-                // 3秒后跳转到通知页面
-                setTimeout(() => {
-                    this.$router.push('/notifications')
-                }, 3000)
+        inviteTitle(item) {
+            const map = {
+                keygen_invite: '密钥生成邀请',
+                sign_invite: '交易签名邀请',
+                destroy_invite: '分片销毁确认',
+                transfer_invite: '分片移交确认'
             }
+            return map[item.type] || item.type
         },
-
-        // 退出登录
-        handleLogout() {
-            this.$store.dispatch('logout')
-            this.$router.push('/login')
-        }
-    },
-    watch: {
-        // 路径变化时更新活动菜单
-        '$route.path'(newPath) {
-            this.activeMenu = newPath
+        inviteSummary(item) {
+            const content = item.content || {}
+            return [
+                content.case_no ? `案件 ${content.case_no}` : '',
+                content.address ? `地址 ${this.short(content.address)}` : '',
+                content.message_hash ? `哈希 ${this.short(content.message_hash)}` : '',
+                content.initiator ? `发起人 ${content.initiator}` : ''
+            ].filter(Boolean).join(' / ') || '等待确认'
         },
-
-        // WebSocket连接状态变化
-        wsConnected(connected) {
-            if (connected) {
-                this.wsErrorCount = 0  // 重置错误计数
-                setTimeout(() => {
-                    initWebSocketService()
-                }, 100)
+        short(value) {
+            if (!value || value.length <= 18) return value || ''
+            return `${value.slice(0, 10)}...${value.slice(-6)}`
+        },
+        thresholdText(row) {
+            if (!row.required_signers || !row.total_parties) return '-'
+            return `${row.required_signers}/${row.total_parties}`
+        },
+        participationTypeText(type) {
+            const map = {
+                keygen: '密钥生成',
+                sign: '交易签名',
+                transfer: '移交',
+                destroy: '销毁'
             }
-        },
-
-        // 通知数量变化
-        notifications() {
-            // 当新增通知时检查是否需要跳转
-            if (this.hasUnhandledNotifications && this.$route.path !== '/notifications') {
-                this.checkPendingNotifications()
-            }
+            return map[type] || type || '-'
         }
     }
 }
 </script>
 
 <style scoped>
-.dashboard-container {
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
+.metric-card {
+    min-height: 96px;
 }
 
-.header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    background-color: #304156;
-    color: white;
-    padding: 0 20px;
-    height: 60px;
+.metric-value {
+    font-size: 28px;
+    font-weight: 600;
+    color: #303133;
 }
 
-.logo {
-    font-size: 20px;
-    font-weight: bold;
+.metric-value.small {
+    font-size: 18px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-.user-info {
-    display: flex;
-    align-items: center;
-}
-
-.user-info span {
-    margin-right: 15px;
-}
-
-.menu {
-    height: calc(100vh - 60px);
-}
-
-.el-menu-item {
-    font-size: 14px;
-}
-
-.el-aside {
-    background-color: #304156;
-}
-
-.el-main {
-    padding: 20px;
-    background-color: #f0f2f5;
-}
-
-.welcome-container {
-    height: 100%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-
-.welcome-message {
-    text-align: center;
-    padding: 40px;
-    background-color: white;
-    border-radius: 8px;
-    box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
-    max-width: 600px;
-}
-
-.welcome-icon {
-    font-size: 64px;
-    color: #409EFF;
-    margin-bottom: 20px;
-}
-
-.feature-box {
-    margin-top: 30px;
-    padding: 20px;
-    background-color: #f8f9fa;
-    border-radius: 4px;
-}
-
-.feature-box h3 {
-    margin-bottom: 15px;
+.metric-label {
+    margin-top: 8px;
     color: #606266;
 }
 
-.feature-box .el-button {
-    margin: 10px;
+.section-row {
+    margin-top: 16px;
+}
+
+.card-header,
+.invite-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.invite-item {
+    padding: 12px 0;
+    border-bottom: 1px solid #ebeef5;
+}
+
+.invite-item:last-child {
+    border-bottom: none;
+}
+
+.invite-item p {
+    margin: 6px 0 0;
+    color: #606266;
+    font-size: 13px;
+}
+
+.quick-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+}
+
+.quick-actions .el-button {
+    margin-left: 0;
 }
 </style>

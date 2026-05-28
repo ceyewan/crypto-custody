@@ -76,6 +76,12 @@ type offlineKeyResponse struct {
 
 type keyShardResponse struct {
 	ShardID             string               `json:"shard_id"`
+	OfflineKeyID        string               `json:"offline_key_id"`
+	Address             string               `json:"address"`
+	CaseNo              string               `json:"case_no,omitempty"`
+	TaskNo              string               `json:"task_no,omitempty"`
+	RequiredSigners     int                  `json:"required_signers,omitempty"`
+	TotalParties        int                  `json:"total_parties,omitempty"`
 	Username            string               `json:"username"`
 	ShardIndex          int                  `json:"shard_index"`
 	RecordID            string               `json:"record_id"`
@@ -115,6 +121,17 @@ type approvalResponse struct {
 	Status      model.ApprovalStatus `json:"status"`
 }
 
+type participationResponse struct {
+	CreatedAt      time.Time `json:"created_at"`
+	Type           string    `json:"type"`
+	Action         string    `json:"action"`
+	ResourceType   string    `json:"resource_type"`
+	ResourceID     string    `json:"resource_id"`
+	Result         string    `json:"result"`
+	ErrorMessage   string    `json:"error_message,omitempty"`
+	RedactedDetail string    `json:"redacted_detail,omitempty"`
+}
+
 // ImportOfflineTask 导入在线系统导出的离线任务包。
 func ImportOfflineTask(c *gin.Context) {
 	raw, err := readPackageBody(c)
@@ -138,17 +155,18 @@ func ImportOfflineTask(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if pkg.PayloadHash != payloadHash {
+	legacyPayloadHash, _ := hashPayloadCompact(pkg.Payload)
+	if pkg.PayloadHash != payloadHash && pkg.PayloadHash != legacyPayloadHash {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "payload_hash不匹配"})
 		return
 	}
 
 	if existing, err := offlineTaskStorage.GetTask(pkg.TaskNo); err == nil {
-		if existing.PayloadHash != payloadHash {
+		if existing.PayloadHash != payloadHash && existing.PayloadHash != legacyPayloadHash && existing.PayloadHash != pkg.PayloadHash {
 			c.JSON(http.StatusConflict, gin.H{"error": "任务编号已存在但payload_hash不同"})
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"success": true, "task": taskDTO(existing), "duplicated": true})
+		c.JSON(http.StatusOK, gin.H{"success": true, "task": taskDTO(existing), "payload": payloadMap(pkg.Payload), "duplicated": true})
 		return
 	}
 
@@ -171,18 +189,33 @@ func ImportOfflineTask(c *gin.Context) {
 		return
 	}
 	auditFromContext(c, "offline_task_import", "offline_task", pkg.TaskNo, "success", "")
-	c.JSON(http.StatusOK, gin.H{"success": true, "task": taskDTO(task)})
+	c.JSON(http.StatusOK, gin.H{"success": true, "task": taskDTO(task), "payload": payloadMap(pkg.Payload)})
 }
 
 // GetOfflineTask 查询导入任务摘要。
 func GetOfflineTask(c *gin.Context) {
 	taskNo := c.Param("task_no")
-	task, err := offlineTaskStorage.GetTask(taskNo)
+	task, _, payload, err := loadTaskPackage(taskNo)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "任务不存在"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "task": taskDTO(task)})
+	c.JSON(http.StatusOK, gin.H{"success": true, "task": taskDTO(task), "payload": payload})
+}
+
+// ListOfflineTasks 查询已导入任务列表。
+func ListOfflineTasks(c *gin.Context) {
+	tasks, err := offlineTaskStorage.ListTasks()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询离线任务列表失败"})
+		return
+	}
+	responses := make([]offlineTaskResponse, 0, len(tasks))
+	for _, task := range tasks {
+		taskCopy := task
+		responses = append(responses, taskDTO(&taskCopy))
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "tasks": responses})
 }
 
 // BuildKeygenTaskRequest 返回基于任务包的 keygen_request 模板。
@@ -223,7 +256,9 @@ func BuildKeygenTaskRequest(c *gin.Context) {
 			"type":             "keygen_request",
 			"session_key":      req.SessionKey,
 			"task_no":          pkg.TaskNo,
+			"case_no":          stringFromPayload(payload["case_no"]),
 			"offline_key_id":   req.OfflineKeyID,
+			"coin_type":        firstNonEmpty(stringFromPayload(payload["coin_type"]), "ETH"),
 			"required_signers": requiredSigners,
 			"total_parties":    totalParties,
 			"participants":     req.Participants,
@@ -265,6 +300,7 @@ func BuildSignTaskRequest(c *gin.Context) {
 			"type":           "sign_request",
 			"session_key":    req.SessionKey,
 			"task_no":        pkg.TaskNo,
+			"case_no":        stringFromPayload(payload["case_no"]),
 			"offline_key_id": req.OfflineKeyID,
 			"transaction_no": stringFromPayload(payload["transaction_no"]),
 			"message_hash":   messageHash,
@@ -360,6 +396,136 @@ func GetOfflineKey(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "key": offlineKeyDTO(key, shards)})
 }
 
+// ListOfflineKeys 查询离线密钥列表。
+func ListOfflineKeys(c *gin.Context) {
+	keys, err := offlineKeyStorage.ListOfflineKeys()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询离线密钥列表失败"})
+		return
+	}
+	responses := make([]offlineKeyResponse, 0, len(keys))
+	for _, key := range keys {
+		responses = append(responses, offlineKeyDTO(&key, nil))
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "keys": responses})
+}
+
+// ListMyKeyShards 查询当前用户持有的分片。
+func ListMyKeyShards(c *gin.Context) {
+	username := usernameFromContext(c)
+	shards, err := offlineShareStore.ListKeyShardsByUsername(username)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询我的分片失败"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "shards": shardDTOsWithKeyInfo(shards)})
+}
+
+// ListMyParticipationRecords 查询当前用户自己的参与记录。
+func ListMyParticipationRecords(c *gin.Context) {
+	username := usernameFromContext(c)
+	logs, err := offlineAuditStore.ListAuditLogs(intFromQuery(c, "limit", 200))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询参与记录失败"})
+		return
+	}
+
+	records := make([]participationResponse, 0)
+	for _, log := range logs {
+		if log.Username != username {
+			continue
+		}
+		records = append(records, participationResponse{
+			CreatedAt:      log.CreatedAt,
+			Type:           participationType(log.Action),
+			Action:         log.Action,
+			ResourceType:   log.ResourceType,
+			ResourceID:     log.ResourceID,
+			Result:         log.Result,
+			ErrorMessage:   log.ErrorMessage,
+			RedactedDetail: log.RedactedDetail,
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "records": records})
+}
+
+// ListKeyShards 管理员查询全部分片。
+func ListKeyShards(c *gin.Context) {
+	shards, err := offlineShareStore.ListKeyShards()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询分片列表失败"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "shards": shardDTOsWithKeyInfo(filterShards(shards, c))})
+}
+
+// TransferKeyShard 生成单个分片移交 WebSocket 请求。真正更新由双方确认后的 transfer_response 完成。
+func TransferKeyShard(c *gin.Context) {
+	shardID := c.Param("shard_id")
+	var req struct {
+		SessionKey  string `json:"session_key"`
+		NewUsername string `json:"new_username"`
+		ToUsername  string `json:"to_username"`
+		Reason      string `json:"reason"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数无效"})
+		return
+	}
+	targetUsername := firstNonEmpty(req.NewUsername, req.ToUsername)
+	if strings.TrimSpace(targetUsername) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "接收警员不能为空"})
+		return
+	}
+
+	shard, err := offlineShareStore.GetKeyShardByID(shardID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "分片不存在"})
+		return
+	}
+	if shard.Status != model.KeyShardStatusActive {
+		c.JSON(http.StatusConflict, gin.H{"error": "只能移交 active 分片"})
+		return
+	}
+	if shard.Username == targetUsername {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "接收警员不能与当前持有人相同"})
+		return
+	}
+	user, err := storage.GetUserStorage().GetUserByUsername(targetUsername)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "接收警员不存在"})
+		return
+	}
+	if user.Role != model.RoleAdmin && user.Role != model.RoleOfficer {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "接收方必须是管理员或警员"})
+		return
+	}
+	if req.SessionKey == "" {
+		req.SessionKey = fmt.Sprintf("transfer_%s_%s", time.Now().UTC().Format("20060102150405"), sanitizeFilePart(shardID))
+	}
+
+	fromUsername := shard.Username
+	createApprovedRecord(c, "offline_shard_transfer", shardID)
+	auditFromContext(c, "offline_shard_transfer_request", "key_shard", shardID, "success", fmt.Sprintf("from=%s,to=%s,reason=%s", fromUsername, targetUsername, req.Reason))
+
+	shardInfo := shardDTOWithKeyInfo(*shard)
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": gin.H{
+			"type":           "transfer_request",
+			"session_key":    req.SessionKey,
+			"shard_id":       shard.ShardID,
+			"offline_key_id": shard.OfflineKeyID,
+			"address":        shard.Address,
+			"case_no":        shardInfo.CaseNo,
+			"shard_index":    shard.ShardIndex,
+			"from_username":  fromUsername,
+			"to_username":    targetUsername,
+			"reason":         req.Reason,
+		},
+	})
+}
+
 // TransferOfflineKey 只调整离线系统业务归属，不移动 SE 内 AES key。
 func TransferOfflineKey(c *gin.Context) {
 	id := c.Param("offline_key_id")
@@ -448,6 +614,18 @@ func ListApprovals(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "approvals": approvalDTOs(approvals)})
 }
 
+// DownloadBackup 下载当前 SQLite 数据库快照。
+func DownloadBackup(c *gin.Context) {
+	path := filepath.Join("data", "crypto-custody.db")
+	if _, err := os.Stat(path); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "备份源数据库不存在"})
+		return
+	}
+	fileName := fmt.Sprintf("offline-backup-%s.db", time.Now().UTC().Format("20060102-150405"))
+	auditFromContext(c, "offline_backup_download", "backup", fileName, "success", "")
+	c.FileAttachment(path, fileName)
+}
+
 func taskDTO(task *model.OfflineTask) offlineTaskResponse {
 	return offlineTaskResponse{
 		ID:             task.ID,
@@ -489,6 +667,8 @@ func shardDTOs(shards []model.KeyShard) []keyShardResponse {
 		sum := sha256.Sum256([]byte(shard.EncryptedBlob))
 		responses = append(responses, keyShardResponse{
 			ShardID:             shard.ShardID,
+			OfflineKeyID:        shard.OfflineKeyID,
+			Address:             shard.Address,
 			Username:            shard.Username,
 			ShardIndex:          shard.ShardIndex,
 			RecordID:            shard.RecordID,
@@ -503,6 +683,46 @@ func shardDTOs(shards []model.KeyShard) []keyShardResponse {
 		})
 	}
 	return responses
+}
+
+func shardDTOsWithKeyInfo(shards []model.KeyShard) []keyShardResponse {
+	responses := shardDTOs(shards)
+	for i := range responses {
+		if key, err := offlineKeyStorage.GetOfflineKeyByID(responses[i].OfflineKeyID); err == nil {
+			responses[i].CaseNo = key.CaseNo
+			responses[i].TaskNo = key.TaskNo
+			responses[i].RequiredSigners = key.RequiredSigners
+			responses[i].TotalParties = key.TotalParties
+		}
+	}
+	return responses
+}
+
+func shardDTOWithKeyInfo(shard model.KeyShard) keyShardResponse {
+	return shardDTOsWithKeyInfo([]model.KeyShard{shard})[0]
+}
+
+func filterShards(shards []model.KeyShard, c *gin.Context) []model.KeyShard {
+	address := strings.TrimSpace(c.Query("address"))
+	username := strings.TrimSpace(c.Query("username"))
+	status := strings.TrimSpace(c.Query("status"))
+	if address == "" && username == "" && status == "" {
+		return shards
+	}
+	filtered := make([]model.KeyShard, 0, len(shards))
+	for _, shard := range shards {
+		if address != "" && !strings.EqualFold(shard.Address, address) {
+			continue
+		}
+		if username != "" && shard.Username != username {
+			continue
+		}
+		if status != "" && string(shard.Status) != status {
+			continue
+		}
+		filtered = append(filtered, shard)
+	}
+	return filtered
 }
 
 func auditLogDTOs(logs []model.AuditLog) []auditLogResponse {
@@ -541,6 +761,21 @@ func approvalDTOs(approvals []model.Approval) []approvalResponse {
 		})
 	}
 	return responses
+}
+
+func participationType(action string) string {
+	switch {
+	case strings.Contains(action, "keygen"):
+		return "keygen"
+	case strings.Contains(action, "sign"):
+		return "sign"
+	case strings.Contains(action, "destroy"):
+		return "destroy"
+	case strings.Contains(action, "transfer"):
+		return "transfer"
+	default:
+		return "operation"
+	}
 }
 
 func readPackageBody(c *gin.Context) ([]byte, error) {
@@ -610,12 +845,36 @@ func loadTaskPackage(taskNo string) (*model.OfflineTask, offlinePackage, map[str
 }
 
 func hashPayload(raw json.RawMessage) (string, error) {
+	var payload any
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	if err := decoder.Decode(&payload); err != nil {
+		return "", fmt.Errorf("payload不是合法JSON: %w", err)
+	}
+	canonical, err := json.Marshal(payload)
+	if err != nil {
+		return "", fmt.Errorf("payload规范化失败: %w", err)
+	}
+	sum := sha256.Sum256(canonical)
+	return "sha256:" + hex.EncodeToString(sum[:]), nil
+}
+
+func hashPayloadCompact(raw json.RawMessage) (string, error) {
 	var buf bytes.Buffer
 	if err := json.Compact(&buf, raw); err != nil {
 		return "", fmt.Errorf("payload不是合法JSON: %w", err)
 	}
 	sum := sha256.Sum256(buf.Bytes())
 	return "sha256:" + hex.EncodeToString(sum[:]), nil
+}
+
+func payloadMap(raw json.RawMessage) map[string]any {
+	var payload map[string]any
+	_ = json.Unmarshal(raw, &payload)
+	if payload == nil {
+		return map[string]any{}
+	}
+	return payload
 }
 
 func buildResultPackage(taskPkg offlinePackage, taskType string, payload map[string]any, createdBy string) (gin.H, string, error) {
