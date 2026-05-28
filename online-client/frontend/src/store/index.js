@@ -16,6 +16,7 @@ export default new Vuex.Store({
     userRole: state => state.user ? state.user.role : '',
     isAdmin: state => state.user && state.user.role === 'admin',
     isOfficer: state => state.user && (state.user.role === 'officer' || state.user.role === 'admin'),
+    isAuditor: state => state.user && (state.user.role === 'auditor' || state.user.role === 'admin'),
     isGuest: state => state.user && state.user.role === 'guest',
     userAccounts: state => state.accounts,
     userTransactions: state => state.transactions

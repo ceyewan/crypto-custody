@@ -4,6 +4,9 @@ FROM node:18-alpine AS build-stage
 
 WORKDIR /app
 
+ARG VUE_APP_API_BASE_URL=http://192.168.192.1:22221
+ENV VUE_APP_API_BASE_URL=${VUE_APP_API_BASE_URL}
+
 # 复制 package 文件并安装依赖
 COPY package*.json ./
 RUN npm ci --legacy-peer-deps && npm cache clean --force

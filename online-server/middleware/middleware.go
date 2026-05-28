@@ -119,6 +119,25 @@ func AdminRequired() gin.HandlerFunc {
 	}
 }
 
+// AuditorRequired 审计查询权限检查中间件
+func AuditorRequired() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		role, exists := c.Get("Role")
+		if !exists {
+			utils.ResponseWithError(c, http.StatusUnauthorized, utils.ErrorUnauthorized)
+			c.Abort()
+			return
+		}
+		roleStr := role.(string)
+		if roleStr != string(model.RoleAdmin) && roleStr != string(model.RoleAuditor) {
+			utils.ResponseWithError(c, http.StatusForbidden, utils.ErrorForbidden+", 需要管理员或审计员权限")
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
 // OfficerRequired 警员权限检查中间件
 func OfficerRequired() gin.HandlerFunc {
 	return func(c *gin.Context) {

@@ -28,7 +28,10 @@ var (
 	// ErrTransactionInProgress 用户已有正在处理中的交易
 	ErrTransactionInProgress = errors.New("交易正在处理中")
 	// errReceiptNotAvailable 交易收据暂时不可用
-	ErrReceiptNotAvailable = errors.New("交易收据暂不可用")
+	ErrReceiptNotAvailable     = errors.New("交易收据暂不可用")
+	transactionManagerInstance *TransactionManager
+	transactionManagerOnce     sync.Once
+	transactionManagerErr      error
 )
 
 // TransactionManager 管理以太坊交易的全生命周期
@@ -74,12 +77,18 @@ func newTransactionManager(client *Client) *TransactionManager {
 //   - *TransactionManager: 交易管理器实例
 //   - error: 初始化过程中的错误
 func GetTransactionManagerInstance() (*TransactionManager, error) {
-	client, err := GetClientInstance()
-	if err != nil {
-		return nil, fmt.Errorf("获取以太坊客户端失败: %w", err)
+	transactionManagerOnce.Do(func() {
+		client, err := GetClientInstance()
+		if err != nil {
+			transactionManagerErr = fmt.Errorf("获取以太坊客户端失败: %w", err)
+			return
+		}
+		transactionManagerInstance = newTransactionManager(client)
+	})
+	if transactionManagerErr != nil {
+		return nil, transactionManagerErr
 	}
-
-	return newTransactionManager(client), nil
+	return transactionManagerInstance, nil
 }
 
 // CreateTransaction 创建一个新的ETH转账交易并存储到数据库

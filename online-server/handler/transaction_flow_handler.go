@@ -1,0 +1,270 @@
+package handler
+
+import (
+	"encoding/hex"
+	"math/big"
+	"net/http"
+	"online-server/dto"
+	"online-server/model"
+	"online-server/service"
+	"online-server/utils"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/gin-gonic/gin"
+)
+
+func CreateTransactionDraft(c *gin.Context) {
+	var req dto.CreateTransactionRequest
+	if !utils.BindJSON(c, &req) {
+		return
+	}
+	txType := req.TxType
+	if txType == "" {
+		txType = "withdraw"
+	}
+	coinType := req.CoinType
+	if coinType == "" {
+		coinType = "ETH"
+	}
+	var caseID *uint
+	if req.CaseID != 0 {
+		caseID = &req.CaseID
+	}
+	var fromAccountID *uint
+	if req.FromAccountID != 0 {
+		fromAccountID = &req.FromAccountID
+	}
+	tx := model.Transaction{
+		TxNo: service.NewBusinessNo("TX"), CaseID: caseID, CaseNo: req.CaseNo,
+		TxType: txType, FromAccountID: fromAccountID, FromAddress: req.FromAddress,
+		ToAddress: req.ToAddress, Value: req.Value, CoinType: coinType,
+		Reason: req.Reason, Status: model.StatusDraft, CreatedBy: c.GetString("Username"),
+	}
+	if err := utils.GetDB().Create(&tx).Error; err != nil {
+		utils.ResponseWithError(c, http.StatusBadRequest, "创建交易失败: "+err.Error())
+		return
+	}
+	service.AuditAction(c, "transaction.create", "transaction", strconv.FormatUint(uint64(tx.ID), 10), tx.CaseNo, "success", "", tx)
+	utils.ResponseWithData(c, "交易草稿创建成功", tx)
+}
+
+func ListTransactionsV2(c *gin.Context) {
+	var req dto.TransactionListRequest
+	_ = c.ShouldBindQuery(&req)
+	if req.Page <= 0 {
+		req.Page = 1
+	}
+	if req.PageSize <= 0 || req.PageSize > 100 {
+		req.PageSize = 20
+	}
+	query := utils.GetDB().Model(&model.Transaction{})
+	if req.Status != "" {
+		if status, ok := parseTransactionStatus(req.Status); ok {
+			query = query.Where("status = ?", status)
+		}
+	}
+	if req.Address != "" {
+		query = query.Where("from_address = ? OR to_address = ?", req.Address, req.Address)
+	}
+	var total int64
+	_ = query.Count(&total).Error
+	var txs []model.Transaction
+	if err := query.Order("created_at DESC").Limit(req.PageSize).Offset((req.Page - 1) * req.PageSize).Find(&txs).Error; err != nil {
+		utils.ResponseWithError(c, http.StatusInternalServerError, "查询交易失败: "+err.Error())
+		return
+	}
+	utils.ResponseWithData(c, "查询交易成功", gin.H{"items": txs, "total": total, "page": req.Page, "pageSize": req.PageSize})
+}
+
+func GetTransactionV2(c *gin.Context) {
+	GetTransactionByID(c)
+}
+
+func PrepareTransactionV2(c *gin.Context) {
+	id, ok := utils.ParseUintParam(c, "id")
+	if !ok {
+		return
+	}
+	var tx model.Transaction
+	if err := utils.GetDB().First(&tx, id).Error; err != nil {
+		utils.ResponseWithError(c, http.StatusNotFound, "交易不存在")
+		return
+	}
+	amountText := strings.Fields(tx.Value)
+	amount := new(big.Float)
+	if len(amountText) > 0 {
+		amount.SetString(amountText[0])
+	} else {
+		amount.SetString(tx.Value)
+	}
+	tm, err := getTransactionManager()
+	if err != nil {
+		utils.ResponseWithError(c, http.StatusInternalServerError, "获取交易管理器失败: "+err.Error())
+		return
+	}
+	_, messageHash, err := tm.CreateTransaction(tx.FromAddress, tx.ToAddress, amount)
+	if err != nil {
+		utils.ResponseWithError(c, http.StatusInternalServerError, "构建交易失败: "+err.Error())
+		return
+	}
+	tx.MessageHash = messageHash
+	tx.Status = model.StatusPending
+	if err := utils.GetDB().Save(&tx).Error; err != nil {
+		utils.ResponseWithError(c, http.StatusInternalServerError, "保存交易哈希失败: "+err.Error())
+		return
+	}
+	service.AuditAction(c, "transaction.prepare", "transaction", strconv.FormatUint(uint64(tx.ID), 10), tx.CaseNo, "success", "", tx)
+	utils.ResponseWithData(c, "交易构建成功", tx)
+}
+
+func ExportSignTask(c *gin.Context) {
+	id, ok := utils.ParseUintParam(c, "id")
+	if !ok {
+		return
+	}
+	var tx model.Transaction
+	if err := utils.GetDB().First(&tx, id).Error; err != nil {
+		utils.ResponseWithError(c, http.StatusNotFound, "交易不存在")
+		return
+	}
+	if tx.MessageHash == "" {
+		utils.ResponseWithError(c, http.StatusBadRequest, "交易尚未生成待签名哈希")
+		return
+	}
+	taskNo := service.NewBusinessNo("TASK")
+	payload := gin.H{
+		"taskNo": taskNo, "taskType": "sign", "caseNo": tx.CaseNo,
+		"transactionNo": tx.TxNo, "fromAddress": tx.FromAddress, "toAddress": tx.ToAddress,
+		"value": tx.Value, "coinType": tx.CoinType, "messageHash": tx.MessageHash, "reason": tx.Reason,
+	}
+	now := time.Now().Unix()
+	tx.Status = model.StatusSignatureExported
+	tx.ExportedAt = &now
+	_ = utils.GetDB().Save(&tx).Error
+	task := model.OfflineTask{
+		TaskNo: taskNo, TaskType: model.OfflineTaskSign, CaseNo: tx.CaseNo,
+		TransactionID: &tx.ID, PayloadHash: hashObject(payload), Status: model.OfflineTaskExported,
+		ExportedBy: c.GetString("Username"), ExportedAt: &now,
+	}
+	_ = utils.GetDB().Create(&task).Error
+	service.AuditAction(c, "transaction.export_sign_task", "transaction", strconv.FormatUint(uint64(tx.ID), 10), tx.CaseNo, "success", "", payload)
+	utils.ResponseWithData(c, "签名任务导出成功", gin.H{"task": task, "payload": payload})
+}
+
+func ImportTransactionSignature(c *gin.Context) {
+	id, ok := utils.ParseUintParam(c, "id")
+	if !ok {
+		return
+	}
+	var req dto.ImportSignatureRequest
+	if !utils.BindJSON(c, &req) {
+		return
+	}
+	var tx model.Transaction
+	if err := utils.GetDB().First(&tx, id).Error; err != nil {
+		utils.ResponseWithError(c, http.StatusNotFound, "交易不存在")
+		return
+	}
+	sig := strings.TrimPrefix(req.Signature, "0x")
+	sigBytes, err := hex.DecodeString(sig)
+	if err != nil {
+		utils.ResponseWithError(c, http.StatusBadRequest, "签名格式错误: "+err.Error())
+		return
+	}
+	if tx.MessageHash != "" {
+		tm, err := getTransactionManager()
+		if err != nil {
+			utils.ResponseWithError(c, http.StatusInternalServerError, "获取交易管理器失败: "+err.Error())
+			return
+		}
+		if _, err := tm.SignTransaction(tx.MessageHash, sig); err != nil {
+			utils.ResponseWithError(c, http.StatusBadRequest, "签名验证或附加失败: "+err.Error())
+			return
+		}
+	}
+	now := time.Now().Unix()
+	tx.Signature = sigBytes
+	tx.Status = model.StatusSigned
+	tx.SignedAt = &now
+	if req.MessageHash != "" {
+		tx.MessageHash = req.MessageHash
+	}
+	if err := utils.GetDB().Save(&tx).Error; err != nil {
+		utils.ResponseWithError(c, http.StatusInternalServerError, "保存签名失败: "+err.Error())
+		return
+	}
+	service.AuditAction(c, "transaction.import_signature", "transaction", strconv.FormatUint(uint64(tx.ID), 10), tx.CaseNo, "success", "", gin.H{"messageHash": tx.MessageHash})
+	utils.ResponseWithData(c, "签名结果导入成功", tx)
+}
+
+func BroadcastTransactionV2(c *gin.Context) {
+	id, ok := utils.ParseUintParam(c, "id")
+	if !ok {
+		return
+	}
+	var tx model.Transaction
+	if err := utils.GetDB().First(&tx, id).Error; err != nil {
+		utils.ResponseWithError(c, http.StatusNotFound, "交易不存在")
+		return
+	}
+	if tx.MessageHash == "" || len(tx.Signature) == 0 {
+		utils.ResponseWithError(c, http.StatusBadRequest, "交易缺少哈希或签名")
+		return
+	}
+	// 真实广播仍由旧 TransactionManager 负责；若缓存丢失，返回明确错误，便于测试识别边界。
+	tm, err := getTransactionManager()
+	if err != nil {
+		utils.ResponseWithError(c, http.StatusInternalServerError, "获取交易管理器失败: "+err.Error())
+		return
+	}
+	_, txHash, err := tm.SendTransaction(tx.MessageHash)
+	if err != nil {
+		utils.ResponseWithError(c, http.StatusBadRequest, "广播失败，请确认交易在当前服务进程中完成构建和签名: "+err.Error())
+		return
+	}
+	now := time.Now().Unix()
+	tx.TxHash = txHash
+	tx.Status = model.StatusBroadcasted
+	tx.BroadcastedAt = &now
+	_ = utils.GetDB().Save(&tx).Error
+	service.AuditAction(c, "transaction.broadcast", "transaction", strconv.FormatUint(uint64(tx.ID), 10), tx.CaseNo, "success", "", gin.H{"txHash": txHash})
+	utils.ResponseWithData(c, "交易广播成功", tx)
+}
+
+func CheckTransactionReceiptV2(c *gin.Context) {
+	id, ok := utils.ParseUintParam(c, "id")
+	if !ok {
+		return
+	}
+	var tx model.Transaction
+	if err := utils.GetDB().First(&tx, id).Error; err != nil {
+		utils.ResponseWithError(c, http.StatusNotFound, "交易不存在")
+		return
+	}
+	utils.ResponseWithData(c, "交易回执查询完成", tx)
+}
+
+func parseTransactionStatus(status string) (model.TransactionStatus, bool) {
+	switch status {
+	case "draft":
+		return model.StatusDraft, true
+	case "pending_signature", "prepared":
+		return model.StatusPending, true
+	case "signature_exported":
+		return model.StatusSignatureExported, true
+	case "signed":
+		return model.StatusSigned, true
+	case "broadcasted", "sent":
+		return model.StatusBroadcasted, true
+	case "confirmed":
+		return model.StatusConfirmed, true
+	case "failed":
+		return model.StatusFailed, true
+	case "cancelled":
+		return model.StatusCancelled, true
+	default:
+		return 0, false
+	}
+}

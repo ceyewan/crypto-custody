@@ -77,11 +77,46 @@ func (s *AccountService) BatchCreateAccounts(accounts []model.Account) error {
 	defer s.mu.Unlock()
 
 	// 批量创建账户
-	if err := utils.GetDB().Create(&accounts).Error; err != nil {
+	if err := utils.GetDB().CreateInBatches(&accounts, 200).Error; err != nil {
 		return fmt.Errorf("批量创建账户失败: %w", err)
 	}
 
 	return nil
+}
+
+// ListAccounts 分页查询账户。
+func (s *AccountService) ListAccounts(page, pageSize int, address, caseNo, coinType, accountType string) ([]model.Account, int64, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if page <= 0 {
+		page = 1
+	}
+	if pageSize <= 0 || pageSize > 100 {
+		pageSize = 20
+	}
+	query := utils.GetDB().Model(&model.Account{})
+	if address != "" {
+		query = query.Where("address LIKE ?", "%"+address+"%")
+	}
+	if caseNo != "" {
+		query = query.Where("case_no = ?", caseNo)
+	}
+	if coinType != "" {
+		query = query.Where("coin_type = ?", coinType)
+	}
+	if accountType != "" {
+		query = query.Where("account_type = ?", accountType)
+	}
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("查询账户总数失败: %w", err)
+	}
+	var accounts []model.Account
+	if err := query.Order("created_at DESC").Limit(pageSize).Offset((page - 1) * pageSize).Find(&accounts).Error; err != nil {
+		return nil, 0, fmt.Errorf("查询账户列表失败: %w", err)
+	}
+	return accounts, total, nil
 }
 
 // UpdateAccountBalance 更新账户余额

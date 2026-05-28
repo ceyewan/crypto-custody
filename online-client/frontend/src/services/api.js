@@ -123,6 +123,11 @@ export const userApi = {
 
 // 账户管理API
 export const accountApi = {
+  // 账户分页查询
+  getAccounts (params = {}) {
+    return apiClient.get('/api/accounts', { params })
+  },
+
   // 根据地址查询账户
   getAccountByAddress (address) {
     return apiClient.get(`/api/accounts/address/${address}`)
@@ -135,12 +140,12 @@ export const accountApi = {
 
   // 创建账户 (警员+)
   createAccount (accountData) {
-    return apiClient.post('/api/accounts/officer/create', accountData)
+    return apiClient.post('/api/accounts', accountData)
   },
 
   // 批量导入账户 (警员+)
   importAccounts (accountsData) {
-    return apiClient.post('/api/accounts/officer/import', accountsData)
+    return apiClient.post('/api/accounts/import', accountsData)
   },
 
   // 获取所有账户 (管理员)
@@ -151,6 +156,18 @@ export const accountApi = {
   // 删除账户 (管理员)
   deleteAccount (id) {
     return apiClient.delete(`/api/accounts/admin/${id}`)
+  },
+
+  syncBalance (id) {
+    return apiClient.post(`/api/accounts/${id}/sync-balance`)
+  },
+
+  exportAccounts () {
+    return apiClient.get('/api/accounts/export')
+  },
+
+  getTemplate () {
+    return apiClient.get('/api/accounts/template')
   }
 }
 
@@ -199,6 +216,118 @@ export const transactionApi = {
   // 删除交易 (管理员)
   deleteTransaction (id) {
     return apiClient.delete(`/api/transaction/admin/${id}`)
+  },
+
+  createDraft (data) {
+    return apiClient.post('/api/transactions', data)
+  },
+
+  getTransactionPage (params = {}) {
+    return apiClient.get('/api/transactions', { params })
+  },
+
+  prepareById (id) {
+    return apiClient.post(`/api/transactions/${id}/prepare`)
+  },
+
+  exportSignTask (id) {
+    return apiClient.get(`/api/transactions/${id}/export-sign-task`)
+  },
+
+  importSignature (id, data) {
+    return apiClient.post(`/api/transactions/${id}/import-signature`, data)
+  },
+
+  broadcast (id) {
+    return apiClient.post(`/api/transactions/${id}/broadcast`)
+  },
+
+  checkReceipt (id) {
+    return apiClient.post(`/api/transactions/${id}/check-receipt`)
+  }
+}
+
+export const caseApi = {
+  list (params = {}) {
+    return apiClient.get('/api/cases', { params })
+  },
+  create (data) {
+    return apiClient.post('/api/cases', data)
+  },
+  update (id, data) {
+    return apiClient.put(`/api/cases/${id}`, data)
+  },
+  remove (id) {
+    return apiClient.delete(`/api/cases/${id}`)
+  },
+  accounts (id) {
+    return apiClient.get(`/api/cases/${id}/accounts`)
+  },
+  linkAccount (id, accountId) {
+    return apiClient.post(`/api/cases/${id}/accounts`, { accountId })
+  },
+  unlinkAccount (id, accountId) {
+    return apiClient.delete(`/api/cases/${id}/accounts/${accountId}`)
+  },
+  importCustodyWallet (id, data) {
+    return apiClient.post(`/api/cases/${id}/custody-wallet/import-result`, data)
+  }
+}
+
+export const offlineTaskApi = {
+  list (params = {}) {
+    return apiClient.get('/api/offline-tasks', { params })
+  },
+  createCustodyKeygen (data) {
+    return apiClient.post('/api/offline-tasks/custody-keygen', data)
+  },
+  exportTask (id) {
+    return apiClient.get(`/api/offline-tasks/${id}/export`)
+  },
+  importResult (id, result) {
+    return apiClient.post(`/api/offline-tasks/${id}/import-result`, { result })
+  }
+}
+
+export const auditApi = {
+  list (params = {}) {
+    return apiClient.get('/api/audit-logs', { params })
+  },
+  export () {
+    return apiClient.get('/api/audit-logs/export')
+  }
+}
+
+export const backupApi = {
+  list () {
+    return apiClient.get('/api/backups')
+  },
+  createHot () {
+    return apiClient.post('/api/backups/hot')
+  },
+  createCold (password) {
+    return apiClient.post('/api/backups/cold/export', { password })
+  },
+  verify (id) {
+    return apiClient.post(`/api/backups/${id}/verify`)
+  },
+  download (id) {
+    return apiClient.get(`/api/backups/${id}/download`, { responseType: 'blob' })
+  },
+  restore (id, password = '') {
+    return apiClient.post(`/api/backups/${id}/restore`, { password })
+  }
+}
+
+export const testDataApi = {
+  seed (data) {
+    return apiClient.post('/api/test-data/seed', data)
+  },
+  clear () {
+    return apiClient.post('/api/test-data/clear')
+  },
+  summary () {
+    return apiClient.get('/api/test-data/summary')
   }
 }
 

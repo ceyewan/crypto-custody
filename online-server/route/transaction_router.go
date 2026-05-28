@@ -8,6 +8,30 @@ import (
 )
 
 func TransactionRouter(r *gin.Engine) {
+	transactions := r.Group("/api/transactions")
+	transactions.Use(middleware.JWTAuth())
+	{
+		transactions.GET("", handler.ListTransactionsV2)
+		transactions.GET("/", handler.ListTransactionsV2)
+		transactions.GET("/:id", handler.GetTransactionV2)
+		ops := transactions.Group("")
+		ops.Use(middleware.OfficerRequired())
+		{
+			ops.POST("", handler.CreateTransactionDraft)
+			ops.POST("/", handler.CreateTransactionDraft)
+			ops.POST("/:id/prepare", handler.PrepareTransactionV2)
+			ops.GET("/:id/export-sign-task", handler.ExportSignTask)
+			ops.POST("/:id/import-signature", handler.ImportTransactionSignature)
+			ops.POST("/:id/broadcast", handler.BroadcastTransactionV2)
+			ops.POST("/:id/check-receipt", handler.CheckTransactionReceiptV2)
+		}
+		admin := transactions.Group("")
+		admin.Use(middleware.AdminRequired())
+		{
+			admin.DELETE("/:id", handler.DeleteTransaction)
+		}
+	}
+
 	// 交易相关路由
 	transactionGroup := r.Group("/api/transaction")
 	{

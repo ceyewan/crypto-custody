@@ -16,9 +16,14 @@ func AccountRoutes(r *gin.Engine) {
 		accounts.GET("/address/:address", handler.GetAccountByAddress) // 根据账户地址查询账户信息
 
 		// 需要认证的API
-		authenticated := accounts.Group("/")
+		authenticated := accounts.Group("")
 		authenticated.Use(middleware.JWTAuth())
 		{
+			authenticated.GET("", handler.ListAccounts)
+			authenticated.GET("/", handler.ListAccounts)
+			authenticated.GET("/template", handler.AccountTemplate)
+			authenticated.GET("/export", handler.ExportAccounts)
+
 			officer := authenticated.Group("/officer")
 			officer.Use(middleware.OfficerRequired())
 			{
@@ -26,6 +31,11 @@ func AccountRoutes(r *gin.Engine) {
 				officer.POST("/create", handler.CreateAccount)       // 创建账户
 				officer.POST("/import", handler.BatchImportAccounts) // 批量导入账户
 			}
+			authenticated.POST("", middleware.OfficerRequired(), handler.CreateAccount)
+			authenticated.POST("/", middleware.OfficerRequired(), handler.CreateAccount)
+			authenticated.POST("/import", middleware.OfficerRequired(), handler.BatchImportAccounts)
+			authenticated.POST("/:id/sync-balance", middleware.OfficerRequired(), handler.SyncAccountBalance)
+			authenticated.POST("/sync-balances", middleware.OfficerRequired(), handler.BatchSyncAccountBalances)
 
 			// 管理员专用API
 			admin := authenticated.Group("/admin")

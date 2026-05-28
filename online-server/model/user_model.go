@@ -8,6 +8,7 @@ type Role string
 const (
 	RoleAdmin   Role = "admin"   // 管理员
 	RoleOfficer Role = "officer" // 警员
+	RoleAuditor Role = "auditor" // 审计员
 	RoleGuest   Role = "guest"   // 游客
 )
 
@@ -20,4 +21,5 @@ type User struct {
 	Password string `gorm:"column:password;size:200;not null;comment:加密后的密码"`                // 加密后的密码
 	Email    string `gorm:"column:email;uniqueIndex;size:100;not null;comment:用户邮箱，唯一标识"`    // 用户邮箱
 	Role     Role   `gorm:"column:role;type:varchar(20);not null;comment:用户角色"`              // 用户角色
+	Status   string `gorm:"column:status;size:20;default:'active';comment:用户状态"`             // 用户状态
 }

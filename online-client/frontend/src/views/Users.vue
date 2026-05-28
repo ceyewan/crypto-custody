@@ -22,6 +22,7 @@
                         <el-select v-model="scope.row.newRole" placeholder="选择角色" size="small" style="width: 120px">
                             <el-option label="管理员" value="admin"></el-option>
                             <el-option label="警员" value="officer"></el-option>
+                            <el-option label="审计员" value="auditor"></el-option>
                             <el-option label="访客" value="guest"></el-option>
                         </el-select>
                         <el-button type="primary" size="small" :disabled="scope.row.role === scope.row.newRole"
@@ -238,6 +239,7 @@ export default {
       const roleMap = {
         admin: '管理员',
         officer: '警员',
+        auditor: '审计员',
         guest: '访客'
       }
       return roleMap[role] || role
@@ -247,6 +249,7 @@ export default {
       const typeMap = {
         admin: 'danger',
         officer: 'warning',
+        auditor: 'success',
         guest: 'info'
       }
       return typeMap[role] || 'info'

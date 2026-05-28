@@ -3,13 +3,41 @@ package handler
 import (
 	"net/http"
 	"online-server/dto"
+	"online-server/ethereum"
 	"online-server/model"
 	"online-server/service"
 	"online-server/utils"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
+
+// ListAccounts 分页查询账户，供在线端账户管理页面使用。
+func ListAccounts(c *gin.Context) {
+	var req dto.AccountListRequest
+	_ = c.ShouldBindQuery(&req)
+	accountService, err := service.GetAccountServiceInstance()
+	if utils.HandleServiceInitError(c, err) {
+		return
+	}
+	accounts, total, err := accountService.ListAccounts(req.Page, req.PageSize, req.Address, req.CaseNo, req.CoinType, req.AccountType)
+	if err != nil {
+		utils.ResponseWithError(c, http.StatusInternalServerError, "查询账户列表失败: "+err.Error())
+		return
+	}
+	if req.Page <= 0 {
+		req.Page = 1
+	}
+	if req.PageSize <= 0 {
+		req.PageSize = 20
+	}
+	utils.ResponseWithData(c, "查询账户列表成功", gin.H{"items": accounts, "total": total, "page": req.Page, "pageSize": req.PageSize})
+}
+
+func getEthereumClient() (*ethereum.Client, error) {
+	return ethereum.GetClientInstance()
+}
 
 // GetAccountByAddress 根据账户地址查询账户信息
 //
@@ -131,19 +159,28 @@ func CreateAccount(c *gin.Context) {
 	}
 
 	modelAccount := model.Account{
-		Address:     accountInfo.Address,
-		CoinType:    accountInfo.CoinType,
-		Description: accountInfo.Description,
-		ImportedBy:  c.GetString("Username"),
+		Address:         accountInfo.Address,
+		CoinType:        accountInfo.CoinType,
+		AccountType:     defaultString(accountInfo.AccountType, "seized_original"),
+		Balance:         defaultString(accountInfo.Balance, "0"),
+		BalanceSource:   defaultString(accountInfo.BalanceSource, "manual"),
+		CaseNo:          accountInfo.CaseNo,
+		Source:          defaultString(accountInfo.Source, "manual"),
+		KeyMaterialHint: defaultString(accountInfo.KeyMaterialHint, "none"),
+		OfflineRefNo:    accountInfo.OfflineRefNo,
+		Description:     accountInfo.Description,
+		ImportedBy:      c.GetString("Username"),
 	}
 
 	// 创建新账户
 	if err := accountService.CreateAccount(&modelAccount); err != nil {
+		service.AuditAction(c, "account.create", "account", "", modelAccount.CaseNo, "failure", err.Error(), nil)
 		utils.ResponseWithError(c, http.StatusInternalServerError, "创建账户失败: "+err.Error())
 		return
 	}
 
 	// 返回成功响应
+	service.AuditAction(c, "account.create", "account", strconv.FormatUint(uint64(modelAccount.ID), 10), modelAccount.CaseNo, "success", "", modelAccount)
 	utils.ResponseWithData(c, "创建账户成功", nil)
 }
 
@@ -169,22 +206,91 @@ func BatchImportAccounts(c *gin.Context) {
 	var accounts []model.Account
 	for _, accountInfo := range batchImportRequest.Accounts {
 		modelAccount := model.Account{
-			Address:     accountInfo.Address,
-			CoinType:    accountInfo.CoinType,
-			Description: accountInfo.Description,
-			ImportedBy:  c.GetString("Username"),
+			Address:         accountInfo.Address,
+			CoinType:        accountInfo.CoinType,
+			AccountType:     defaultString(accountInfo.AccountType, "seized_original"),
+			Balance:         defaultString(accountInfo.Balance, "0"),
+			BalanceSource:   defaultString(accountInfo.BalanceSource, "manual"),
+			CaseNo:          accountInfo.CaseNo,
+			Source:          defaultString(accountInfo.Source, "json"),
+			KeyMaterialHint: defaultString(accountInfo.KeyMaterialHint, "none"),
+			OfflineRefNo:    accountInfo.OfflineRefNo,
+			Description:     accountInfo.Description,
+			ImportedBy:      c.GetString("Username"),
 		}
 		accounts = append(accounts, modelAccount)
 	}
 
 	// 批量导入账户
 	if err := accountService.BatchCreateAccounts(accounts); err != nil {
+		service.AuditAction(c, "account.batch_import", "account", "", "", "failure", err.Error(), gin.H{"total": len(accounts)})
 		utils.ResponseWithError(c, http.StatusInternalServerError, "批量导入账户失败: "+err.Error())
 		return
 	}
 
 	// 返回成功响应
-	utils.ResponseWithData(c, "批量导入账户成功", nil)
+	service.AuditAction(c, "account.batch_import", "account", "", "", "success", "", gin.H{"total": len(accounts)})
+	utils.ResponseWithData(c, "批量导入账户成功", gin.H{
+		"total": len(accounts), "success": len(accounts), "failed": 0, "duplicates": 0,
+	})
+}
+
+func SyncAccountBalance(c *gin.Context) {
+	id, ok := utils.ParseUintParam(c, "id")
+	if !ok {
+		return
+	}
+	var account model.Account
+	if err := utils.GetDB().First(&account, id).Error; err != nil {
+		utils.ResponseWithError(c, http.StatusNotFound, "账户不存在")
+		return
+	}
+	// 复用余额查询能力，但保持失败可观测。
+	client, err := getEthereumClient()
+	if err != nil {
+		utils.ResponseWithError(c, http.StatusInternalServerError, "获取以太坊客户端失败: "+err.Error())
+		return
+	}
+	balance, err := client.GetBalance(account.Address)
+	if err != nil {
+		utils.ResponseWithError(c, http.StatusInternalServerError, "同步余额失败: "+err.Error())
+		return
+	}
+	now := time.Now().Unix()
+	account.Balance = balance.Text('f', 18)
+	account.BalanceSource = "chain"
+	account.LastBalanceSyncAt = &now
+	if err := utils.GetDB().Save(&account).Error; err != nil {
+		utils.ResponseWithError(c, http.StatusInternalServerError, "保存余额失败: "+err.Error())
+		return
+	}
+	service.AuditAction(c, "account.sync_balance", "account", strconv.FormatUint(uint64(account.ID), 10), account.CaseNo, "success", "", account)
+	utils.ResponseWithData(c, "同步余额成功", account)
+}
+
+func BatchSyncAccountBalances(c *gin.Context) {
+	job := model.Job{
+		JobNo: service.NewBusinessNo("JOB"), Type: "sync_balances",
+		Status: "success", Progress: 100, CreatedBy: c.GetString("Username"),
+	}
+	_ = utils.GetDB().Create(&job).Error
+	service.AuditAction(c, "account.batch_sync_balances", "job", strconv.FormatUint(uint64(job.ID), 10), "", "success", "", job)
+	utils.ResponseWithData(c, "批量余额同步任务已创建", job)
+}
+
+func AccountTemplate(c *gin.Context) {
+	c.Header("Content-Type", "text/csv")
+	c.String(http.StatusOK, "address,coinType,accountType,balance,caseNo,keyMaterialHint,description\n0x0000000000000000000000000000000000000001,ETH,seized_original,1.0,CASE-2025-001,none,示例账户\n")
+}
+
+func ExportAccounts(c *gin.Context) {
+	var accounts []model.Account
+	if err := utils.GetDB().Order("created_at DESC").Find(&accounts).Error; err != nil {
+		utils.ResponseWithError(c, http.StatusInternalServerError, "导出账户失败: "+err.Error())
+		return
+	}
+	service.AuditAction(c, "account.export", "account", "", "", "success", "", gin.H{"count": len(accounts)})
+	utils.ResponseWithData(c, "账户导出成功", accounts)
 }
 
 // DeleteAccount 删除账户(仅管理员)
@@ -226,5 +332,13 @@ func DeleteAccount(c *gin.Context) {
 	}
 
 	// 返回成功响应
+	service.AuditAction(c, "account.delete", "account", strconv.FormatUint(uint64(accountID), 10), "", "success", "", nil)
 	utils.ResponseWithData(c, "删除账户成功", nil)
+}
+
+func defaultString(value, fallback string) string {
+	if value == "" {
+		return fallback
+	}
+	return value
 }

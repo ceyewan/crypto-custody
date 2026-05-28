@@ -4,3 +4,5 @@ bin/*
 database/*
 *.bin
 tmp/*
+.gocache/
+tests/logs/

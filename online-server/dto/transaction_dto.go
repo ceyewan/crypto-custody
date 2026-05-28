@@ -7,6 +7,26 @@ type PrepareTransactionRequest struct {
 	Amount      float64 `json:"amount" binding:"required,gt=0"`
 }
 
+// CreateTransactionRequest 是目标态交易草稿请求。
+type CreateTransactionRequest struct {
+	CaseID        uint   `json:"caseId"`
+	CaseNo        string `json:"caseNo"`
+	TxType        string `json:"txType"`
+	FromAccountID uint   `json:"fromAccountId"`
+	FromAddress   string `json:"fromAddress" binding:"required"`
+	ToAddress     string `json:"toAddress" binding:"required"`
+	Value         string `json:"value" binding:"required"`
+	CoinType      string `json:"coinType"`
+	Reason        string `json:"reason"`
+}
+
+type ImportSignatureRequest struct {
+	TaskNo      string `json:"taskNo"`
+	MessageHash string `json:"messageHash"`
+	Signature   string `json:"signature" binding:"required"`
+	CompletedAt string `json:"completedAt"`
+}
+
 // 签名并发送交易请求
 type SignSendTransactionRequest struct {
 	MessageHash string `json:"messageHash" binding:"required"`

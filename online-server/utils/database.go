@@ -116,6 +116,8 @@ func CloseDB() {
 		} else {
 			dbLogger.Info("数据库连接已关闭")
 		}
+		instance = nil
+		DB = nil
 	}
 }
 
@@ -135,12 +137,22 @@ func autoMigrateModels() error {
 	dbLogger.Info("迁移数据模型",
 		clog.String("model", "User"),
 		clog.String("model", "Account"),
-		clog.String("model", "Transaction"))
+		clog.String("model", "Transaction"),
+		clog.String("model", "Case"),
+		clog.String("model", "OfflineTask"),
+		clog.String("model", "AuditLog"),
+		clog.String("model", "BackupRecord"),
+		clog.String("model", "Job"))
 
 	return instance.AutoMigrate(
 		&model.User{},
 		&model.Account{},
 		&model.Transaction{},
+		&model.Case{},
+		&model.OfflineTask{},
+		&model.AuditLog{},
+		&model.BackupRecord{},
+		&model.Job{},
 	)
 }
 
