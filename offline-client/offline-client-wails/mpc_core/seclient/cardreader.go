@@ -52,7 +52,7 @@ func NewCardReader(opts ...CardReaderOption) (*CardReader, error) {
 // Close 关闭连接
 func (r *CardReader) Close() {
 	if r.card != nil {
-		r.card.Disconnect(scard.LeaveCard)
+		r.card.Disconnect(scard.ResetCard)
 		r.card = nil
 	}
 	if r.context != nil {
@@ -118,6 +118,10 @@ func (r *CardReader) Connect(readerName string) error {
 	if err != nil {
 		return fmt.Errorf("连接到读卡器失败: %v", err)
 	}
+	if err := card.Reconnect(scard.ShareShared, scard.ProtocolAny, scard.ResetCard); err != nil {
+		card.Disconnect(scard.LeaveCard)
+		return fmt.Errorf("重置读卡器连接失败: %v", err)
+	}
 
 	r.card = card
 	r.protocol = card.ActiveProtocol()
@@ -130,11 +134,6 @@ func (r *CardReader) Connect(readerName string) error {
 
 // SelectApplet 选择Applet
 func (r *CardReader) SelectApplet(aid []byte) error {
-	// 在选择Applet之前，先获取芯片的CPLC数据，缓存下来
-	_, err := r.GetCPLC()
-	if err != nil {
-		return fmt.Errorf("获取CPLC数据失败: %v", err)
-	}
 	selectCmd := append([]byte{0x00, 0xA4, 0x04, 0x00, byte(len(aid))}, aid...)
 
 	if r.debug {

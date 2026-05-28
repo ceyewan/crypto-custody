@@ -22,7 +22,29 @@
 *   `models`: 定义核心业务逻辑中使用的数据结构。
 *   `seclient`: 封装了与硬件安全芯片进行底层通信（APDU 命令）的逻辑。
 *   `services`: 核心业务逻辑层，包含 `MPCService` 和 `SecurityService`。
+*   `cmd/se-smoke`: 真实 SE smoke 测试入口，直接复用生产 `seclient` 并覆盖 `SecurityService`。
 *   `utils`: 提供各种辅助功能，如加密/解密、数据压缩、文件操作以及执行外部命令等。
+
+## SE smoke 测试
+
+硬件 smoke 测试必须从本模块运行，确保测到桌面端真实代码路径：
+
+```bash
+cd offline-client/offline-client-wails
+go run ./mpc_core/cmd/se-smoke
+```
+
+常用参数：
+
+```bash
+go run ./mpc_core/cmd/se-smoke -reader "GOODIX GSE SmartCard Reader 01"
+go run ./mpc_core/cmd/se-smoke -private-key ../secured/genkey/ec_private_key.pem
+```
+
+该命令会覆盖两层：
+
+*   `mpc_core/seclient`：连接读卡器、读取 CPLC、选择 Applet、存储、读取、删除、更新、无效签名、错误输入和清理测试记录。
+*   `SecurityService`：按桌面端实际调用方式执行 `StoreData`、`ReadData`、`DeleteData`，验证配置 AID、`record_id`/地址解析和授权签名链路。
 
 ## 设计理念
 

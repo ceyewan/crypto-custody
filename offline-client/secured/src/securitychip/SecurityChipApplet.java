@@ -3,9 +3,9 @@
  * 
  * 该Applet实现了一个简单的数据存储和检索系统。
  * 主要功能包括:
- * 1. 存储固定长度的用户名(32字节)、以太坊地址(20字节)和消息数据(32字节)
- * 2. 通过用户名和地址检索数据
- * 3. 支持覆盖已存在的(userName, Addr)对的数据
+ * 1. 存储固定长度的record_id(32字节)、以太坊地址(20字节)和消息数据(32字节)
+ * 2. 通过record_id和地址检索数据
+ * 3. 支持覆盖已存在的(recordId, Addr)对的数据
  * 4. 支持删除已存在的数据
  * 5. 使用ECDSA签名验证操作的安全性
  * 
@@ -32,22 +32,22 @@ public class SecurityChipApplet extends Applet {
 
     // 存储限制常量
     private static final byte MAX_RECORDS = 100; // 最大记录数量
-    private static final byte USERNAME_LENGTH = 32; // 用户名固定长度
+    private static final byte RECORD_ID_LENGTH = 32; // record_id固定长度
     private static final byte ADDR_LENGTH = 20; // 地址固定长度
     private static final byte MESSAGE_LENGTH = 32; // 消息固定长度
     private static final byte MAX_SIGNATURE_LENGTH = 72; // ECDSA DER格式签名最大长度
 
     // ECDSA公钥 (NIST P-256 / secp256r1曲线)
     private static final byte[] EC_PUBLIC_KEY_BYTES = {
-            (byte) 0x04, (byte) 0x79, (byte) 0x7C, (byte) 0xEF, (byte) 0x50, (byte) 0x1E, (byte) 0x84, (byte) 0xF2,
-            (byte) 0xD3, (byte) 0x15, (byte) 0xBE, (byte) 0xDB, (byte) 0xDE, (byte) 0xF0, (byte) 0xD3, (byte) 0x0B,
-            (byte) 0xCF, (byte) 0x3A, (byte) 0x16, (byte) 0x30, (byte) 0xA3, (byte) 0x79, (byte) 0x81, (byte) 0x51,
-            (byte) 0xD2, (byte) 0xBC, (byte) 0xF7, (byte) 0xA3, (byte) 0x21, (byte) 0x3A, (byte) 0xD4, (byte) 0x22,
-            (byte) 0x17, (byte) 0x64, (byte) 0x45, (byte) 0x01, (byte) 0x90, (byte) 0x5F, (byte) 0x0C, (byte) 0x58,
-            (byte) 0xC9, (byte) 0x53, (byte) 0x4E, (byte) 0x3E, (byte) 0xAE, (byte) 0x69, (byte) 0x63, (byte) 0x43,
-            (byte) 0x3A, (byte) 0xBE, (byte) 0xEE, (byte) 0x3D, (byte) 0x25, (byte) 0xB5, (byte) 0x87, (byte) 0xCD,
-            (byte) 0xC1, (byte) 0x39, (byte) 0x9D, (byte) 0xD0, (byte) 0x19, (byte) 0x86, (byte) 0xBB, (byte) 0x1D,
-            (byte) 0x12
+            (byte) 0x04, (byte) 0xB6, (byte) 0x29, (byte) 0x04, (byte) 0x3F, (byte) 0x4C, (byte) 0xAC, (byte) 0x5B,
+            (byte) 0xDF, (byte) 0x0B, (byte) 0x97, (byte) 0xE8, (byte) 0x0D, (byte) 0x24, (byte) 0x7E, (byte) 0xF0,
+            (byte) 0x4D, (byte) 0xEF, (byte) 0xB4, (byte) 0x81, (byte) 0x7E, (byte) 0x9E, (byte) 0xEB, (byte) 0x45,
+            (byte) 0xF7, (byte) 0xDA, (byte) 0xE4, (byte) 0xD1, (byte) 0x30, (byte) 0xAD, (byte) 0xA7, (byte) 0xBB,
+            (byte) 0xB4, (byte) 0x68, (byte) 0xCC, (byte) 0x69, (byte) 0x3D, (byte) 0x08, (byte) 0xDC, (byte) 0x2E,
+            (byte) 0x6B, (byte) 0xF6, (byte) 0x2D, (byte) 0x61, (byte) 0xF9, (byte) 0xB3, (byte) 0xC1, (byte) 0x17,
+            (byte) 0xD5, (byte) 0x0E, (byte) 0xBF, (byte) 0x5E, (byte) 0x8C, (byte) 0x86, (byte) 0x3E, (byte) 0xA3,
+            (byte) 0x66, (byte) 0x95, (byte) 0x15, (byte) 0x73, (byte) 0xCE, (byte) 0x0E, (byte) 0xA1, (byte) 0x94,
+            (byte) 0x7A
     };
 
     private static final byte[] P = {
@@ -93,7 +93,7 @@ public class SecurityChipApplet extends Applet {
     private Signature ecSignature;
 
     // 数据存储结构
-    private byte[] userNames; // 所有用户名存储数组
+    private byte[] recordIds; // 所有record_id存储数组
     private byte[] addresses; // 所有地址存储数组
     private byte[] messages; // 所有消息存储数组
     private byte[] existFlags; // 记录存在标志数组
@@ -108,15 +108,15 @@ public class SecurityChipApplet extends Applet {
      */
     private SecurityChipApplet() {
         // 初始化存储结构 - 固定长度数组
-        userNames = new byte[MAX_RECORDS * USERNAME_LENGTH];
+        recordIds = new byte[MAX_RECORDS * RECORD_ID_LENGTH];
         addresses = new byte[MAX_RECORDS * ADDR_LENGTH];
         messages = new byte[MAX_RECORDS * MESSAGE_LENGTH];
         existFlags = new byte[MAX_RECORDS]; // 0表示空槽，1表示有效记录
         recordCount = 0;
         nextFreeSlot = 0;
 
-        // 初始化临时缓冲区 - 只需要存储用户名和地址用于构建签名消息
-        tempBuffer = JCSystem.makeTransientByteArray((short) (USERNAME_LENGTH + ADDR_LENGTH),
+        // 初始化临时缓冲区 - 只需要存储record_id和地址用于构建签名消息
+        tempBuffer = JCSystem.makeTransientByteArray((short) (RECORD_ID_LENGTH + ADDR_LENGTH),
                 JCSystem.CLEAR_ON_DESELECT);
 
         // 初始化ECDSA验证
@@ -187,23 +187,23 @@ public class SecurityChipApplet extends Applet {
     /**
      * 处理存储数据 - 一次性存储完整记录
      * 
-     * APDU格式: [CLA][INS][P1][P2][Lc][userName(32)][addr(20)][message(32)]
+     * APDU格式: [CLA][INS][P1][P2][Lc][recordId(32)][addr(20)][message(32)]
      */
     private void processStoreData(APDU apdu) {
         byte[] apduBuffer = apdu.getBuffer();
         short dataLength = apdu.setIncomingAndReceive();
 
         // 验证数据长度
-        if (dataLength != (short) (USERNAME_LENGTH + ADDR_LENGTH + MESSAGE_LENGTH)) {
+        if (dataLength != (short) (RECORD_ID_LENGTH + ADDR_LENGTH + MESSAGE_LENGTH)) {
             ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
         }
 
         short offset = ISO7816.OFFSET_CDATA;
 
-        // 检查是否已存在相同(userName, addr)的记录
+        // 检查是否已存在相同(recordId, addr)的记录
         byte existingIndex = findRecord(
                 apduBuffer, offset,
-                apduBuffer, (short) (offset + USERNAME_LENGTH));
+                apduBuffer, (short) (offset + RECORD_ID_LENGTH));
 
         byte recordIndex;
         if (existingIndex != -1) {
@@ -225,10 +225,10 @@ public class SecurityChipApplet extends Applet {
             recordCount++; // 增加记录数
         }
 
-        // 保存用户名
-        short userNameOffset = (short) (recordIndex * USERNAME_LENGTH);
-        Util.arrayCopy(apduBuffer, offset, userNames, userNameOffset, USERNAME_LENGTH);
-        offset += USERNAME_LENGTH;
+        // 保存record_id
+        short recordIdOffset = (short) (recordIndex * RECORD_ID_LENGTH);
+        Util.arrayCopy(apduBuffer, offset, recordIds, recordIdOffset, RECORD_ID_LENGTH);
+        offset += RECORD_ID_LENGTH;
 
         // 保存地址
         short addrOffset = (short) (recordIndex * ADDR_LENGTH);
@@ -252,7 +252,7 @@ public class SecurityChipApplet extends Applet {
     /**
      * 处理读取数据 - 一次性读取完整记录
      * 
-     * APDU格式: [CLA][INS][P1][P2][Lc][userName(32)][addr(20)][sign_DER(变长)]
+     * APDU格式: [CLA][INS][P1][P2][Lc][recordId(32)][addr(20)][sign_DER(变长)]
      * 注意: sign_DER是DER编码格式的ECDSA签名，最大长度为72字节
      */
     private void processReadData(APDU apdu) {
@@ -260,7 +260,7 @@ public class SecurityChipApplet extends Applet {
         short dataLength = apdu.setIncomingAndReceive();
 
         // 验证数据最小长度
-        if (dataLength < (short) (USERNAME_LENGTH + ADDR_LENGTH + 8)) {
+        if (dataLength < (short) (RECORD_ID_LENGTH + ADDR_LENGTH + 8)) {
             // 8是DER签名的最小长度 (序列头2字节 + r至少3字节 + s至少3字节)
             ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
         }
@@ -268,22 +268,22 @@ public class SecurityChipApplet extends Applet {
         short offset = ISO7816.OFFSET_CDATA;
 
         // 准备验证签名
-        // 1. 复制用户名和地址到临时缓冲区，用于构建待签名的消息
-        Util.arrayCopy(apduBuffer, offset, tempBuffer, (short) 0, (short) (USERNAME_LENGTH + ADDR_LENGTH));
+        // 1. 复制record_id和地址到临时缓冲区，用于构建待签名的消息
+        Util.arrayCopy(apduBuffer, offset, tempBuffer, (short) 0, (short) (RECORD_ID_LENGTH + ADDR_LENGTH));
 
-        // 计算签名数据长度 (总数据长度减去用户名和地址的长度)
-        short signatureLength = (short) (dataLength - USERNAME_LENGTH - ADDR_LENGTH);
+        // 计算签名数据长度 (总数据长度减去record_id和地址的长度)
+        short signatureLength = (short) (dataLength - RECORD_ID_LENGTH - ADDR_LENGTH);
 
         // 2. 验证签名 - 现在签名已经是DER格式
-        if (!verifySignature(tempBuffer, (short) 0, (short) (USERNAME_LENGTH + ADDR_LENGTH),
-                apduBuffer, (short) (offset + USERNAME_LENGTH + ADDR_LENGTH), signatureLength)) {
+        if (!verifySignature(tempBuffer, (short) 0, (short) (RECORD_ID_LENGTH + ADDR_LENGTH),
+                apduBuffer, (short) (offset + RECORD_ID_LENGTH + ADDR_LENGTH), signatureLength)) {
             ISOException.throwIt(SW_SIGNATURE_INVALID);
         }
 
         // 查找匹配的记录
         byte foundIndex = findRecord(
                 apduBuffer, offset,
-                apduBuffer, (short) (offset + USERNAME_LENGTH));
+                apduBuffer, (short) (offset + RECORD_ID_LENGTH));
 
         // 如果没有找到匹配记录，返回记录未找到状态
         if (foundIndex == -1) {
@@ -299,9 +299,9 @@ public class SecurityChipApplet extends Applet {
     }
 
     /**
-     * 处理删除数据 - 根据用户名和地址删除记录
+     * 处理删除数据 - 根据record_id和地址删除记录
      * 
-     * APDU格式: [CLA][INS][P1][P2][Lc][userName(32)][addr(20)][sign_DER(变长)]
+     * APDU格式: [CLA][INS][P1][P2][Lc][recordId(32)][addr(20)][sign_DER(变长)]
      * 注意: sign_DER是DER编码格式的ECDSA签名，最大长度为72字节
      */
     private void processDeleteData(APDU apdu) {
@@ -309,7 +309,7 @@ public class SecurityChipApplet extends Applet {
         short dataLength = apdu.setIncomingAndReceive();
 
         // 验证数据最小长度
-        if (dataLength < (short) (USERNAME_LENGTH + ADDR_LENGTH + 8)) {
+        if (dataLength < (short) (RECORD_ID_LENGTH + ADDR_LENGTH + 8)) {
             // 8是DER签名的最小长度
             ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
         }
@@ -317,22 +317,22 @@ public class SecurityChipApplet extends Applet {
         short offset = ISO7816.OFFSET_CDATA;
 
         // 准备验证签名
-        // 1. 复制用户名和地址到临时缓冲区，用于构建待签名的消息
-        Util.arrayCopy(apduBuffer, offset, tempBuffer, (short) 0, (short) (USERNAME_LENGTH + ADDR_LENGTH));
+        // 1. 复制record_id和地址到临时缓冲区，用于构建待签名的消息
+        Util.arrayCopy(apduBuffer, offset, tempBuffer, (short) 0, (short) (RECORD_ID_LENGTH + ADDR_LENGTH));
 
         // 计算签名数据长度
-        short signatureLength = (short) (dataLength - USERNAME_LENGTH - ADDR_LENGTH);
+        short signatureLength = (short) (dataLength - RECORD_ID_LENGTH - ADDR_LENGTH);
 
         // 2. 验证签名 - 现在签名已经是DER格式
-        if (!verifySignature(tempBuffer, (short) 0, (short) (USERNAME_LENGTH + ADDR_LENGTH),
-                apduBuffer, (short) (offset + USERNAME_LENGTH + ADDR_LENGTH), signatureLength)) {
+        if (!verifySignature(tempBuffer, (short) 0, (short) (RECORD_ID_LENGTH + ADDR_LENGTH),
+                apduBuffer, (short) (offset + RECORD_ID_LENGTH + ADDR_LENGTH), signatureLength)) {
             ISOException.throwIt(SW_SIGNATURE_INVALID);
         }
 
         // 查找匹配的记录
         byte foundIndex = findRecord(
                 apduBuffer, offset,
-                apduBuffer, (short) (offset + USERNAME_LENGTH));
+                apduBuffer, (short) (offset + RECORD_ID_LENGTH));
 
         // 如果没有找到匹配记录，返回记录未找到状态
         if (foundIndex == -1) {
@@ -378,15 +378,15 @@ public class SecurityChipApplet extends Applet {
     }
 
     /**
-     * 根据用户名和地址查找记录索引
+     * 根据record_id和地址查找记录索引
      * 
-     * @param userNameArray  用户名所在的数组
-     * @param userNameOffset 用户名在数组中的起始位置
+     * @param recordIdArray  record_id所在的数组
+     * @param recordIdOffset record_id在数组中的起始位置
      * @param addrArray      地址所在的数组
      * @param addrOffset     地址在数组中的起始位置
      * @return 找到的记录索引，未找到则返回 -1
      */
-    private byte findRecord(byte[] userNameArray, short userNameOffset,
+    private byte findRecord(byte[] recordIdArray, short recordIdOffset,
             byte[] addrArray, short addrOffset) {
         for (byte i = 0; i < MAX_RECORDS; i++) {
             // 检查记录是否存在
@@ -394,10 +394,10 @@ public class SecurityChipApplet extends Applet {
                 continue; // 跳过已删除的记录
             }
 
-            // 比较用户名
-            short currentUserNameOffset = (short) (i * USERNAME_LENGTH);
-            if (Util.arrayCompare(userNameArray, userNameOffset, userNames, currentUserNameOffset,
-                    USERNAME_LENGTH) == 0) {
+            // 比较record_id
+            short currentRecordIdOffset = (short) (i * RECORD_ID_LENGTH);
+            if (Util.arrayCompare(recordIdArray, recordIdOffset, recordIds, currentRecordIdOffset,
+                    RECORD_ID_LENGTH) == 0) {
                 // 比较地址
                 short currentAddrOffset = (short) (i * ADDR_LENGTH);
                 if (Util.arrayCompare(addrArray, addrOffset, addresses, currentAddrOffset, ADDR_LENGTH) == 0) {

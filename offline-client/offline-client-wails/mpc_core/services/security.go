@@ -155,11 +155,14 @@ func (s *SecurityService) DeleteData(recordID, addr string, signature []byte) er
 
 // GetCPLC 获取安全芯片的CPLC信息。
 func (s *SecurityService) GetCPLC() ([]byte, error) {
-	reader, err := s.connectAndSelect()
+	reader, err := seclient.NewCardReader(seclient.WithDebug(s.cfg.Debug))
 	if err != nil {
 		return nil, err
 	}
 	defer reader.Close()
+	if err := reader.Connect(s.cfg.CardReaderName); err != nil {
+		return nil, err
+	}
 
 	cplc, err := reader.GetCPLC()
 	if err != nil {
@@ -171,8 +174,8 @@ func (s *SecurityService) GetCPLC() ([]byte, error) {
 
 func parseRecordID(recordID string) ([]byte, error) {
 	recordBytes, err := hex.DecodeString(strings.TrimPrefix(recordID, "0x"))
-	if err != nil || len(recordBytes) != seclient.USERNAME_LENGTH {
-		return nil, fmt.Errorf("record_id必须是%d字节hex", seclient.USERNAME_LENGTH)
+	if err != nil || len(recordBytes) != seclient.RECORD_ID_LENGTH {
+		return nil, fmt.Errorf("record_id必须是%d字节hex", seclient.RECORD_ID_LENGTH)
 	}
 	return recordBytes, nil
 }

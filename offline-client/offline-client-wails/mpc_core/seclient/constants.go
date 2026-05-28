@@ -16,7 +16,7 @@ const (
 	SW_SIGNATURE_INVALID = 0x6982 // 签名无效
 
 	// 固定长度常量
-	USERNAME_LENGTH      = 32 // 用户名长度
+	RECORD_ID_LENGTH     = 32 // record_id长度
 	ADDR_LENGTH          = 20 // 地址长度
 	MESSAGE_LENGTH       = 32 // 消息长度
 	MAX_SIGNATURE_LENGTH = 72 // DER格式签名最大长度

@@ -77,7 +77,7 @@ gg20_signing \
 
 ## SE 访问
 
-`SecurityService` 将 `record_id` 当作 32 字节 hex 解析，并直接传给 Applet 的第一段 32 字节字段。Applet 里历史字段名可能仍叫 `userName`，但上层语义统一为 `record_id`。
+`SecurityService` 将 `record_id` 当作 32 字节 hex 解析，并直接传给 Applet 的第一段 32 字节字段。Applet、Go `seclient` 和上层协议语义均统一为 `record_id`。
 
 SE 数据模型：
 
@@ -86,3 +86,28 @@ record_id(32 bytes) + address(20 bytes) -> aes_key(32 bytes)
 ```
 
 读取和删除都必须携带服务端对 `record_id || address` 生成的授权签名。
+
+## SE smoke 测试
+
+真实硬件 smoke 测试放在 `mpc_core/cmd/se-smoke`，必须直接复用生产 `mpc_core/seclient`。不要在 `secured/test/go` 里维护第二份 `seclient`，否则 Applet 测试和桌面端真实调用链可能漂移。
+
+运行方式：
+
+```bash
+cd offline-client/offline-client-wails
+go run ./mpc_core/cmd/se-smoke
+```
+
+常用参数：
+
+```bash
+go run ./mpc_core/cmd/se-smoke -reader "GOODIX GSE SmartCard Reader 01"
+go run ./mpc_core/cmd/se-smoke -private-key ../secured/genkey/ec_private_key.pem
+go run ./mpc_core/cmd/se-smoke -skip-direct
+go run ./mpc_core/cmd/se-smoke -skip-service
+```
+
+覆盖范围：
+
+- 直接 `mpc_core/seclient`：连接读卡器、读取 CPLC、选择 Applet、存储、读取、删除、更新、无效签名、错误输入、清理测试记录。
+- `SecurityService`：按桌面端真实路径执行 `StoreData`、`ReadData`、`DeleteData`，验证配置 AID、`record_id`/地址解析和授权签名。

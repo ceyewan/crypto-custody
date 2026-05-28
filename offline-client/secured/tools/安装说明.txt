@@ -1,0 +1,18 @@
+1. 命令行安装：
+  本项目不要直接使用系统默认 python3 安装。如果默认 python3 是 3.14 或更新版本，pygse/pyscard 容易出现兼容性问题。
+  推荐使用 Python 3.11 虚拟环境，并固定 pyscard==2.2.2：
+
+  cd offline-client/secured/tools
+  /opt/homebrew/opt/python@3.11/bin/python3.11 -m venv .venv311
+  source .venv311/bin/activate
+  python -m pip install -U pip setuptools wheel
+  python -m pip install -U ./pygse-2.1.5-py3-none-any.whl ./gpqc-1.0.1-py3-none-any.whl
+  python -m pip install --force-reinstall "pyscard==2.2.2"
+
+2. 运行：
+  安装完成后，命令行运行：
+  pygse ls-dev
+  gpqc
+
+3. 查看用户手册：
+  后量子工具窗口中“帮助-》用户手册”

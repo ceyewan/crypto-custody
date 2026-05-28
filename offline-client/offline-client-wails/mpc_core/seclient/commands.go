@@ -7,10 +7,10 @@ import (
 )
 
 // StoreData 存储数据 - 简化接口，直接接收数据
-func (r *CardReader) StoreData(username []byte, addr []byte, message []byte) (int, int, error) {
+func (r *CardReader) StoreData(recordID []byte, addr []byte, message []byte) (int, int, error) {
 	// 验证输入数据长度
-	if len(username) != USERNAME_LENGTH {
-		return 0, 0, fmt.Errorf("用户名长度错误: 应为 %d 字节", USERNAME_LENGTH)
+	if len(recordID) != RECORD_ID_LENGTH {
+		return 0, 0, fmt.Errorf("record_id长度错误: 应为 %d 字节", RECORD_ID_LENGTH)
 	}
 	if len(addr) != ADDR_LENGTH {
 		return 0, 0, fmt.Errorf("地址长度错误: 应为 %d 字节", ADDR_LENGTH)
@@ -20,14 +20,14 @@ func (r *CardReader) StoreData(username []byte, addr []byte, message []byte) (in
 	}
 
 	// 构造完整数据
-	fullData := make([]byte, 0, USERNAME_LENGTH+ADDR_LENGTH+MESSAGE_LENGTH)
-	fullData = append(fullData, username...)
+	fullData := make([]byte, 0, RECORD_ID_LENGTH+ADDR_LENGTH+MESSAGE_LENGTH)
+	fullData = append(fullData, recordID...)
 	fullData = append(fullData, addr...)
 	fullData = append(fullData, message...)
 
 	if r.debug {
 		clog.Info("❕存储数据到安全芯片❕",
-			clog.String("username", hex.EncodeToString(username)),
+			clog.String("record_id", hex.EncodeToString(recordID)),
 			clog.String("addr", hex.EncodeToString(addr)),
 			clog.String("message", hex.EncodeToString(message)),
 		)
@@ -72,10 +72,10 @@ func (r *CardReader) StoreData(username []byte, addr []byte, message []byte) (in
 }
 
 // ReadData 读取数据 - 简化接口，接收外部生成的签名
-func (r *CardReader) ReadData(username []byte, addr []byte, signature []byte) ([]byte, error) {
+func (r *CardReader) ReadData(recordID []byte, addr []byte, signature []byte) ([]byte, error) {
 	// 验证输入数据长度
-	if len(username) != USERNAME_LENGTH {
-		return nil, fmt.Errorf("用户名长度错误: 应为 %d 字节", USERNAME_LENGTH)
+	if len(recordID) != RECORD_ID_LENGTH {
+		return nil, fmt.Errorf("record_id长度错误: 应为 %d 字节", RECORD_ID_LENGTH)
 	}
 	if len(addr) != ADDR_LENGTH {
 		return nil, fmt.Errorf("地址长度错误: 应为 %d 字节", ADDR_LENGTH)
@@ -85,14 +85,14 @@ func (r *CardReader) ReadData(username []byte, addr []byte, signature []byte) ([
 	}
 
 	// 构造完整数据 - 包含签名
-	fullData := make([]byte, 0, USERNAME_LENGTH+ADDR_LENGTH+len(signature))
-	fullData = append(fullData, username...)
+	fullData := make([]byte, 0, RECORD_ID_LENGTH+ADDR_LENGTH+len(signature))
+	fullData = append(fullData, recordID...)
 	fullData = append(fullData, addr...)
 	fullData = append(fullData, signature...)
 
 	if r.debug {
 		clog.Info("❕读取数据从安全芯片❕",
-			clog.String("username", hex.EncodeToString(username)),
+			clog.String("record_id", hex.EncodeToString(recordID)),
 			clog.String("addr", hex.EncodeToString(addr)),
 			clog.String("signature", hex.EncodeToString(signature)),
 		)
@@ -126,10 +126,10 @@ func (r *CardReader) ReadData(username []byte, addr []byte, signature []byte) ([
 }
 
 // DeleteData 删除数据 - 简化接口，接收外部生成的签名
-func (r *CardReader) DeleteData(username []byte, addr []byte, signature []byte) (int, int, error) {
+func (r *CardReader) DeleteData(recordID []byte, addr []byte, signature []byte) (int, int, error) {
 	// 验证输入数据长度
-	if len(username) != USERNAME_LENGTH {
-		return 0, 0, fmt.Errorf("用户名长度错误: 应为 %d 字节", USERNAME_LENGTH)
+	if len(recordID) != RECORD_ID_LENGTH {
+		return 0, 0, fmt.Errorf("record_id长度错误: 应为 %d 字节", RECORD_ID_LENGTH)
 	}
 	if len(addr) != ADDR_LENGTH {
 		return 0, 0, fmt.Errorf("地址长度错误: 应为 %d 字节", ADDR_LENGTH)
@@ -139,14 +139,14 @@ func (r *CardReader) DeleteData(username []byte, addr []byte, signature []byte) 
 	}
 
 	// 构造完整数据 - 包含签名
-	fullData := make([]byte, 0, USERNAME_LENGTH+ADDR_LENGTH+len(signature))
-	fullData = append(fullData, username...)
+	fullData := make([]byte, 0, RECORD_ID_LENGTH+ADDR_LENGTH+len(signature))
+	fullData = append(fullData, recordID...)
 	fullData = append(fullData, addr...)
 	fullData = append(fullData, signature...)
 
 	if r.debug {
 		clog.Info("❕删除数据从安全芯片❕",
-			clog.String("username", hex.EncodeToString(username)),
+			clog.String("record_id", hex.EncodeToString(recordID)),
 			clog.String("addr", hex.EncodeToString(addr)),
 			clog.String("signature", hex.EncodeToString(signature)),
 		)

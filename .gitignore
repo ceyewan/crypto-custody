@@ -3,6 +3,8 @@
 */.DS_Store
 offline-client/.DS_Store
 offline-client/secured/genkey/ec_private_key.pem
+offline-client/secured/tools/.venv/
+offline-client/secured/tools/.venv311/
 offline-client/web-se/private_keys/ec_private_key.pem
 offline-client/web-se/logs/app.log
 offline-client/web-se/web-se
