@@ -135,6 +135,7 @@ func (s *SeStorage) GetAllSe() ([]model.Se, error) {
 }
 
 // GetActiveSeIds 选取指定数量的可用安全芯片ID。
+// 如果可用 SE 数量少于参与方数量，会循环复用已有 SE。SE 记录仍通过不同 record_id 隔离。
 func (s *SeStorage) GetActiveSeIds(count int) ([]string, error) {
 	if count <= 0 {
 		return nil, ErrInvalidParameter
@@ -158,13 +159,13 @@ func (s *SeStorage) GetActiveSeIds(count int) ([]string, error) {
 		return nil, ErrOperationFailed
 	}
 
-	if len(ses) < count {
+	if len(ses) == 0 {
 		return nil, ErrRecordNotFound
 	}
 
-	seIDs := make([]string, len(ses))
-	for i := range ses {
-		seIDs[i] = ses[i].SeID
+	seIDs := make([]string, count)
+	for i := 0; i < count; i++ {
+		seIDs[i] = ses[i%len(ses)].SeID
 	}
 	return seIDs, nil
 }
