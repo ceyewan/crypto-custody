@@ -5,11 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"offline-client-wails/mpc_core/clog"
 	"offline-client-wails/mpc_core/config"
 	"offline-client-wails/mpc_core/seclient"
 )
+
+var seOperationMu sync.Mutex
 
 // SecurityService 提供与安全芯片通信的服务接口。
 type SecurityService struct {
@@ -69,6 +72,9 @@ func (s *SecurityService) StoreData(recordID, addr string, key []byte) error {
 		return err
 	}
 
+	seOperationMu.Lock()
+	defer seOperationMu.Unlock()
+
 	reader, err := s.connectAndSelect()
 	if err != nil {
 		return err
@@ -103,6 +109,9 @@ func (s *SecurityService) ReadData(recordID, addr string, signature []byte) ([]b
 	if err != nil {
 		return nil, err
 	}
+
+	seOperationMu.Lock()
+	defer seOperationMu.Unlock()
 
 	reader, err := s.connectAndSelect()
 	if err != nil {
@@ -139,6 +148,9 @@ func (s *SecurityService) DeleteData(recordID, addr string, signature []byte) er
 		return err
 	}
 
+	seOperationMu.Lock()
+	defer seOperationMu.Unlock()
+
 	reader, err := s.connectAndSelect()
 	if err != nil {
 		return err
@@ -155,6 +167,9 @@ func (s *SecurityService) DeleteData(recordID, addr string, signature []byte) er
 
 // GetCPLC 获取安全芯片的CPLC信息。
 func (s *SecurityService) GetCPLC() ([]byte, error) {
+	seOperationMu.Lock()
+	defer seOperationMu.Unlock()
+
 	reader, err := seclient.NewCardReader(seclient.WithDebug(s.cfg.Debug))
 	if err != nil {
 		return nil, err

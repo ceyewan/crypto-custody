@@ -36,6 +36,37 @@ func NewMessageHandler() *MessageHandler {
 	sessionManager := mem_storage.GetSessionManager()
 	managerRuntime := manager.NewSessionRuntimeFromEnv()
 
+	return NewMessageHandlerWithDependencies(
+		shareStorage,
+		seStorage,
+		offlineKeyStorage,
+		keyGenStorage,
+		signStorage,
+		auditStorage,
+		sessionManager,
+		managerRuntime,
+	)
+}
+
+// NewMessageHandlerWithDependencies 创建使用显式依赖的消息处理器，主要用于
+// 本地 smoke、测试和外部组装场景。生产默认路径仍使用 NewMessageHandler。
+func NewMessageHandlerWithDependencies(
+	shareStorage storage.IShareStorage,
+	seStorage storage.ISeStorage,
+	offlineKeyStorage storage.IOfflineKeyStorage,
+	keyGenStorage storage.IKeyGenStorage,
+	signStorage storage.ISignStorage,
+	auditStorage storage.IAuditStorage,
+	sessionManager *mem_storage.SessionManager,
+	managerRuntime manager.SessionRuntime,
+) *MessageHandler {
+	if sessionManager == nil {
+		sessionManager = mem_storage.NewSessionManager()
+	}
+	if managerRuntime == nil {
+		managerRuntime = manager.NewSessionRuntimeFromEnv()
+	}
+
 	handler := &MessageHandler{
 		shareStorage:      shareStorage,
 		seStorage:         seStorage,

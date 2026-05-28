@@ -70,7 +70,15 @@ func NewServer(addr string) *Server {
 func NewServerWithConfig(addr string, config ServerConfig) *Server {
 	// 创建消息处理器
 	handler := NewMessageHandler()
+	return NewServerWithHandler(addr, config, handler)
+}
 
+// NewServerWithHandler 使用指定消息处理器创建 WebSocket 服务器。
+// 生产代码通常使用 NewServer 或 NewServerWithConfig；该入口用于 smoke 和测试。
+func NewServerWithHandler(addr string, config ServerConfig, handler *MessageHandler) *Server {
+	if handler == nil {
+		handler = NewMessageHandler()
+	}
 	// 创建客户端集线器
 	hub := NewHub(handler)
 
