@@ -468,7 +468,7 @@ func (c *Client) Close() {
 
 		// 从Hub注销
 		if c.username != "" {
-			c.hub.UnregisterClient(c.username)
+			c.hub.UnregisterClientIfCurrent(c.username, c)
 		}
 
 		// 关闭连接

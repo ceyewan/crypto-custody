@@ -73,7 +73,7 @@ func (h *Hub) cleanupDeadConnections() {
 
 		if closed {
 			// 从Hub注销
-			h.UnregisterClient(username)
+			h.UnregisterClientIfCurrent(username, client)
 			deadClients++
 			continue
 		}
@@ -126,13 +126,28 @@ func (h *Hub) RegisterClient(username string, client *Client) {
 
 // UnregisterClient 注销客户端
 func (h *Hub) UnregisterClient(username string) {
+	h.unregisterClient(username, nil)
+}
+
+// UnregisterClientIfCurrent 仅当 Hub 中当前保存的连接就是指定 client 时才注销。
+// 这避免同名用户重连后，旧连接异步关闭时把新连接从 Hub 中误删。
+func (h *Hub) UnregisterClientIfCurrent(username string, client *Client) {
+	h.unregisterClient(username, client)
+}
+
+func (h *Hub) unregisterClient(username string, expected *Client) {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 
 	// 检查客户端是否存在
-	_, exists := h.clients[username]
+	current, exists := h.clients[username]
 	if !exists {
 		// 客户端已不存在，可能已被其他操作注销
+		return
+	}
+	if expected != nil && current != expected {
+		clog.Debug("跳过注销非当前客户端",
+			clog.String("username", username))
 		return
 	}
 
