@@ -1,0 +1,5 @@
+.env
+data/
+logs/
+private_keys/*
+!private_keys/.gitkeep

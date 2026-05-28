@@ -2,7 +2,7 @@
 
 # Deploy offline-server with Docker Compose.
 # Usage:
-#   OFFLINE_MANAGER_PUBLIC_HOST=192.168.1.10 ./docker-deploy.sh
+#   OFFLINE_MANAGER_PUBLIC_HOST=192.168.1.10 ./deploy.sh
 #
 # Required local file:
 #   private_keys/ec_private_key.pem
@@ -30,7 +30,7 @@ if [[ ! -f ".env" ]]; then
     echo "Created .env from .env.example"
 fi
 
-mkdir -p private_keys
+mkdir -p data logs private_keys
 if [[ ! -f "private_keys/ec_private_key.pem" ]]; then
     echo "Error: private_keys/ec_private_key.pem is required."
     echo "Copy in the offline-server ECDSA private key that matches the SE applet public key."
@@ -51,6 +51,7 @@ echo "======================================"
 echo "Deploying crypto-custody offline-server"
 echo "Image: ${OFFLINE_SERVER_IMAGE:-$(grep -E '^OFFLINE_SERVER_IMAGE=' .env | tail -1 | cut -d= -f2- || echo ceyewan/crypto-custody-offline-server:latest)}"
 echo "Manager public host: ${PUBLIC_HOST:-unset}"
+echo "Work dir: $(pwd)"
 echo "======================================"
 
 "${COMPOSE[@]}" pull || true

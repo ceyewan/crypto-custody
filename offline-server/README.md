@@ -76,12 +76,6 @@ OFFLINE_MANAGER_PORT_END=18100
 - `offline-server` 服务端可执行文件。
 - `bin/gg20_sm_manager_linux_amd64`。
 
-镜像不会包含 `private_keys/ec_private_key.pem`。部署前需要把与 SE applet 公钥匹配的服务端 ECDSA 私钥放到：
-
-```bash
-offline-server/private_keys/ec_private_key.pem
-```
-
 构建并推送镜像：
 
 ```bash
@@ -89,36 +83,15 @@ cd offline-server
 ./docker-build-push.sh ceyewan crypto-custody-offline-server latest
 ```
 
-服务器上一键启动：
+部署入口统一放在根目录的独立部署目录：
 
 ```bash
-cd offline-server
+cd deploy/offline-server
 cp .env.example .env
-# 编辑 .env，把 OFFLINE_MANAGER_PUBLIC_HOST 改成桌面端可访问的服务器 IP 或域名
-./docker-deploy.sh
+./deploy.sh
 ```
 
-也可以不改 `.env`，直接用环境变量启动：
-
-```bash
-OFFLINE_MANAGER_PUBLIC_HOST=192.168.1.10 ./docker-deploy.sh
-```
-
-需要在服务器防火墙和安全组放行：
-
-```text
-8080              HTTP API
-8081              WebSocket
-18001-18100       会话级 gg20 manager 端口范围
-```
-
-常用运维命令：
-
-```bash
-docker compose logs -f offline-server
-docker compose ps
-docker compose down
-```
+详细说明见 `deploy/offline-server/README.md`。镜像不会包含 `ec_private_key.pem`，部署时由 `deploy/offline-server/private_keys/` 挂载。
 
 ## 测试
 

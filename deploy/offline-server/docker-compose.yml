@@ -1,10 +1,8 @@
 services:
   offline-server:
-    build:
-      context: .
-      dockerfile: Dockerfile
     image: ${OFFLINE_SERVER_IMAGE:-ceyewan/crypto-custody-offline-server:latest}
     platform: ${DOCKER_PLATFORM:-linux/amd64}
+    pull_policy: always
     container_name: crypto-custody-offline-server
     restart: unless-stopped
     environment:
@@ -27,8 +25,8 @@ services:
       - "${OFFLINE_WS_HOST_PORT:-8081}:${OFFLINE_WS_PORT:-8081}"
       - "${OFFLINE_MANAGER_PORT_START:-18001}-${OFFLINE_MANAGER_PORT_END:-18100}:${OFFLINE_MANAGER_PORT_START:-18001}-${OFFLINE_MANAGER_PORT_END:-18100}"
     volumes:
-      - offline-server-data:/app/data
-      - offline-server-logs:/app/logs
+      - ./data:/app/data
+      - ./logs:/app/logs
       - ./private_keys:/app/private_keys:ro
     networks:
       - crypto-custody-offline-net
@@ -37,9 +35,3 @@ networks:
   crypto-custody-offline-net:
     name: crypto-custody-offline-net
     driver: bridge
-
-volumes:
-  offline-server-data:
-    name: crypto-custody-offline-data
-  offline-server-logs:
-    name: crypto-custody-offline-logs
