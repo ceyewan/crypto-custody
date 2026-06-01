@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"time"
 
 	"offline-server/storage"
 	"offline-server/storage/model"
@@ -16,6 +17,7 @@ type DestroyHandler struct {
 	seStorage         storage.ISeStorage
 	offlineKeyStorage storage.IOfflineKeyStorage
 	auditStorage      storage.IAuditStorage
+	approvalStore     storage.IApprovalStorage
 	sessionManager    *mem_storage.SessionManager
 }
 
@@ -25,6 +27,7 @@ func NewDestroyHandler(
 	seStorage storage.ISeStorage,
 	offlineKeyStorage storage.IOfflineKeyStorage,
 	auditStorage storage.IAuditStorage,
+	approvalStore storage.IApprovalStorage,
 	sessionManager *mem_storage.SessionManager,
 ) *DestroyHandler {
 	return &DestroyHandler{
@@ -32,6 +35,7 @@ func NewDestroyHandler(
 		seStorage:         seStorage,
 		offlineKeyStorage: offlineKeyStorage,
 		auditStorage:      auditStorage,
+		approvalStore:     approvalStore,
 		sessionManager:    sessionManager,
 	}
 }
@@ -155,6 +159,7 @@ func (h *DestroyHandler) handleDestroyResponse(msg DestroyResponseMessage, sende
 	if !msg.Accept {
 		session.Responses[idx] = string(model.ParticipantRejected)
 		h.markDestroyFailed(msg.SessionKey)
+		h.recordApproval(session, sender.GetUserName(), model.ApprovalRejected)
 		h.notifySessionFailure(session, sender, fmt.Sprintf("参与方 %s 拒绝销毁", sender.GetUserName()), msg.Reason)
 		return nil
 	}
@@ -220,6 +225,7 @@ func (h *DestroyHandler) handleDestroyResult(msg DestroyResultMessage, sender *C
 	if !msg.Success {
 		session.Responses[idx] = string(model.ParticipantFailed)
 		h.markDestroyFailed(msg.SessionKey)
+		h.recordApproval(session, sender.GetUserName(), model.ApprovalRejected)
 		h.notifySessionFailure(session, sender, fmt.Sprintf("参与方 %s 销毁失败", sender.GetUserName()), msg.Message)
 		return nil
 	}
@@ -240,6 +246,7 @@ func (h *DestroyHandler) handleDestroyResult(msg DestroyResultMessage, sender *C
 	}
 	session.Status = model.StatusCompleted
 	h.audit(sender, "destroy_session_complete", "offline_key", session.OfflineKeyID, "success", "")
+	h.recordApproval(session, sender.GetUserName(), model.ApprovalApproved)
 
 	completeMsg := DestroyCompleteMessage{
 		BaseMessage:  BaseMessage{Type: MsgDestroyComplete},
@@ -333,5 +340,20 @@ func (h *DestroyHandler) audit(sender *Client, action, resourceType, resourceID,
 		ResourceID:   resourceID,
 		Result:       result,
 		ErrorMessage: errMsg,
+	})
+}
+
+func (h *DestroyHandler) recordApproval(session *mem_storage.DestroySession, approvedBy string, status model.ApprovalStatus) {
+	if h.approvalStore == nil || session == nil {
+		return
+	}
+	_, _ = h.approvalStore.CreateApproval(model.Approval{
+		ApprovalID:  fmt.Sprintf("APPROVAL-%s-%d", sanitizeApprovalPart(session.OfflineKeyID), time.Now().UnixNano()),
+		Operation:   "offline_key_destroy",
+		ResourceID:  session.OfflineKeyID,
+		RequestedBy: session.Initiator,
+		ApprovedBy:  approvedBy,
+		Role:        "officer",
+		Status:      status,
 	})
 }

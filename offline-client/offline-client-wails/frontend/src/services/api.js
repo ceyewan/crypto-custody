@@ -169,16 +169,13 @@ export const offlineApi = {
         return apiClient.post(`/offline/shards/${encodeURIComponent(shardID)}/transfer`, data)
     },
 
-    transferKey(offlineKeyID, data) {
-        return apiClient.post(`/offline/keys/${offlineKeyID}/transfer`, data)
-    },
-
     destroyKey(offlineKeyID, data = {}) {
         return apiClient.post(`/offline/keys/${offlineKeyID}/destroy`, data)
     },
 
-    listAudit(limit = 100) {
-        return apiClient.get(`/offline/audit`, { params: { limit } })
+    listAudit(params = {}) {
+        const query = typeof params === 'number' ? { limit: params } : params
+        return apiClient.get(`/offline/audit`, { params: query })
     },
 
     listApprovals(limit = 100) {

@@ -48,7 +48,6 @@ func initOfflineRouter(r *gin.Engine) {
 		offlineAdminGroup.POST("/tasks/:task_no/sign/start", handler.BuildSignTaskRequest)
 		offlineAdminGroup.GET("/results/:task_no/download", handler.DownloadOfflineResult)
 		offlineAdminGroup.POST("/shards/:shard_id/transfer", handler.TransferKeyShard)
-		offlineAdminGroup.POST("/keys/:offline_key_id/transfer", handler.TransferOfflineKey)
 		offlineAdminGroup.POST("/keys/:offline_key_id/destroy", handler.DestroyOfflineKey)
 		offlineAdminGroup.GET("/backup/download", handler.DownloadBackup)
 	}

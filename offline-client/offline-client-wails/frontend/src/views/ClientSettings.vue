@@ -141,7 +141,7 @@ export default {
             try {
                 await this.$store.dispatch('saveClientSettings', this.form)
                 const response = await seApi.getCPLC()
-                this.$alert(response.data.cplc_info || '', 'SE CPLC', {
+                this.$alert(response.data.cplc_info || '', '安全芯片编号', {
                     closeOnClickModal: true
                 })
             } catch (error) {

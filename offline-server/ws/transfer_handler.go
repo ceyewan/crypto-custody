@@ -3,6 +3,7 @@ package ws
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"offline-server/storage"
 	"offline-server/storage/model"
@@ -13,17 +14,20 @@ import (
 type TransferHandler struct {
 	shareStorage   storage.IShareStorage
 	auditStorage   storage.IAuditStorage
+	approvalStore  storage.IApprovalStorage
 	sessionManager *mem_storage.SessionManager
 }
 
 func NewTransferHandler(
 	shareStorage storage.IShareStorage,
 	auditStorage storage.IAuditStorage,
+	approvalStore storage.IApprovalStorage,
 	sessionManager *mem_storage.SessionManager,
 ) *TransferHandler {
 	return &TransferHandler{
 		shareStorage:   shareStorage,
 		auditStorage:   auditStorage,
+		approvalStore:  approvalStore,
 		sessionManager: sessionManager,
 	}
 }
@@ -134,6 +138,7 @@ func (h *TransferHandler) handleTransferResponse(msg TransferResponseMessage, se
 	if !msg.Accept {
 		session.Responses[idx] = string(model.ParticipantRejected)
 		h.markTransferFailed(session.SessionKey)
+		h.recordApproval(session, sender.GetUserName(), model.ApprovalRejected)
 		h.notifyTransferComplete(session, sender, false, fmt.Sprintf("参与方 %s 拒绝分片移交", sender.GetUserName()))
 		return nil
 	}
@@ -152,6 +157,7 @@ func (h *TransferHandler) handleTransferResponse(msg TransferResponseMessage, se
 	session.Status = model.StatusCompleted
 	session.Address = updated.Address
 	h.audit(sender, "transfer_session_complete", "key_shard", session.ShardID, "success", fmt.Sprintf("from=%s,to=%s", session.FromUsername, session.ToUsername))
+	h.recordApproval(session, sender.GetUserName(), model.ApprovalApproved)
 	h.notifyTransferComplete(session, sender, true, "分片移交已完成")
 	return nil
 }
@@ -198,4 +204,37 @@ func (h *TransferHandler) audit(sender *Client, action, resourceType, resourceID
 		Result:       result,
 		ErrorMessage: errMsg,
 	})
+}
+
+func (h *TransferHandler) recordApproval(session *mem_storage.TransferSession, approvedBy string, status model.ApprovalStatus) {
+	if h.approvalStore == nil || session == nil {
+		return
+	}
+	_, _ = h.approvalStore.CreateApproval(model.Approval{
+		ApprovalID:  fmt.Sprintf("APPROVAL-%s-%d", sanitizeApprovalPart(session.ShardID), time.Now().UnixNano()),
+		Operation:   "offline_shard_transfer",
+		ResourceID:  session.ShardID,
+		RequestedBy: session.Initiator,
+		ApprovedBy:  approvedBy,
+		Role:        "officer",
+		Status:      status,
+	})
+}
+
+func sanitizeApprovalPart(value string) string {
+	if value == "" {
+		return "resource"
+	}
+	var out []rune
+	for _, r := range value {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+			out = append(out, r)
+		} else {
+			out = append(out, '_')
+		}
+	}
+	if len(out) == 0 {
+		return "resource"
+	}
+	return string(out)
 }

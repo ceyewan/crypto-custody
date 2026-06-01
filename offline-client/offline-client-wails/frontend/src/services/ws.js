@@ -335,7 +335,7 @@ function handleRegisterComplete(message) {
 }
 
 function handleKeyGenInvite(message) {
-    console.log('收到密钥生成邀请:', message)
+    console.log('收到私钥生成邀请:', message)
     markInvited('keygen', message, {
         kind: 'keygen',
         session_key: message.session_key,
@@ -344,9 +344,9 @@ function handleKeyGenInvite(message) {
         party_index: message.party_index,
         status: 'invited',
         phase: WS_MESSAGE_TYPES.KEYGEN_INVITE,
-        message: '等待用户确认密钥生成邀请'
+        message: '等待用户确认私钥生成邀请'
     })
-    Message.info(`收到来自 ${message.initiator || '管理员'} 的密钥生成邀请，请在通知页面处理`)
+    Message.info(`收到来自 ${message.initiator || '管理员'} 的私钥生成邀请，请在通知页面处理`)
 }
 
 function handleSignInvite(message) {
@@ -366,7 +366,7 @@ function handleSignInvite(message) {
 }
 
 function handleDestroyInvite(message) {
-    console.log('收到密钥销毁邀请:', message)
+    console.log('收到私钥销毁邀请:', message)
     markInvited('destroy', message, {
         kind: 'destroy',
         session_key: message.session_key,
@@ -375,13 +375,13 @@ function handleDestroyInvite(message) {
         party_index: message.party_index,
         status: 'invited',
         phase: WS_MESSAGE_TYPES.DESTROY_INVITE,
-        message: '等待用户确认密钥销毁邀请'
+        message: '等待用户确认私钥销毁邀请'
     })
-    Message.warning(`收到密钥销毁邀请，地址: ${message.address}，请在通知页面处理`)
+    Message.warning(`收到私钥销毁邀请，地址: ${message.address}，请在通知页面处理`)
 }
 
 function handleTransferInvite(message) {
-    console.log('收到分片移交邀请:', message)
+    console.log('收到私钥分片移交邀请:', message)
     markInvited('transfer', message, {
         kind: 'transfer',
         session_key: message.session_key,
@@ -390,9 +390,9 @@ function handleTransferInvite(message) {
         case_no: message.case_no,
         status: 'invited',
         phase: WS_MESSAGE_TYPES.TRANSFER_INVITE,
-        message: '等待用户确认分片移交邀请'
+        message: '等待用户确认私钥分片移交邀请'
     })
-    Message.warning(`收到分片移交邀请，地址: ${message.address}，请在通知页面处理`)
+    Message.warning(`收到私钥分片移交邀请，地址: ${message.address}，请在通知页面处理`)
 }
 
 
@@ -440,16 +440,16 @@ async function handleKeyGenParams(message) {
                 record_id: message.record_id,
                 encrypted_shard: keygenResponse.data.encrypted_shard,
                 success: true,
-                message: '密钥生成成功'
+                message: '私钥生成成功'
             }
-            sendTaskResult(task.key, resultMessage, '密钥生成成功，结果已回传')
+            sendTaskResult(task.key, resultMessage, '私钥生成成功，结果已回传')
 
-            Message.success('密钥生成成功')
+            Message.success('私钥生成成功')
         } else {
-            throw new Error('MPC服务密钥生成失败')
+            throw new Error('私钥生成失败')
         }
     } catch (error) {
-        console.error('密钥生成失败:', error)
+        console.error('私钥生成失败:', error)
         // 发送失败结果
         const resultMessage = {
             type: WS_MESSAGE_TYPES.KEYGEN_RESULT,
@@ -461,32 +461,32 @@ async function handleKeyGenParams(message) {
             record_id: message.record_id,
             encrypted_shard: '',
             success: false,
-            message: '密钥生成失败: ' + errorMessage(error)
+            message: '私钥生成失败: ' + errorMessage(error)
         }
-        sendTaskResult(task.key, resultMessage, '密钥生成失败，错误已回传')
+        sendTaskResult(task.key, resultMessage, '私钥生成失败，错误已回传')
 
-        Message.error('密钥生成失败: ' + errorMessage(error))
+        Message.error('私钥生成失败: ' + errorMessage(error))
     }
 }
 
-// 处理密钥生成完成消息
+// 处理私钥生成完成消息
 function handleKeyGenComplete(message) {
     commitTask(mpcTaskKey('keygen', message), {
         status: 'completed',
         phase: WS_MESSAGE_TYPES.KEYGEN_COMPLETE,
         success: !!message.success,
-        message: message.message || (message.success ? '密钥生成完成' : '密钥生成失败')
+        message: message.message || (message.success ? '私钥生成完成' : '私钥生成失败')
     })
     if (message.success) {
         MessageBox.alert(
-            `密钥生成成功! 地址: ${message.address}`,
-            '密钥生成完成',
+            `私钥生成成功，托管地址: ${message.address}`,
+            '私钥生成完成',
             { type: 'success' }
         )
     } else {
         MessageBox.alert(
-            `密钥生成失败: ${message.message}`,
-            '密钥生成失败',
+            `私钥生成失败: ${message.message}`,
+            '私钥生成失败',
             { type: 'error' }
         )
     }
@@ -571,7 +571,7 @@ function handleSignComplete(message) {
     }
 }
 
-// 处理密钥销毁参数
+// 处理私钥销毁参数
 async function handleDestroyParams(message) {
     const task = beginTask('destroy', message)
     if (!task.started) {
@@ -590,43 +590,43 @@ async function handleDestroyParams(message) {
             session_key: message.session_key,
             party_index: message.party_index,
             success: true,
-            message: 'SE记录已删除并验证不可读取'
+            message: '安全芯片记录已删除并验证不可读取'
         }
-        sendTaskResult(task.key, resultMessage, 'SE记录销毁成功，结果已回传')
+        sendTaskResult(task.key, resultMessage, '私钥销毁成功，结果已回传')
 
-        Message.success('SE记录销毁成功')
+        Message.success('私钥销毁成功')
     } catch (error) {
         const resultMessage = {
             type: WS_MESSAGE_TYPES.DESTROY_RESULT,
             session_key: message.session_key,
             party_index: message.party_index,
             success: false,
-            message: 'SE记录销毁失败: ' + errorMessage(error)
+            message: '私钥销毁失败: ' + errorMessage(error)
         }
-        sendTaskResult(task.key, resultMessage, 'SE记录销毁失败，错误已回传')
+        sendTaskResult(task.key, resultMessage, '私钥销毁失败，错误已回传')
 
-        Message.error('SE记录销毁失败: ' + errorMessage(error))
+        Message.error('私钥销毁失败: ' + errorMessage(error))
     }
 }
 
-// 处理密钥销毁完成消息
+// 处理私钥销毁完成消息
 function handleDestroyComplete(message) {
     commitTask(mpcTaskKey('destroy', message), {
         status: 'completed',
         phase: WS_MESSAGE_TYPES.DESTROY_COMPLETE,
         success: !!message.success,
-        message: message.message || (message.success ? '密钥销毁完成' : '密钥销毁失败')
+        message: message.message || (message.success ? '私钥销毁完成' : '私钥销毁失败')
     })
     if (message.success) {
         MessageBox.alert(
-            `密钥销毁完成，已销毁分片数: ${message.destroyed}`,
-            '密钥销毁完成',
+            `私钥销毁完成，已销毁私钥分片数: ${message.destroyed}`,
+            '私钥销毁完成',
             { type: 'success' }
         )
     } else {
         MessageBox.alert(
-            `密钥销毁失败: ${message.message}`,
-            '密钥销毁失败',
+            `私钥销毁失败: ${message.message}`,
+            '私钥销毁失败',
             { type: 'error' }
         )
     }
@@ -637,12 +637,12 @@ function handleTransferComplete(message) {
         status: 'completed',
         phase: WS_MESSAGE_TYPES.TRANSFER_COMPLETE,
         success: !!message.success,
-        message: message.message || (message.success ? '分片移交完成' : '分片移交失败')
+        message: message.message || (message.success ? '私钥分片移交完成' : '私钥分片移交失败')
     })
     if (message.success) {
-        Message.success(message.message || '分片移交完成')
+        Message.success(message.message || '私钥分片移交完成')
     } else {
-        Message.error(message.message || '分片移交失败')
+        Message.error(message.message || '私钥分片移交失败')
     }
 }
 

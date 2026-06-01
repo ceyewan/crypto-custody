@@ -36,7 +36,7 @@
                             </el-menu-item>
                             <el-menu-item index="/keygen">
                                 <i class="el-icon-key"></i>
-                                <span>密钥生成</span>
+                                <span>生成私钥</span>
                             </el-menu-item>
                             <el-menu-item index="/sign">
                                 <i class="el-icon-s-finance"></i>
@@ -44,7 +44,7 @@
                             </el-menu-item>
                             <el-menu-item index="/keys">
                                 <i class="el-icon-wallet"></i>
-                                <span>密钥与分片</span>
+                                <span>地址与私钥</span>
                             </el-menu-item>
                             <el-menu-item index="/security-elements">
                                 <i class="el-icon-cpu"></i>
@@ -52,7 +52,7 @@
                             </el-menu-item>
                             <el-menu-item index="/users">
                                 <i class="el-icon-user"></i>
-                                <span>账户管理</span>
+                                <span>用户管理</span>
                             </el-menu-item>
                             <el-menu-item index="/backup">
                                 <i class="el-icon-folder-checked"></i>
@@ -68,7 +68,7 @@
                             </el-menu-item>
                             <el-menu-item index="/my-shards">
                                 <i class="el-icon-collection-tag"></i>
-                                <span>我的分片</span>
+                                <span>我的私钥分片</span>
                             </el-menu-item>
                             <el-menu-item index="/participation">
                                 <i class="el-icon-time"></i>
@@ -83,7 +83,7 @@
                             </el-menu-item>
                             <el-menu-item index="/keys">
                                 <i class="el-icon-wallet"></i>
-                                <span>密钥摘要</span>
+                                <span>地址与私钥摘要</span>
                             </el-menu-item>
                         </template>
 

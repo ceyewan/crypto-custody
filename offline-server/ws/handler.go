@@ -16,6 +16,7 @@ type MessageHandler struct {
 	keyGenStorage     storage.IKeyGenStorage
 	signStorage       storage.ISignStorage
 	auditStorage      storage.IAuditStorage
+	approvalStore     storage.IApprovalStorage
 	sessionManager    *mem_storage.SessionManager
 	managerRuntime    manager.SessionRuntime
 
@@ -34,6 +35,7 @@ func NewMessageHandler() *MessageHandler {
 	keyGenStorage := storage.GetKeyGenStorage()
 	signStorage := storage.GetSignStorage()
 	auditStorage := storage.GetAuditStorage()
+	approvalStore := storage.GetApprovalStorage()
 	sessionManager := mem_storage.GetSessionManager()
 	managerRuntime := manager.NewSessionRuntimeFromEnv()
 
@@ -44,6 +46,7 @@ func NewMessageHandler() *MessageHandler {
 		keyGenStorage,
 		signStorage,
 		auditStorage,
+		approvalStore,
 		sessionManager,
 		managerRuntime,
 	)
@@ -58,6 +61,7 @@ func NewMessageHandlerWithDependencies(
 	keyGenStorage storage.IKeyGenStorage,
 	signStorage storage.ISignStorage,
 	auditStorage storage.IAuditStorage,
+	approvalStore storage.IApprovalStorage,
 	sessionManager *mem_storage.SessionManager,
 	managerRuntime manager.SessionRuntime,
 ) *MessageHandler {
@@ -75,6 +79,7 @@ func NewMessageHandlerWithDependencies(
 		keyGenStorage:     keyGenStorage,
 		signStorage:       signStorage,
 		auditStorage:      auditStorage,
+		approvalStore:     approvalStore,
 		sessionManager:    sessionManager,
 		managerRuntime:    managerRuntime,
 	}
@@ -82,8 +87,8 @@ func NewMessageHandlerWithDependencies(
 	// 创建子处理器
 	handler.keygenHandler = NewKeyGenHandler(shareStorage, seStorage, offlineKeyStorage, keyGenStorage, auditStorage, sessionManager, managerRuntime)
 	handler.signHandler = NewSignHandler(shareStorage, seStorage, offlineKeyStorage, signStorage, auditStorage, sessionManager, managerRuntime)
-	handler.destroyHandler = NewDestroyHandler(shareStorage, seStorage, offlineKeyStorage, auditStorage, sessionManager)
-	handler.transferHandler = NewTransferHandler(shareStorage, auditStorage, sessionManager)
+	handler.destroyHandler = NewDestroyHandler(shareStorage, seStorage, offlineKeyStorage, auditStorage, approvalStore, sessionManager)
+	handler.transferHandler = NewTransferHandler(shareStorage, auditStorage, approvalStore, sessionManager)
 
 	clog.Debug("创建消息处理器实例")
 	return handler

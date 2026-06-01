@@ -63,10 +63,10 @@ export default {
         },
         typeText(type) {
             const map = {
-                keygen: '密钥生成',
+                keygen: '私钥生成',
                 sign: '交易签名',
-                transfer: '分片移交',
-                destroy: '分片销毁'
+                transfer: '私钥分片移交',
+                destroy: '私钥销毁'
             }
             return map[type] || type
         },

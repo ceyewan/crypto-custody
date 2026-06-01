@@ -2,8 +2,24 @@
 package storage
 
 import (
+	"time"
+
 	"offline-server/storage/model"
 )
+
+// AuditLogFilter 定义审计日志的服务端筛选条件。
+type AuditLogFilter struct {
+	Limit    int
+	TimeFrom time.Time
+	TimeTo   time.Time
+	Username string
+	Role     string
+	Action   string
+	Resource string
+	CaseNo   string
+	Address  string
+	Result   string
+}
 
 // IUserStorage 定义用户账号存储接口
 type IUserStorage interface {
@@ -194,6 +210,7 @@ type IOfflineTaskStorage interface {
 type IAuditStorage interface {
 	CreateAuditLog(log model.AuditLog) error
 	ListAuditLogs(limit int) ([]model.AuditLog, error)
+	SearchAuditLogs(filter AuditLogFilter) ([]model.AuditLog, error)
 }
 
 // IApprovalStorage 定义敏感操作审批记录存储接口

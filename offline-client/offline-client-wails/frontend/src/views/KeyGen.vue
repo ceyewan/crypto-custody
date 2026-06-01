@@ -2,8 +2,8 @@
     <div class="page task-entry-page">
         <div class="page-header">
             <div>
-                <h2 class="page-title">密钥生成</h2>
-                <p class="page-subtitle">优先导入在线系统导出的托管钱包生成任务包，再发起 2-of-3 等 MPC keygen。</p>
+                <h2 class="page-title">生成私钥</h2>
+                <p class="page-subtitle">优先导入在线系统导出的任务包，生成托管地址和对应的私钥分片。</p>
             </div>
             <el-button type="primary" icon="el-icon-upload2" @click="$router.push('/offline-tasks')">
                 导入 JSON 任务包
@@ -14,13 +14,13 @@
             <el-alert
                 type="info"
                 :closable="false"
-                title="keygen 主流程已经收敛到“离线任务”页面。">
+                    title="生成私钥主流程已经收敛到“离线任务”页面。">
             </el-alert>
 
             <el-steps :active="0" simple class="steps">
                 <el-step title="导入 offline_task JSON"></el-step>
                 <el-step title="选择管理员/警员参与方"></el-step>
-                <el-step title="警员确认并执行 MPC"></el-step>
+                    <el-step title="警员确认并生成私钥分片"></el-step>
                 <el-step title="下载 offline_result JSON"></el-step>
             </el-steps>
 

@@ -2,8 +2,8 @@
     <div class="page users-page">
         <div class="page-header">
             <div>
-                <h2 class="page-title">账户管理</h2>
-                <p class="page-subtitle">只保留管理员、警员、审计员三类角色；警员和管理员可以参与 MPC。</p>
+                <h2 class="page-title">用户管理</h2>
+                <p class="page-subtitle">管理登录离线系统的管理员、警员、审计员；警员和管理员可以参与私钥生成和签名。</p>
             </div>
             <el-button icon="el-icon-refresh" :loading="loading" @click="fetchUserList">刷新</el-button>
         </div>

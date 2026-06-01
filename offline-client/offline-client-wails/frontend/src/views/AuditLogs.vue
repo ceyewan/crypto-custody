@@ -3,7 +3,7 @@
         <div class="page-header">
             <div>
                 <h2 class="page-title">审计日志</h2>
-                <p class="page-subtitle">只读查看离线任务、密钥、分片、安全芯片和备份操作记录。</p>
+                <p class="page-subtitle">只读查看离线任务、地址、私钥分片、安全芯片和备份操作记录。</p>
             </div>
             <el-button icon="el-icon-refresh" :loading="loadingLogs || loadingApprovals" @click="loadAll">刷新</el-button>
         </div>
@@ -48,13 +48,14 @@
                     </el-select>
                 </el-form-item>
                 <el-form-item>
+                    <el-button type="primary" :loading="loadingLogs" @click="loadAudit">查询</el-button>
                     <el-button @click="resetFilters">重置</el-button>
                 </el-form-item>
             </el-form>
 
             <el-tabs v-model="activeTab">
                 <el-tab-pane label="审计日志" name="audit">
-                    <el-table :data="filteredLogs" style="width: 100%" v-loading="loadingLogs">
+                    <el-table :data="logs" style="width: 100%" v-loading="loadingLogs">
                         <el-table-column prop="created_at" label="时间" width="180">
                             <template slot-scope="scope">
                                 {{ formatTime(scope.row.created_at) }}
@@ -135,27 +136,6 @@ export default {
             loadingApprovals: false
         }
     },
-    computed: {
-        filteredLogs() {
-            return this.logs.filter(log => {
-                if (this.filters.username && !String(log.username || '').includes(this.filters.username)) return false
-                if (this.filters.role && log.role !== this.filters.role) return false
-                if (this.filters.action && !String(log.action || '').includes(this.filters.action)) return false
-                const haystack = `${log.resource_type || ''} ${log.resource_id || ''} ${log.redacted_detail || ''}`
-                if (this.filters.resource && !haystack.includes(this.filters.resource)) return false
-                if (this.filters.caseNo && !haystack.includes(this.filters.caseNo)) return false
-                if (this.filters.address && !haystack.toLowerCase().includes(this.filters.address.toLowerCase())) return false
-                if (this.filters.result && log.result !== this.filters.result) return false
-                if (this.filters.timeRange && this.filters.timeRange.length === 2) {
-                    const time = new Date(log.created_at).getTime()
-                    const start = new Date(this.filters.timeRange[0]).getTime()
-                    const end = new Date(this.filters.timeRange[1]).getTime()
-                    if (time < start || time > end) return false
-                }
-                return true
-            })
-        }
-    },
     created() {
         this.loadAll()
     },
@@ -167,13 +147,29 @@ export default {
         async loadAudit() {
             this.loadingLogs = true
             try {
-                const response = await this.$offlineApi.listAudit(300)
+                const response = await this.$offlineApi.listAudit(this.auditQuery())
                 this.logs = response.data.logs || []
             } catch (error) {
                 this.$message.error(this.apiError(error, '审计日志加载失败'))
             } finally {
                 this.loadingLogs = false
             }
+        },
+
+        auditQuery() {
+            const params = { limit: 300 }
+            if (this.filters.timeRange && this.filters.timeRange.length === 2) {
+                params.time_from = new Date(this.filters.timeRange[0]).toISOString()
+                params.time_to = new Date(this.filters.timeRange[1]).toISOString()
+            }
+            if (this.filters.username) params.username = this.filters.username
+            if (this.filters.role) params.role = this.filters.role
+            if (this.filters.action) params.action = this.filters.action
+            if (this.filters.resource) params.resource = this.filters.resource
+            if (this.filters.caseNo) params.case_no = this.filters.caseNo
+            if (this.filters.address) params.address = this.filters.address
+            if (this.filters.result) params.result = this.filters.result
+            return params
         },
 
         async loadApprovals() {
@@ -199,6 +195,7 @@ export default {
                 address: '',
                 result: ''
             }
+            this.loadAudit()
         },
 
         showDetail(row) {

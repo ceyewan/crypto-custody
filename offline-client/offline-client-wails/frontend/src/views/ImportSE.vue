@@ -3,7 +3,7 @@
         <div class="page-header">
             <div>
                 <h2 class="page-title">安全芯片管理</h2>
-                <p class="page-subtitle">SE 统一管理，不归属个人；分片归属由用户名和 record_id 表达。</p>
+                <p class="page-subtitle">安全芯片统一登记，不归属个人；私钥分片归属由持有人和安全芯片记录表达。</p>
             </div>
             <div>
                 <el-button icon="el-icon-refresh" :loading="loadingList" @click="loadSecurityElements">刷新列表</el-button>

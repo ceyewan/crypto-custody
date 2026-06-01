@@ -2,8 +2,8 @@
     <div class="page key-management-page">
         <div class="page-header">
             <div>
-                <h2 class="page-title">密钥与分片</h2>
-                <p class="page-subtitle">围绕地址和单个分片管理移交、销毁与查询，不再表达成账户所有权变更。</p>
+                <h2 class="page-title">地址与私钥</h2>
+                <p class="page-subtitle">明文私钥不会出现在系统中；这里展示地址、私钥分片持有人和安全芯片记录。</p>
             </div>
             <el-button icon="el-icon-refresh" :loading="loading" @click="loadAll">刷新</el-button>
         </div>
@@ -26,7 +26,7 @@
                     </el-select>
                 </el-form-item>
                 <el-form-item>
-                    <el-button type="primary" @click="loadShards">查询分片</el-button>
+                    <el-button type="primary" @click="loadShards">查询私钥分片</el-button>
                 </el-form-item>
             </el-form>
 
@@ -41,7 +41,7 @@
                                 {{ scope.row.required_signers }} / {{ scope.row.total_parties }}
                             </template>
                         </el-table-column>
-                        <el-table-column prop="offline_key_id" label="离线密钥编号" min-width="180"></el-table-column>
+                        <el-table-column prop="offline_key_id" label="私钥编号" min-width="180"></el-table-column>
                         <el-table-column prop="status" label="状态" width="110">
                             <template slot-scope="scope">
                                 <el-tag :type="statusTag(scope.row.status)">{{ scope.row.status }}</el-tag>
@@ -49,7 +49,7 @@
                         </el-table-column>
                         <el-table-column label="操作" width="190">
                             <template slot-scope="scope">
-                                <el-button size="mini" @click="showKey(scope.row)">分片</el-button>
+                                <el-button size="mini" @click="showKey(scope.row)">私钥分片</el-button>
                                 <el-button
                                     v-if="isAdmin"
                                     type="danger"
@@ -63,19 +63,19 @@
                     </el-table>
                 </el-tab-pane>
 
-                <el-tab-pane label="分片列表" name="shards">
+                <el-tab-pane label="私钥分片列表" name="shards">
                     <el-table :data="shards" v-loading="loadingShards" style="width: 100%">
                         <el-table-column prop="address" label="地址" min-width="220"></el-table-column>
                         <el-table-column prop="case_no" label="案件编号" width="150"></el-table-column>
-                        <el-table-column prop="shard_index" label="分片" width="80"></el-table-column>
+                        <el-table-column prop="shard_index" label="私钥分片" width="90"></el-table-column>
                         <el-table-column label="门限" width="100">
                             <template slot-scope="scope">
                                 {{ thresholdText(scope.row) }}
                             </template>
                         </el-table-column>
                         <el-table-column prop="username" label="持有人" width="130"></el-table-column>
-                        <el-table-column prop="record_id" label="Record ID" min-width="220"></el-table-column>
-                        <el-table-column prop="se_cplc" label="SE CPLC" min-width="220"></el-table-column>
+                        <el-table-column prop="record_id" label="安全芯片记录" min-width="220"></el-table-column>
+                        <el-table-column prop="se_cplc" label="安全芯片编号" min-width="220"></el-table-column>
                         <el-table-column prop="encrypted_blob_sha256" label="密文摘要" min-width="220"></el-table-column>
                         <el-table-column prop="status" label="状态" width="110">
                             <template slot-scope="scope">
@@ -98,12 +98,12 @@
             </el-tabs>
         </el-card>
 
-        <el-dialog title="分片移交" :visible.sync="transferDialogVisible" width="560px">
+        <el-dialog title="私钥分片移交" :visible.sync="transferDialogVisible" width="560px">
             <el-descriptions v-if="transferShard" :column="1" border size="small">
                 <el-descriptions-item label="地址">{{ transferShard.address }}</el-descriptions-item>
-                <el-descriptions-item label="分片">{{ transferShard.shard_index }}</el-descriptions-item>
+                <el-descriptions-item label="私钥分片">{{ transferShard.shard_index }}</el-descriptions-item>
                 <el-descriptions-item label="当前持有人">{{ transferShard.username }}</el-descriptions-item>
-                <el-descriptions-item label="Record ID">{{ transferShard.record_id }}</el-descriptions-item>
+                <el-descriptions-item label="安全芯片记录">{{ transferShard.record_id }}</el-descriptions-item>
             </el-descriptions>
 
             <el-form :model="transferForm" label-width="120px" class="transfer-form">
@@ -197,7 +197,7 @@ export default {
                 const response = await this.$offlineApi.listShards(params)
                 this.shards = response.data.shards || []
             } catch (error) {
-                this.$message.error(this.apiError(error, '查询分片列表失败'))
+                this.$message.error(this.apiError(error, '查询私钥分片列表失败'))
             } finally {
                 this.loadingShards = false
             }
@@ -244,11 +244,11 @@ export default {
                     throw new Error('WebSocket 未连接')
                 }
                 this.$store.commit('setCurrentSession', message.session_key)
-                this.$message.success('分片移交邀请已发送，等待移出和接收双方确认')
+                this.$message.success('私钥分片移交邀请已发送，等待移出和接收双方确认')
                 this.transferDialogVisible = false
                 this.$router.push('/notifications')
             } catch (error) {
-                this.$message.error(this.apiError(error, '分片移交失败'))
+                this.$message.error(this.apiError(error, '私钥分片移交失败'))
             } finally {
                 this.transferring = false
             }
@@ -256,7 +256,7 @@ export default {
 
         async destroyKey(key) {
             try {
-                await this.$confirm('确认发起该地址的分片销毁流程？参与警员仍需在各自客户端确认。', '销毁确认', { type: 'warning' })
+                await this.$confirm('确认发起该地址的私钥销毁流程？参与警员仍需在各自客户端确认。', '私钥销毁确认', { type: 'warning' })
             } catch {
                 return
             }
@@ -270,7 +270,7 @@ export default {
                     throw new Error('WebSocket 未连接')
                 }
                 this.$store.commit('setCurrentSession', message.session_key)
-                this.$message.success('销毁请求已发送，请等待分片持有人确认')
+                this.$message.success('私钥销毁请求已发送，请等待私钥分片持有人确认')
                 this.$router.push('/notifications')
             } catch (error) {
                 this.$message.error(this.apiError(error, '销毁失败'))

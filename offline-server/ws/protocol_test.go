@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sync"
 	"testing"
 
 	"offline-server/manager"
@@ -382,7 +383,7 @@ func TestDestroyProtocolDeletesAllActiveShardsBeforeMarkingKeyDestroyed(t *testi
 	}
 
 	sessionManager := mem_storage.NewSessionManager()
-	handler := NewDestroyHandler(shareStore, seStore, offlineKeyStore, fakeAuditStorage{}, sessionManager)
+	handler := NewDestroyHandler(shareStore, seStore, offlineKeyStore, fakeAuditStorage{}, fakeApprovalStorage{}, sessionManager)
 
 	hub := newTestHub()
 	admin := addTestClient(hub, "admin", RoleAdmin)
@@ -473,7 +474,7 @@ func TestTransferProtocolRequiresBothSidesBeforeMovingShard(t *testing.T) {
 	}
 
 	sessionManager := mem_storage.NewSessionManager()
-	handler := NewTransferHandler(shareStore, fakeAuditStorage{}, sessionManager)
+	handler := NewTransferHandler(shareStore, fakeAuditStorage{}, fakeApprovalStorage{}, sessionManager)
 
 	hub := newTestHub()
 	admin := addTestClient(hub, "admin", RoleAdmin)
@@ -628,6 +629,7 @@ func (f *fakeManagerRuntime) StopAll() error {
 }
 
 type fakeShareStorage struct {
+	mu      sync.RWMutex
 	shards  map[string]model.KeyShard
 	created []model.KeyShard
 }
@@ -637,12 +639,16 @@ func newFakeShareStorage() *fakeShareStorage {
 }
 
 func (f *fakeShareStorage) CreateKeyShard(shard model.KeyShard) (*model.KeyShard, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.created = append(f.created, shard)
 	f.shards[shardKey(shard.Username, shard.Address)] = shard
 	return &shard, nil
 }
 
 func (f *fakeShareStorage) GetKeyShardForParticipant(username, address string) (*model.KeyShard, error) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
 	shard, ok := f.shards[shardKey(username, address)]
 	if !ok || shard.Status != model.KeyShardStatusActive {
 		return nil, storage.ErrRecordNotFound
@@ -651,6 +657,8 @@ func (f *fakeShareStorage) GetKeyShardForParticipant(username, address string) (
 }
 
 func (f *fakeShareStorage) GetKeyShardByID(shardID string) (*model.KeyShard, error) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
 	for _, shard := range f.shards {
 		if shard.ShardID == shardID {
 			return &shard, nil
@@ -660,6 +668,8 @@ func (f *fakeShareStorage) GetKeyShardByID(shardID string) (*model.KeyShard, err
 }
 
 func (f *fakeShareStorage) ListActiveKeyShardsByAddress(address string) ([]model.KeyShard, error) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
 	var shards []model.KeyShard
 	for _, shard := range f.shards {
 		if shard.Address == address && shard.Status == model.KeyShardStatusActive {
@@ -670,6 +680,8 @@ func (f *fakeShareStorage) ListActiveKeyShardsByAddress(address string) ([]model
 }
 
 func (f *fakeShareStorage) ListKeyShardsByAddress(address string) ([]model.KeyShard, error) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
 	var shards []model.KeyShard
 	for _, shard := range f.shards {
 		if shard.Address == address {
@@ -680,6 +692,8 @@ func (f *fakeShareStorage) ListKeyShardsByAddress(address string) ([]model.KeySh
 }
 
 func (f *fakeShareStorage) ListKeyShardsByUsername(username string) ([]model.KeyShard, error) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
 	var shards []model.KeyShard
 	for _, shard := range f.shards {
 		if shard.Username == username {
@@ -690,6 +704,8 @@ func (f *fakeShareStorage) ListKeyShardsByUsername(username string) ([]model.Key
 }
 
 func (f *fakeShareStorage) ListKeyShards() ([]model.KeyShard, error) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
 	shards := make([]model.KeyShard, 0, len(f.shards))
 	for _, shard := range f.shards {
 		shards = append(shards, shard)
@@ -698,6 +714,8 @@ func (f *fakeShareStorage) ListKeyShards() ([]model.KeyShard, error) {
 }
 
 func (f *fakeShareStorage) UpdateKeyShardStatus(shardID string, status model.KeyShardStatus) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	for key, shard := range f.shards {
 		if shard.ShardID == shardID {
 			shard.Status = status
@@ -709,6 +727,8 @@ func (f *fakeShareStorage) UpdateKeyShardStatus(shardID string, status model.Key
 }
 
 func (f *fakeShareStorage) TransferKeyShard(shardID, newUsername string) (*model.KeyShard, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	for key, shard := range f.shards {
 		if shard.ShardID == shardID {
 			delete(f.shards, key)
@@ -1017,5 +1037,19 @@ func (fakeAuditStorage) CreateAuditLog(log model.AuditLog) error {
 }
 
 func (fakeAuditStorage) ListAuditLogs(limit int) ([]model.AuditLog, error) {
+	return nil, nil
+}
+
+func (fakeAuditStorage) SearchAuditLogs(filter storage.AuditLogFilter) ([]model.AuditLog, error) {
+	return nil, nil
+}
+
+type fakeApprovalStorage struct{}
+
+func (fakeApprovalStorage) CreateApproval(approval model.Approval) (*model.Approval, error) {
+	return &approval, nil
+}
+
+func (fakeApprovalStorage) ListApprovals(limit int) ([]model.Approval, error) {
 	return nil, nil
 }

@@ -3,7 +3,7 @@
         <div class="page-header">
             <div>
                 <h2 class="page-title">待处理邀请</h2>
-                <p class="page-subtitle">确认前请插入对应安全芯片；同意时客户端会读取当前 SE CPLC 并回传服务端。</p>
+                <p class="page-subtitle">确认前请插入对应安全芯片；同意时客户端会读取当前安全芯片编号并回传服务端。</p>
             </div>
             <el-button icon="el-icon-delete" @click="clearNotifications">清空通知</el-button>
         </div>
@@ -35,14 +35,14 @@
                     <el-descriptions-item label="发起人">
                         {{ item.content.initiator || '-' }}
                     </el-descriptions-item>
-                    <el-descriptions-item label="分片序号">{{ item.content.party_index || '-' }}</el-descriptions-item>
+                    <el-descriptions-item label="私钥分片">{{ item.content.party_index || '-' }}</el-descriptions-item>
                     <el-descriptions-item v-if="item.content.from_username" label="移出警员">
                         {{ item.content.from_username }}
                     </el-descriptions-item>
                     <el-descriptions-item v-if="item.content.to_username" label="接收警员">
                         {{ item.content.to_username }}
                     </el-descriptions-item>
-                    <el-descriptions-item label="指定 SE">{{ item.content.se_id || '-' }}</el-descriptions-item>
+                    <el-descriptions-item label="指定安全芯片">{{ item.content.se_id || '-' }}</el-descriptions-item>
                     <el-descriptions-item v-if="item.content.reason" label="原因">{{ item.content.reason }}</el-descriptions-item>
                 </el-descriptions>
 
@@ -150,17 +150,17 @@ export default {
 
         formatMsgType(type) {
             const typeMap = {
-                keygen_invite: '密钥生成邀请',
-                keygen_params: '密钥生成执行',
-                keygen_complete: '密钥生成完成',
+                keygen_invite: '私钥生成邀请',
+                keygen_params: '私钥生成执行',
+                keygen_complete: '私钥生成完成',
                 sign_invite: '交易签名邀请',
                 sign_params: '交易签名执行',
                 sign_complete: '签名完成',
-                destroy_invite: '销毁邀请',
+                destroy_invite: '私钥销毁邀请',
                 destroy_params: '销毁执行',
                 destroy_complete: '销毁完成',
-                transfer_invite: '分片移交确认',
-                transfer_complete: '分片移交完成',
+                transfer_invite: '私钥分片移交确认',
+                transfer_complete: '私钥分片移交完成',
                 error: '错误'
             }
             return typeMap[type] || type
@@ -168,10 +168,10 @@ export default {
 
         inviteTitle(item) {
             const map = {
-                keygen_invite: '密钥生成邀请',
+                keygen_invite: '私钥生成邀请',
                 sign_invite: '交易签名邀请',
-                destroy_invite: '分片销毁确认',
-                transfer_invite: '分片移交确认'
+                destroy_invite: '私钥销毁确认',
+                transfer_invite: '私钥分片移交确认'
             }
             return map[item.type] || item.type
         },
@@ -244,7 +244,7 @@ export default {
                 })
                 this.markNotificationResponded(notification)
                 this.markTaskResponded('keygen', notification, true, '', cplc)
-                this.$message.success('已接受密钥生成邀请')
+                this.$message.success('已接受私钥生成邀请')
             } catch (error) {
                 await this.rejectAfterError(notification, WS_MESSAGE_TYPES.KEYGEN_RESPONSE, 'keygen', error)
             }
@@ -281,7 +281,7 @@ export default {
         async handleDestroyInviteAccept(notification) {
             if (notification.responded) return
             try {
-                await this.$confirm('确认对当前安全芯片执行密钥记录删除？', '销毁确认', { type: 'warning' })
+                await this.$confirm('确认删除当前安全芯片中的私钥记录？', '私钥销毁确认', { type: 'warning' })
             } catch {
                 return
             }
@@ -297,7 +297,7 @@ export default {
                 })
                 this.markNotificationResponded(notification)
                 this.markTaskResponded('destroy', notification, true, '', cplc)
-                this.$message.success('已确认密钥销毁邀请')
+                this.$message.success('已确认私钥销毁邀请')
             } catch (error) {
                 await this.rejectAfterError(notification, WS_MESSAGE_TYPES.DESTROY_RESPONSE, 'destroy', error)
             }
@@ -319,9 +319,9 @@ export default {
                 })
                 this.markNotificationResponded(notification)
                 this.markTaskResponded('transfer', notification, true)
-                this.$message.success('已同意分片移交')
+                this.$message.success('已同意私钥分片移交')
             } catch (error) {
-                this.$message.error('同意分片移交失败: ' + error.message)
+                this.$message.error('同意私钥分片移交失败: ' + error.message)
             }
         },
 
@@ -333,7 +333,7 @@ export default {
             const cplcResponse = await seApi.getCPLC()
             const cplc = cplcResponse.data.cplc_info || ''
             if (!cplc) {
-                throw new Error('未读取到当前 SE CPLC')
+                throw new Error('未读取到当前安全芯片编号')
             }
             return cplc
         },

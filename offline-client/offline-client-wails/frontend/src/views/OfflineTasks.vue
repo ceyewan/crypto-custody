@@ -3,7 +3,7 @@
         <div class="page-header">
             <div>
                 <h2 class="page-title">离线任务</h2>
-                <p class="page-subtitle">通过在线系统导出的 JSON 任务包发起 keygen/sign，完成后下载 JSON 结果包。</p>
+                <p class="page-subtitle">通过在线系统导出的 JSON 任务包生成托管地址、完成交易签名，并下载 JSON 结果包。</p>
             </div>
             <el-button icon="el-icon-refresh" @click="resetFlow">重新选择</el-button>
         </div>
@@ -63,7 +63,7 @@
                     <el-form :model="manualForm" label-width="120px" class="manual-form">
                         <el-form-item label="任务类型">
                             <el-radio-group v-model="manualForm.taskType" @change="refreshManualTaskNo">
-                                <el-radio-button label="custody_keygen">托管钱包生成</el-radio-button>
+                                    <el-radio-button label="custody_keygen">生成托管地址和私钥</el-radio-button>
                                 <el-radio-button label="sign">交易签名</el-radio-button>
                             </el-radio-group>
                         </el-form-item>
@@ -190,7 +190,7 @@
                                     {{ requiredSigners }} / {{ totalParties }}
                                 </el-descriptions-item>
                                 <el-descriptions-item v-if="isSignTask" label="签名地址">{{ payload.from_address }}</el-descriptions-item>
-                                <el-descriptions-item v-if="isSignTask" label="密钥门限">
+                                <el-descriptions-item v-if="isSignTask" label="私钥门限">
                                     {{ keyThresholdText }}
                                 </el-descriptions-item>
                                 <el-descriptions-item label="已选参与方">{{ selectedParticipants.join(', ') || '-' }}</el-descriptions-item>
@@ -200,7 +200,7 @@
                         <div>
                             <h3>发起参数</h3>
                             <el-form label-width="120px">
-                                <el-form-item label="离线密钥编号">
+                                <el-form-item label="私钥编号">
                                     <el-input v-model="offlineKeyID" :placeholder="isKeygenTask ? '默认 OFFKEY-任务编号' : '签名任务可留空由地址匹配'"></el-input>
                                 </el-form-item>
                                 <el-form-item>
@@ -232,7 +232,7 @@
                     <div class="section-grid">
                         <div>
                             <h3>结果包</h3>
-                            <p class="muted">keygen 完成后下载 custody_keygen_result，sign 完成后下载 sign_result。</p>
+                            <p class="muted">托管地址和私钥生成完成后下载 custody_keygen_result，签名完成后下载 sign_result。</p>
                             <el-form label-width="100px">
                                 <el-form-item label="任务编号">
                                     <el-input v-model="resultTaskNo" placeholder="例如 TASK-2026-0001"></el-input>
@@ -335,7 +335,7 @@ export default {
             return this.currentTaskType === 'sign'
         },
         taskTypeText() {
-            if (this.isKeygenTask) return '托管钱包生成'
+            if (this.isKeygenTask) return '生成托管地址和私钥'
             if (this.isSignTask) return '交易签名'
             return this.currentTaskType || '-'
         },
@@ -717,7 +717,7 @@ export default {
         },
 
         taskTypeLabel(type) {
-            if (type === 'custody_keygen') return '托管钱包生成'
+            if (type === 'custody_keygen') return '生成托管地址和私钥'
             if (type === 'sign') return '交易签名'
             return type
         },

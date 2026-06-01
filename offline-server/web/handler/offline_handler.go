@@ -505,7 +505,6 @@ func TransferKeyShard(c *gin.Context) {
 	}
 
 	fromUsername := shard.Username
-	createApprovedRecord(c, "offline_shard_transfer", shardID)
 	auditFromContext(c, "offline_shard_transfer_request", "key_shard", shardID, "success", fmt.Sprintf("from=%s,to=%s,reason=%s", fromUsername, targetUsername, req.Reason))
 
 	shardInfo := shardDTOWithKeyInfo(*shard)
@@ -524,26 +523,6 @@ func TransferKeyShard(c *gin.Context) {
 			"reason":         req.Reason,
 		},
 	})
-}
-
-// TransferOfflineKey 只调整离线系统业务归属，不移动 SE 内 AES key。
-func TransferOfflineKey(c *gin.Context) {
-	id := c.Param("offline_key_id")
-	var req struct {
-		NewOwner string `json:"new_owner"`
-		Reason   string `json:"reason"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil || strings.TrimSpace(req.NewOwner) == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "new_owner不能为空"})
-		return
-	}
-	if err := offlineKeyStorage.UpdateOfflineKeyOwner(id, req.NewOwner); err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "离线密钥不存在"})
-		return
-	}
-	createApprovedRecord(c, "offline_key_transfer", id)
-	auditFromContext(c, "offline_key_transfer", "offline_key", id, "success", req.Reason)
-	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
 // DestroyOfflineKey 生成密钥销毁 WebSocket 请求。真正的状态变更由 destroy_result 完成。
@@ -579,7 +558,6 @@ func DestroyOfflineKey(c *gin.Context) {
 		}
 	}
 
-	createApprovedRecord(c, "offline_key_destroy", id)
 	auditFromContext(c, "offline_key_destroy_request", "offline_key", id, "success", req.Reason)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -596,7 +574,8 @@ func DestroyOfflineKey(c *gin.Context) {
 
 // ListAuditLogs 查询脱敏审计日志。
 func ListAuditLogs(c *gin.Context) {
-	logs, err := offlineAuditStore.ListAuditLogs(intFromQuery(c, "limit", 100))
+	filter := auditFilterFromQuery(c)
+	logs, err := offlineAuditStore.SearchAuditLogs(filter)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询审计日志失败"})
 		return
@@ -917,19 +896,6 @@ func auditFromContext(c *gin.Context, action, resourceType, resourceID, result, 
 	})
 }
 
-func createApprovedRecord(c *gin.Context, operation, resourceID string) {
-	username := usernameFromContext(c)
-	_, _ = offlineApproval.CreateApproval(model.Approval{
-		ApprovalID:  fmt.Sprintf("APPROVAL-%s-%d", sanitizeFilePart(resourceID), time.Now().UnixNano()),
-		Operation:   operation,
-		ResourceID:  resourceID,
-		RequestedBy: username,
-		ApprovedBy:  username,
-		Role:        roleFromContext(c),
-		Status:      model.ApprovalApproved,
-	})
-}
-
 func usernameFromContext(c *gin.Context) string {
 	if value, ok := c.Get("userName"); ok {
 		if username, ok := value.(string); ok {
@@ -946,6 +912,21 @@ func roleFromContext(c *gin.Context) string {
 		}
 	}
 	return ""
+}
+
+func auditFilterFromQuery(c *gin.Context) storage.AuditLogFilter {
+	return storage.AuditLogFilter{
+		Limit:    intFromQuery(c, "limit", 100),
+		TimeFrom: timeFromQuery(c, "time_from"),
+		TimeTo:   timeFromQuery(c, "time_to"),
+		Username: strings.TrimSpace(c.Query("username")),
+		Role:     strings.TrimSpace(c.Query("role")),
+		Action:   strings.TrimSpace(c.Query("action")),
+		Resource: strings.TrimSpace(c.Query("resource")),
+		CaseNo:   strings.TrimSpace(c.Query("case_no")),
+		Address:  strings.TrimSpace(c.Query("address")),
+		Result:   strings.TrimSpace(c.Query("result")),
+	}
 }
 
 func intFromPayload(value any) int {
@@ -972,6 +953,23 @@ func intFromQuery(c *gin.Context, key string, fallback int) int {
 		return fallback
 	}
 	return parsed
+}
+
+func timeFromQuery(c *gin.Context, key string) time.Time {
+	value := strings.TrimSpace(c.Query(key))
+	if value == "" {
+		return time.Time{}
+	}
+	if parsed, err := time.Parse(time.RFC3339, value); err == nil {
+		return parsed
+	}
+	if parsed, err := time.Parse("2006-01-02 15:04:05", value); err == nil {
+		return parsed
+	}
+	if parsed, err := time.Parse("2006-01-02", value); err == nil {
+		return parsed
+	}
+	return time.Time{}
 }
 
 func stringFromPayload(value any) string {

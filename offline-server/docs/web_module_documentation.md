@@ -211,21 +211,6 @@ GET /offline/keys/:offline_key_id
 查询接口只返回密文摘要和分布信息，不返回 local share 明文，也不返回完整 `encrypted_blob`。
 每次查询都会写入 `audit_logs`，用于满足授权查询留痕要求。
 
-移交业务归属：
-
-```http
-POST /offline/keys/:offline_key_id/transfer
-```
-
-```json
-{
-  "new_owner": "case-owner-b",
-  "reason": "案件归属调整"
-}
-```
-
-移交只修改离线系统服务端的 `logical_owner`，不移动 SE 内 AES key。
-
 销毁密钥：
 
 ```http

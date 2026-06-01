@@ -41,7 +41,7 @@
             <el-col :span="12">
                 <el-card>
                     <div slot="header" class="card-header">
-                        <span>我的分片</span>
+                        <span>我的私钥分片</span>
                         <el-button type="text" @click="$router.push('/my-shards')">查看全部</el-button>
                     </div>
                     <el-table :data="myShardSummary" v-loading="loadingOfficerSnapshot" size="mini" style="width: 100%">
@@ -51,7 +51,7 @@
                             </template>
                         </el-table-column>
                         <el-table-column prop="case_no" label="案件" width="120"></el-table-column>
-                        <el-table-column prop="shard_index" label="分片" width="70"></el-table-column>
+                        <el-table-column prop="shard_index" label="私钥分片" width="90"></el-table-column>
                         <el-table-column label="门限" width="80">
                             <template slot-scope="scope">
                                 {{ thresholdText(scope.row) }}
@@ -59,7 +59,7 @@
                         </el-table-column>
                         <el-table-column prop="status" label="状态" width="90"></el-table-column>
                     </el-table>
-                    <el-empty v-if="!loadingOfficerSnapshot && myShardSummary.length === 0" description="暂无分片" :image-size="70"></el-empty>
+                    <el-empty v-if="!loadingOfficerSnapshot && myShardSummary.length === 0" description="暂无私钥分片" :image-size="70"></el-empty>
                 </el-card>
             </el-col>
 
@@ -112,7 +112,7 @@
                     <div slot="header">管理员快捷操作</div>
                     <div class="quick-actions">
                         <el-button icon="el-icon-upload2" @click="$router.push('/offline-tasks')">导入 JSON 任务包</el-button>
-                        <el-button icon="el-icon-key" @click="$router.push('/keygen')">密钥生成</el-button>
+                        <el-button icon="el-icon-key" @click="$router.push('/keygen')">生成私钥</el-button>
                         <el-button icon="el-icon-s-finance" @click="$router.push('/sign')">交易签名</el-button>
                         <el-button icon="el-icon-cpu" @click="$router.push('/security-elements')">安全芯片管理</el-button>
                     </div>
@@ -142,9 +142,9 @@ export default {
             return '离线工作台'
         },
         subtitle() {
-            if (this.isOfficer) return '处理 MPC 邀请，查看自己的分片和参与记录。'
+            if (this.isOfficer) return '处理私钥生成、签名等邀请，查看自己的私钥分片和参与记录。'
             if (this.isAuditor) return '查看离线系统任务、密钥和安全操作审计。'
-            return '通过 JSON 任务包发起密钥生成和签名，导出 JSON 结果包回传在线系统。'
+            return '通过 JSON 任务包生成托管地址和私钥分片，完成签名后导出结果包回传在线系统。'
         },
         pendingInvitations() {
             return this.notifications.filter(n =>
@@ -188,10 +188,10 @@ export default {
         },
         inviteTitle(item) {
             const map = {
-                keygen_invite: '密钥生成邀请',
+                keygen_invite: '私钥生成邀请',
                 sign_invite: '交易签名邀请',
-                destroy_invite: '分片销毁确认',
-                transfer_invite: '分片移交确认'
+                destroy_invite: '私钥销毁确认',
+                transfer_invite: '私钥分片移交确认'
             }
             return map[item.type] || item.type
         },
@@ -214,7 +214,7 @@ export default {
         },
         participationTypeText(type) {
             const map = {
-                keygen: '密钥生成',
+                keygen: '私钥生成',
                 sign: '交易签名',
                 transfer: '移交',
                 destroy: '销毁'

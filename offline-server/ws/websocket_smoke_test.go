@@ -89,7 +89,7 @@ func startSmokeWebSocketServer(t *testing.T) (*Server, string, *fakeManagerRunti
 	}
 	handler.keygenHandler = NewKeyGenHandler(shareStore, seStore, offlineKeyStore, keyGenStore, fakeAuditStorage{}, sessionManager, runtime)
 	handler.signHandler = NewSignHandler(shareStore, seStore, offlineKeyStore, signStore, fakeAuditStorage{}, sessionManager, runtime)
-	handler.destroyHandler = NewDestroyHandler(shareStore, seStore, offlineKeyStore, fakeAuditStorage{}, sessionManager)
+	handler.destroyHandler = NewDestroyHandler(shareStore, seStore, offlineKeyStore, fakeAuditStorage{}, fakeApprovalStorage{}, sessionManager)
 
 	addr := freeLocalAddr(t)
 	server := NewServerWithConfig(addr, ServerConfig{

@@ -19,7 +19,7 @@
 
             <el-steps :active="0" simple class="steps">
                 <el-step title="导入 offline_task JSON"></el-step>
-                <el-step title="按地址选择分片持有人"></el-step>
+                    <el-step title="按地址选择私钥分片持有人"></el-step>
                 <el-step title="警员确认并执行 MPC"></el-step>
                 <el-step title="下载 offline_result JSON"></el-step>
             </el-steps>
