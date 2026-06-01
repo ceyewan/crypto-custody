@@ -35,9 +35,9 @@
         <el-table-column prop="Status" label="状态" width="110"><template slot-scope="s"><el-tag>{{ statusText(s.row.Status) }}</el-tag></template></el-table-column>
         <el-table-column label="操作" width="360">
           <template slot-scope="scope">
-            <el-button v-if="canWrite" size="mini" @click="prepare(scope.row)">生成哈希</el-button>
-            <el-button v-if="canWrite" size="mini" type="primary" @click="exportTask(scope.row)">导出任务</el-button>
-            <el-button v-if="canWrite" size="mini" type="success" @click="openSignature(scope.row)">导入签名</el-button>
+            <el-button v-if="canWrite" size="mini" @click="prepare(scope.row)">生成待签名交易</el-button>
+            <el-button v-if="canWrite" size="mini" type="primary" @click="exportTask(scope.row)">导出离线签名任务</el-button>
+            <el-button v-if="canWrite" size="mini" type="success" @click="openSignature(scope.row)">导入离线签名结果</el-button>
             <el-button v-if="canWrite" size="mini" type="warning" @click="broadcast(scope.row)">广播</el-button>
             <el-button size="mini" @click="view(scope.row)">详情</el-button>
           </template>
@@ -65,8 +65,11 @@
       <span slot="footer"><el-button @click="createDialog=false">取消</el-button><el-button type="primary" @click="createTx">保存</el-button></span>
     </el-dialog>
 
-    <el-dialog title="导入签名结果" :visible.sync="signatureDialog" width="620px">
+    <el-dialog title="导入离线签名结果" :visible.sync="signatureDialog" width="720px">
       <el-form :model="signatureForm" label-width="100px">
+        <el-form-item label="结果包 JSON">
+          <el-input v-model="signatureResultText" type="textarea" :rows="6" placeholder="可粘贴离线端导出的 offline_result JSON，系统会自动识别消息哈希和签名" @blur="parseSignatureResult" />
+        </el-form-item>
         <el-form-item label="任务编号"><el-input v-model="signatureForm.taskNo" /></el-form-item>
         <el-form-item label="消息哈希"><el-input v-model="signatureForm.messageHash" /></el-form-item>
         <el-form-item label="签名"><el-input v-model="signatureForm.signature" type="textarea" :rows="5" /></el-form-item>
@@ -101,7 +104,8 @@ export default {
       detailDialog: false,
       selected: null,
       form: {},
-      signatureForm: {}
+      signatureForm: {},
+      signatureResultText: ''
     }
   },
   created () {
@@ -141,14 +145,32 @@ export default {
     },
     async exportTask (row) {
       const res = await transactionApi.exportSignTask(row.ID)
-      this.$alert(JSON.stringify(res.data.data.payload, null, 2), '签名任务包')
+      const pkg = res.data.data.package || res.data.data.payload
+      this.downloadJson(pkg, `offline_task_${pkg.task_no || res.data.data.task.TaskNo}.json`)
+      this.$alert(JSON.stringify(pkg, null, 2), '离线签名任务包已下载')
     },
     openSignature (row) {
       this.selected = row
+      this.signatureResultText = ''
       this.signatureForm = { taskNo: '', messageHash: row.MessageHash || '', signature: '' }
       this.signatureDialog = true
     },
+    parseSignatureResult () {
+      if (!this.signatureResultText.trim()) return
+      try {
+        const pkg = JSON.parse(this.signatureResultText)
+        const payload = pkg.payload || pkg
+        this.signatureForm = {
+          taskNo: pkg.task_no || payload.task_no || this.signatureForm.taskNo,
+          messageHash: payload.message_hash || payload.messageHash || this.signatureForm.messageHash,
+          signature: payload.signature || this.signatureForm.signature
+        }
+      } catch (error) {
+        this.$message.warning('结果包 JSON 格式不正确')
+      }
+    },
     async importSignature () {
+      this.parseSignatureResult()
       await transactionApi.importSignature(this.selected.ID, this.signatureForm)
       this.$message.success('签名已导入')
       this.signatureDialog = false
@@ -166,6 +188,15 @@ export default {
     short (v) {
       if (!v) return ''
       return v.length > 20 ? `${v.slice(0, 10)}...${v.slice(-8)}` : v
+    },
+    downloadJson (data, filename) {
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filename
+      link.click()
+      URL.revokeObjectURL(url)
     },
     statusText (v) {
       const map = { 0: '待签名', 1: '已签名', 2: '已提交', 3: '已确认', 4: '失败', 5: '草稿', 6: '已导出', 7: '已广播', 8: '已取消' }

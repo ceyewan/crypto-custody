@@ -71,11 +71,14 @@
       </span>
     </el-dialog>
 
-    <el-dialog title="导入离线托管钱包结果" :visible.sync="walletDialog" width="560px">
+    <el-dialog title="导入离线托管钱包结果" :visible.sync="walletDialog" width="680px">
       <el-form :model="walletForm" label-width="110px">
+        <el-form-item label="结果包 JSON">
+          <el-input v-model="walletResultText" type="textarea" :rows="6" placeholder="可粘贴离线端导出的 offline_result JSON，系统会自动识别托管地址和离线结果编号" @blur="parseWalletResult" />
+        </el-form-item>
         <el-form-item label="任务编号"><el-input v-model="walletForm.taskNo" /></el-form-item>
         <el-form-item label="托管地址"><el-input v-model="walletForm.custodyAddress" /></el-form-item>
-        <el-form-item label="离线引用"><el-input v-model="walletForm.offlineRefNo" /></el-form-item>
+        <el-form-item label="离线结果编号"><el-input v-model="walletForm.offlineRefNo" /></el-form-item>
         <el-form-item label="币种"><el-input v-model="walletForm.coinType" /></el-form-item>
       </el-form>
       <span slot="footer">
@@ -112,6 +115,7 @@ export default {
       accountsDialog: false,
       selectedCase: null,
       caseAccounts: [],
+      walletResultText: '',
       form: { caseNo: '', name: '', status: 'active', description: '' },
       walletForm: { taskNo: '', custodyAddress: '', offlineRefNo: '', coinType: 'ETH' }
     }
@@ -156,14 +160,33 @@ export default {
     },
     async createTask (row) {
       const res = await offlineTaskApi.createCustodyKeygen({ caseId: row.ID, coinType: 'ETH', thresholdPolicy: '2_of_3' })
-      this.$alert(JSON.stringify(res.data.data.payload, null, 2), '离线任务包')
+      const pkg = res.data.data.package || res.data.data.payload
+      this.downloadJson(pkg, `offline_task_${pkg.task_no || res.data.data.task.TaskNo}.json`)
+      this.$alert(JSON.stringify(pkg, null, 2), '离线任务包已下载')
     },
     openImport (row) {
       this.selectedCase = row
+      this.walletResultText = ''
       this.walletForm = { taskNo: '', custodyAddress: '', offlineRefNo: '', coinType: 'ETH' }
       this.walletDialog = true
     },
+    parseWalletResult () {
+      if (!this.walletResultText.trim()) return
+      try {
+        const pkg = JSON.parse(this.walletResultText)
+        const payload = pkg.payload || pkg
+        this.walletForm = {
+          taskNo: pkg.task_no || payload.task_no || this.walletForm.taskNo,
+          custodyAddress: payload.custody_address || payload.custodyAddress || this.walletForm.custodyAddress,
+          offlineRefNo: payload.offline_ref_no || payload.offlineRefNo || this.walletForm.offlineRefNo,
+          coinType: payload.coin_type || payload.coinType || this.walletForm.coinType || 'ETH'
+        }
+      } catch (error) {
+        this.$message.warning('结果包 JSON 格式不正确')
+      }
+    },
     async importWallet () {
+      this.parseWalletResult()
       await caseApi.importCustodyWallet(this.selectedCase.ID, { ...this.walletForm, caseNo: this.selectedCase.CaseNo })
       this.walletDialog = false
       this.$message.success('导入成功')
@@ -177,6 +200,15 @@ export default {
     short (v) {
       if (!v) return ''
       return v.length > 20 ? `${v.slice(0, 10)}...${v.slice(-8)}` : v
+    },
+    downloadJson (data, filename) {
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filename
+      link.click()
+      URL.revokeObjectURL(url)
     },
     statusText (v) {
       return { active: '进行中', closed: '已关闭', archived: '已归档' }[v] || v

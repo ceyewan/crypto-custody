@@ -47,7 +47,7 @@ export default {
     },
     roleText () {
       if (this.isAdmin) return '管理员'
-      if (this.isOfficer) return '操作员'
+      if (this.isOfficer) return '警员'
       if (this.isAuditor) return '审计员'
       return '访客'
     }

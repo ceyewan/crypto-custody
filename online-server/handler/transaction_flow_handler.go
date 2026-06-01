@@ -134,23 +134,21 @@ func ExportSignTask(c *gin.Context) {
 		return
 	}
 	taskNo := service.NewBusinessNo("TASK")
-	payload := gin.H{
-		"taskNo": taskNo, "taskType": "sign", "caseNo": tx.CaseNo,
-		"transactionNo": tx.TxNo, "fromAddress": tx.FromAddress, "toAddress": tx.ToAddress,
-		"value": tx.Value, "coinType": tx.CoinType, "messageHash": tx.MessageHash, "reason": tx.Reason,
-	}
+	payload := signTaskPayload(tx)
+	payloadHash := hashPayload(payload)
+	taskPackage := buildOfflineTaskPackage(taskNo, "sign", c.GetString("Username"), time.Now().UTC().Format(time.RFC3339), payload, payloadHash)
 	now := time.Now().Unix()
 	tx.Status = model.StatusSignatureExported
 	tx.ExportedAt = &now
 	_ = utils.GetDB().Save(&tx).Error
 	task := model.OfflineTask{
 		TaskNo: taskNo, TaskType: model.OfflineTaskSign, CaseNo: tx.CaseNo,
-		TransactionID: &tx.ID, PayloadHash: hashObject(payload), Status: model.OfflineTaskExported,
+		TransactionID: &tx.ID, PayloadHash: payloadHash, Status: model.OfflineTaskExported,
 		ExportedBy: c.GetString("Username"), ExportedAt: &now,
 	}
 	_ = utils.GetDB().Create(&task).Error
-	service.AuditAction(c, "transaction.export_sign_task", "transaction", strconv.FormatUint(uint64(tx.ID), 10), tx.CaseNo, "success", "", payload)
-	utils.ResponseWithData(c, "签名任务导出成功", gin.H{"task": task, "payload": payload})
+	service.AuditAction(c, "transaction.export_sign_task", "transaction", strconv.FormatUint(uint64(tx.ID), 10), tx.CaseNo, "success", "", taskPackage)
+	utils.ResponseWithData(c, "签名任务导出成功", gin.H{"task": task, "payload": payload, "package": taskPackage})
 }
 
 func ImportTransactionSignature(c *gin.Context) {
