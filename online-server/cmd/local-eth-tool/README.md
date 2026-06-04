@@ -9,10 +9,35 @@ cd online-server
 go run ./cmd/local-eth-tool
 ```
 
+也可以直接脚本化巡检 Ganache/本地链：
+
+```bash
+cd online-server
+go run ./cmd/local-eth-tool --inspect --rpc http://127.0.0.1:8545
+go run ./cmd/local-eth-tool --inspect --rpc http://127.0.0.1:8545 --json
+```
+
+仓库根目录也提供了封装脚本：
+
+```bash
+scripts/ganache-inspect.sh
+scripts/ganache-inspect.sh --addresses 0xabc...,0xdef...
+scripts/ganache-inspect.sh --json
+```
+
+给指定地址分配启动资金：
+
+```bash
+scripts/ganache-fund.sh 0xabc...
+scripts/ganache-fund.sh --to 0xabc... --amount 100
+```
+
+`ganache-fund.sh` 默认转账 `100 ETH`，会从 Ganache/RPC 返回的已解锁账户中自动选择第一个余额足够的账户作为转出方。
+
 默认 RPC 地址：
 
 ```text
-http://127.0.0.1:7545
+http://127.0.0.1:8545
 ```
 
 ## 功能
@@ -21,6 +46,14 @@ http://127.0.0.1:7545
 2. 使用转出方私钥直接签名并发送 ETH 转账。
 3. 根据交易明细生成待签名 Hash，等待离线端或门限签名系统生成签名后，再粘贴签名并广播交易。
 4. 输入私钥和待签名 Hash，输出标准以太坊签名，用于模拟离线签名结果。
+5. 一键查询 Ganache/本地链信息、RPC 暴露地址、余额和 nonce。
+
+命令行模式额外支持从 Ganache/RPC 已解锁账户自动转账：
+
+```bash
+cd online-server
+go run ./cmd/local-eth-tool --fund --to 0xabc... --amount 100 --rpc http://127.0.0.1:8545
+```
 
 第 3 种模式和在线服务端交易流程一致：先构造原始交易并生成待签名 Hash，再使用外部签名附加到交易，验证签名地址与转出方一致后广播。
 
@@ -57,3 +90,15 @@ http://127.0.0.1:7545
 - 输入的外部签名应为 65 字节十六进制，格式为 `r(32) + s(32) + v(1)`。
 - 签名的 `v` 值可以是 `0/1` 或 `27/28`，工具会自动适配。
 - 只在本地测试链使用测试私钥，不要输入真实资产账户私钥。
+
+## 在线账户 API 脚本
+
+Docker 或无 GUI 环境可以直接使用仓库根目录脚本调用在线系统 API：
+
+```bash
+API_URL=http://127.0.0.1:22221 LOGIN_USER=admin PASSWORD=admin123 scripts/online-accounts.sh list
+API_URL=http://127.0.0.1:22221 LOGIN_USER=admin PASSWORD=admin123 scripts/online-accounts.sh import accounts.json
+API_URL=http://127.0.0.1:22221 LOGIN_USER=admin PASSWORD=admin123 scripts/online-accounts.sh sync
+```
+
+`accounts.json` 支持 JSON 数组，也支持 `{ "accounts": [...] }`。

@@ -4,20 +4,54 @@ import (
 	"bufio"
 	"context"
 	"encoding/hex"
+	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
 	"math/big"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
-const defaultRPC = "http://127.0.0.1:7545"
+const defaultRPC = "http://127.0.0.1:8545"
+
+type inspectAccount struct {
+	Address    string `json:"address"`
+	BalanceETH string `json:"balanceEth"`
+	BalanceWei string `json:"balanceWei"`
+	Nonce      uint64 `json:"nonce"`
+}
+
+type chainSnapshot struct {
+	RPC         string           `json:"rpc"`
+	ChainID     string           `json:"chainId"`
+	NetworkID   string           `json:"networkId"`
+	BlockNumber uint64           `json:"blockNumber"`
+	GasPriceWei string           `json:"gasPriceWei"`
+	Accounts    []inspectAccount `json:"accounts"`
+}
+
+type fundResult struct {
+	RPC         string `json:"rpc"`
+	ChainID     string `json:"chainId"`
+	NetworkID   string `json:"networkId"`
+	From        string `json:"from"`
+	To          string `json:"to"`
+	AmountETH   string `json:"amountEth"`
+	AmountWei   string `json:"amountWei"`
+	GasLimit    uint64 `json:"gasLimit"`
+	GasPriceWei string `json:"gasPriceWei"`
+	TxHash      string `json:"txHash"`
+}
 
 type txDraft struct {
 	rpcURL    string
@@ -36,6 +70,28 @@ type txDraft struct {
 }
 
 func main() {
+	inspect := flag.Bool("inspect", false, "一键查询链信息、RPC 暴露地址、余额和 nonce")
+	fund := flag.Bool("fund", false, "从 Ganache/RPC 已解锁账户自动转 ETH 到目标地址")
+	rpcURL := flag.String("rpc", defaultRPC, "以太坊 RPC 地址")
+	addresses := flag.String("addresses", "", "额外查询地址，多个地址用英文逗号分隔")
+	toAddress := flag.String("to", "", "收款地址，用于 --fund")
+	amount := flag.String("amount", "100", "转账金额 ETH，用于 --fund")
+	jsonOutput := flag.Bool("json", false, "以 JSON 格式输出")
+	flag.Parse()
+
+	if *inspect {
+		if err := inspectChain(*rpcURL, *addresses, *jsonOutput); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+	if *fund {
+		if err := fundAddress(*rpcURL, *toAddress, *amount, *jsonOutput); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+
 	reader := bufio.NewReader(os.Stdin)
 
 	fmt.Println("本地以太坊测试工具")
@@ -43,7 +99,8 @@ func main() {
 	fmt.Println("2. 从已有账户私钥直接转 ETH")
 	fmt.Println("3. 根据交易明细生成待签名 Hash，粘贴外部签名后广播")
 	fmt.Println("4. 输入私钥和 Hash，输出标准以太坊签名")
-	fmt.Print("请选择操作 [1/2/3/4]: ")
+	fmt.Println("5. 一键查询 Ganache/本地链信息和账户余额")
+	fmt.Print("请选择操作 [1/2/3/4/5]: ")
 
 	choice := readLine(reader)
 	switch choice {
@@ -63,9 +120,249 @@ func main() {
 		if err := signHashWithPrivateKey(reader); err != nil {
 			log.Fatal(err)
 		}
+	case "5":
+		fmt.Printf("RPC 地址 [%s]: ", defaultRPC)
+		rpcURL := readLine(reader)
+		if rpcURL == "" {
+			rpcURL = defaultRPC
+		}
+		fmt.Print("额外查询地址，多个地址用英文逗号分隔，可留空: ")
+		addresses := readLine(reader)
+		if err := inspectChain(rpcURL, addresses, false); err != nil {
+			log.Fatal(err)
+		}
 	default:
 		log.Fatalf("未知操作: %s", choice)
 	}
+}
+
+func inspectChain(rpcURL, extraAddresses string, asJSON bool) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	rpcClient, err := rpc.DialContext(ctx, rpcURL)
+	if err != nil {
+		return fmt.Errorf("连接 RPC 失败: %w", err)
+	}
+	defer rpcClient.Close()
+
+	client := ethclient.NewClient(rpcClient)
+	defer client.Close()
+
+	chainID, err := client.ChainID(ctx)
+	if err != nil {
+		return fmt.Errorf("获取 Chain ID 失败: %w", err)
+	}
+	networkID, err := client.NetworkID(ctx)
+	if err != nil {
+		return fmt.Errorf("获取 Network ID 失败: %w", err)
+	}
+	blockNumber, err := client.BlockNumber(ctx)
+	if err != nil {
+		return fmt.Errorf("获取区块高度失败: %w", err)
+	}
+	gasPrice, err := client.SuggestGasPrice(ctx)
+	if err != nil {
+		return fmt.Errorf("获取 gas price 失败: %w", err)
+	}
+
+	addressSet := make(map[string]common.Address)
+	var rpcAccounts []common.Address
+	if err := rpcClient.CallContext(ctx, &rpcAccounts, "eth_accounts"); err != nil {
+		return fmt.Errorf("调用 eth_accounts 失败: %w", err)
+	}
+	for _, address := range rpcAccounts {
+		addressSet[strings.ToLower(address.Hex())] = address
+	}
+	for _, raw := range strings.Split(extraAddresses, ",") {
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			continue
+		}
+		if !common.IsHexAddress(raw) {
+			return fmt.Errorf("额外地址格式不正确: %s", raw)
+		}
+		address := common.HexToAddress(raw)
+		addressSet[strings.ToLower(address.Hex())] = address
+	}
+
+	accounts := make([]inspectAccount, 0, len(addressSet))
+	addressKeys := make([]string, 0, len(addressSet))
+	for key := range addressSet {
+		addressKeys = append(addressKeys, key)
+	}
+	sort.Strings(addressKeys)
+	for _, key := range addressKeys {
+		address := addressSet[key]
+		balance, err := client.BalanceAt(ctx, address, nil)
+		if err != nil {
+			return fmt.Errorf("查询地址 %s 余额失败: %w", address.Hex(), err)
+		}
+		nonce, err := client.PendingNonceAt(ctx, address)
+		if err != nil {
+			return fmt.Errorf("查询地址 %s nonce 失败: %w", address.Hex(), err)
+		}
+		accounts = append(accounts, inspectAccount{
+			Address:    address.Hex(),
+			BalanceETH: weiToETH(balance),
+			BalanceWei: balance.String(),
+			Nonce:      nonce,
+		})
+	}
+
+	snapshot := chainSnapshot{
+		RPC:         rpcURL,
+		ChainID:     chainID.String(),
+		NetworkID:   networkID.String(),
+		BlockNumber: blockNumber,
+		GasPriceWei: gasPrice.String(),
+		Accounts:    accounts,
+	}
+
+	if asJSON {
+		encoded, err := json.MarshalIndent(snapshot, "", "  ")
+		if err != nil {
+			return fmt.Errorf("编码 JSON 失败: %w", err)
+		}
+		fmt.Println(string(encoded))
+		return nil
+	}
+
+	fmt.Println()
+	fmt.Println("链上巡检结果")
+	fmt.Printf("RPC: %s\n", snapshot.RPC)
+	fmt.Printf("Chain ID: %s\n", snapshot.ChainID)
+	fmt.Printf("Network ID: %s\n", snapshot.NetworkID)
+	fmt.Printf("当前区块: %d\n", snapshot.BlockNumber)
+	fmt.Printf("Gas Price: %s wei\n", snapshot.GasPriceWei)
+	fmt.Printf("RPC 暴露账户数: %d\n", len(rpcAccounts))
+	fmt.Printf("本次查询地址数: %d\n", len(snapshot.Accounts))
+	fmt.Println()
+	if len(snapshot.Accounts) == 0 {
+		fmt.Println("未查询到地址。Ganache 若未暴露 eth_accounts，可用 --addresses 追加要查的地址。")
+		return nil
+	}
+
+	fmt.Printf("%-42s  %-24s  %s\n", "Address", "Balance(ETH)", "Nonce")
+	for _, account := range snapshot.Accounts {
+		fmt.Printf("%-42s  %-24s  %d\n", account.Address, account.BalanceETH, account.Nonce)
+	}
+	return nil
+}
+
+func fundAddress(rpcURL, toAddressText, amountText string, asJSON bool) error {
+	toAddressText = strings.TrimSpace(toAddressText)
+	if !common.IsHexAddress(toAddressText) {
+		return fmt.Errorf("收款地址格式不正确，请使用 --to 0x...")
+	}
+	toAddress := common.HexToAddress(toAddressText)
+
+	value, err := ethToWei(amountText)
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	rpcClient, err := rpc.DialContext(ctx, rpcURL)
+	if err != nil {
+		return fmt.Errorf("连接 RPC 失败: %w", err)
+	}
+	defer rpcClient.Close()
+
+	client := ethclient.NewClient(rpcClient)
+	defer client.Close()
+
+	chainID, err := client.ChainID(ctx)
+	if err != nil {
+		return fmt.Errorf("获取 Chain ID 失败: %w", err)
+	}
+	networkID, err := client.NetworkID(ctx)
+	if err != nil {
+		return fmt.Errorf("获取 Network ID 失败: %w", err)
+	}
+	gasPrice, err := client.SuggestGasPrice(ctx)
+	if err != nil {
+		return fmt.Errorf("获取 gas price 失败: %w", err)
+	}
+
+	var accounts []common.Address
+	if err := rpcClient.CallContext(ctx, &accounts, "eth_accounts"); err != nil {
+		return fmt.Errorf("调用 eth_accounts 失败: %w", err)
+	}
+	if len(accounts) == 0 {
+		return fmt.Errorf("RPC 未返回可用账户。请确认 Ganache 已启动，并暴露/解锁了测试账户")
+	}
+
+	gasLimit := uint64(21000)
+	fee := new(big.Int).Mul(gasPrice, new(big.Int).SetUint64(gasLimit))
+	totalNeed := new(big.Int).Add(value, fee)
+
+	var fromAddress common.Address
+	found := false
+	for _, account := range accounts {
+		balance, err := client.BalanceAt(ctx, account, nil)
+		if err != nil {
+			return fmt.Errorf("查询地址 %s 余额失败: %w", account.Hex(), err)
+		}
+		if balance.Cmp(totalNeed) >= 0 {
+			fromAddress = account
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("没有余额足够的 Ganache 账户: 需要至少 %s ETH，本次发现账户数 %d", weiToETH(totalNeed), len(accounts))
+	}
+
+	gasHex := hexutil.Uint64(gasLimit)
+	args := map[string]interface{}{
+		"from":     fromAddress.Hex(),
+		"to":       toAddress.Hex(),
+		"value":    (*hexutil.Big)(value),
+		"gas":      &gasHex,
+		"gasPrice": (*hexutil.Big)(gasPrice),
+	}
+
+	var txHash common.Hash
+	if err := rpcClient.CallContext(ctx, &txHash, "eth_sendTransaction", args); err != nil {
+		return fmt.Errorf("发送交易失败: %w。请确认 Ganache 账户处于 unlocked 状态", err)
+	}
+
+	result := fundResult{
+		RPC:         rpcURL,
+		ChainID:     chainID.String(),
+		NetworkID:   networkID.String(),
+		From:        fromAddress.Hex(),
+		To:          toAddress.Hex(),
+		AmountETH:   amountText,
+		AmountWei:   value.String(),
+		GasLimit:    gasLimit,
+		GasPriceWei: gasPrice.String(),
+		TxHash:      txHash.Hex(),
+	}
+	if asJSON {
+		encoded, err := json.MarshalIndent(result, "", "  ")
+		if err != nil {
+			return fmt.Errorf("编码 JSON 失败: %w", err)
+		}
+		fmt.Println(string(encoded))
+		return nil
+	}
+
+	fmt.Println()
+	fmt.Println("启动资金转账已发送")
+	fmt.Printf("RPC: %s\n", result.RPC)
+	fmt.Printf("Chain ID: %s\n", result.ChainID)
+	fmt.Printf("Network ID: %s\n", result.NetworkID)
+	fmt.Printf("From: %s\n", result.From)
+	fmt.Printf("To: %s\n", result.To)
+	fmt.Printf("Amount: %s ETH\n", result.AmountETH)
+	fmt.Printf("Gas Limit: %d\n", result.GasLimit)
+	fmt.Printf("Gas Price: %s wei\n", result.GasPriceWei)
+	fmt.Printf("Tx Hash: %s\n", result.TxHash)
+	return nil
 }
 
 func generateAccount() error {
