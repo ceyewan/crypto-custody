@@ -14,6 +14,8 @@ services:
       BACKEND_PORT: ${BACKEND_PORT:-22221}
       DATABASE_PATH: ${DATABASE_PATH:-/app/database/crypto-custody.db}
       DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD:-admin123}
+      ETH_RPC_URL: ${ETH_RPC_URL:-http://ganache:8545}
+      ETH_CHAIN_ID: ${ETH_CHAIN_ID:-1337}
     ports:
       - "${WEB_HOST_PORT:-8088}:${WEB_PORT:-8088}"
     volumes:

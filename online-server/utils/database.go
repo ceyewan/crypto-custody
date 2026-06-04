@@ -149,7 +149,7 @@ func autoMigrateModels() error {
 		clog.String("model", "BackupRecord"),
 		clog.String("model", "Job"))
 
-	return instance.AutoMigrate(
+	if err := instance.AutoMigrate(
 		&model.User{},
 		&model.Account{},
 		&model.Transaction{},
@@ -158,7 +158,11 @@ func autoMigrateModels() error {
 		&model.AuditLog{},
 		&model.BackupRecord{},
 		&model.Job{},
-	)
+	); err != nil {
+		return err
+	}
+
+	return migrateTransactionHashIndexes()
 }
 
 // AutoMigrate 自动迁移指定的数据库模型
@@ -263,6 +267,90 @@ func migrateLegacyUserRoles() error {
 		return fmt.Errorf("迁移历史用户角色失败: %w", err)
 	}
 	return nil
+}
+
+func migrateTransactionHashIndexes() error {
+	if instance == nil {
+		return fmt.Errorf("数据库未初始化")
+	}
+	if instance.Dialector.Name() != "sqlite" {
+		return nil
+	}
+
+	var schema string
+	if err := instance.Raw("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'transactions'").Scan(&schema).Error; err != nil {
+		return fmt.Errorf("读取交易表结构失败: %w", err)
+	}
+	if schema == "" || (!strings.Contains(schema, "uni_transactions_message_hash") && !strings.Contains(schema, "uni_transactions_tx_hash")) {
+		return nil
+	}
+
+	dbLogger := clog.Module("database")
+	dbLogger.Info("迁移交易表哈希索引，移除空哈希不应触发的唯一约束")
+
+	return instance.Transaction(func(tx *gorm.DB) error {
+		statements := []string{
+			"DROP TABLE IF EXISTS `transactions_without_hash_unique`",
+			"ALTER TABLE `transactions` RENAME TO `transactions_without_hash_unique`",
+			`CREATE TABLE "transactions" (
+				"id" integer PRIMARY KEY AUTOINCREMENT,
+				"created_at" datetime,
+				"updated_at" datetime,
+				"deleted_at" datetime,
+				"tx_no" text,
+				"case_id" integer,
+				"case_no" text,
+				"tx_type" text DEFAULT "withdraw",
+				"from_account_id" integer,
+				"from_address" text NOT NULL,
+				"to_address" text NOT NULL,
+				"value" text NOT NULL,
+				"coin_type" text DEFAULT "ETH",
+				"reason" text,
+				"unsigned_payload" blob,
+				"message_hash" text,
+				"tx_hash" text,
+				"signature" blob,
+				"receipt" blob,
+				"status" integer NOT NULL,
+				"created_by" text,
+				"approved_by" text,
+				"exported_at" integer,
+				"signed_at" integer,
+				"broadcasted_at" integer,
+				"confirmed_at" integer
+			)`,
+			`INSERT INTO "transactions" (
+				"id", "created_at", "updated_at", "deleted_at", "tx_no", "case_id", "case_no", "tx_type",
+				"from_account_id", "from_address", "to_address", "value", "coin_type", "reason",
+				"unsigned_payload", "message_hash", "tx_hash", "signature", "receipt", "status",
+				"created_by", "approved_by", "exported_at", "signed_at", "broadcasted_at", "confirmed_at"
+			)
+			SELECT
+				"id", "created_at", "updated_at", "deleted_at", "tx_no", "case_id", "case_no", "tx_type",
+				"from_account_id", "from_address", "to_address", "value", "coin_type", "reason",
+				"unsigned_payload", "message_hash", "tx_hash", "signature", "receipt", "status",
+				"created_by", "approved_by", "exported_at", "signed_at", "broadcasted_at", "confirmed_at"
+			FROM "transactions_without_hash_unique"`,
+			"DROP TABLE `transactions_without_hash_unique`",
+			"CREATE INDEX IF NOT EXISTS `idx_transactions_deleted_at` ON `transactions`(`deleted_at`)",
+			"CREATE INDEX IF NOT EXISTS `idx_transactions_tx_no` ON `transactions`(`tx_no`)",
+			"CREATE INDEX IF NOT EXISTS `idx_transactions_case_id` ON `transactions`(`case_id`)",
+			"CREATE INDEX IF NOT EXISTS `idx_transactions_case_no` ON `transactions`(`case_no`)",
+			"CREATE INDEX IF NOT EXISTS `idx_transactions_tx_type` ON `transactions`(`tx_type`)",
+			"CREATE INDEX IF NOT EXISTS `idx_transactions_from_account_id` ON `transactions`(`from_account_id`)",
+			"CREATE INDEX IF NOT EXISTS `idx_transactions_from_address` ON `transactions`(`from_address`)",
+			"CREATE INDEX IF NOT EXISTS `idx_transactions_to_address` ON `transactions`(`to_address`)",
+			"CREATE INDEX IF NOT EXISTS `idx_transactions_message_hash` ON `transactions`(`message_hash`)",
+			"CREATE INDEX IF NOT EXISTS `idx_transactions_tx_hash` ON `transactions`(`tx_hash`)",
+		}
+		for _, statement := range statements {
+			if err := tx.Exec(statement).Error; err != nil {
+				return fmt.Errorf("迁移交易表哈希索引失败: %w", err)
+			}
+		}
+		return nil
+	})
 }
 
 func ensureDefaultUser(username, nickname, email, password string, role model.Role) error {

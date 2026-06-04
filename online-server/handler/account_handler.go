@@ -269,13 +269,92 @@ func SyncAccountBalance(c *gin.Context) {
 }
 
 func BatchSyncAccountBalances(c *gin.Context) {
+	startedAt := time.Now().Unix()
 	job := model.Job{
 		JobNo: service.NewBusinessNo("JOB"), Type: "sync_balances",
-		Status: "success", Progress: 100, CreatedBy: c.GetString("Username"),
+		Status: "running", Progress: 0, CreatedBy: c.GetString("Username"), StartedAt: &startedAt,
 	}
 	_ = utils.GetDB().Create(&job).Error
-	service.AuditAction(c, "account.batch_sync_balances", "job", strconv.FormatUint(uint64(job.ID), 10), "", "success", "", job)
-	utils.ResponseWithData(c, "批量余额同步任务已创建", job)
+
+	var accounts []model.Account
+	if err := utils.GetDB().Order("created_at DESC").Find(&accounts).Error; err != nil {
+		job.Status = "failed"
+		job.ErrorMessage = err.Error()
+		job.Progress = 100
+		_ = utils.GetDB().Save(&job).Error
+		service.AuditAction(c, "account.batch_sync_balances", "job", strconv.FormatUint(uint64(job.ID), 10), "", "failure", err.Error(), job)
+		utils.ResponseWithError(c, http.StatusInternalServerError, "读取账户列表失败: "+err.Error())
+		return
+	}
+
+	client, err := getEthereumClient()
+	if err != nil {
+		job.Status = "failed"
+		job.ErrorMessage = err.Error()
+		job.Progress = 100
+		_ = utils.GetDB().Save(&job).Error
+		service.AuditAction(c, "account.batch_sync_balances", "job", strconv.FormatUint(uint64(job.ID), 10), "", "failure", err.Error(), job)
+		utils.ResponseWithError(c, http.StatusInternalServerError, "获取以太坊客户端失败: "+err.Error())
+		return
+	}
+
+	results := make([]gin.H, 0, len(accounts))
+	successCount := 0
+	failedCount := 0
+	now := time.Now().Unix()
+	for _, account := range accounts {
+		balance, err := client.GetBalance(account.Address)
+		if err != nil {
+			failedCount++
+			results = append(results, gin.H{
+				"id": account.ID, "address": account.Address, "success": false, "error": err.Error(),
+			})
+			continue
+		}
+		account.Balance = balance.Text('f', 18)
+		account.BalanceSource = "chain"
+		account.LastBalanceSyncAt = &now
+		if err := utils.GetDB().Save(&account).Error; err != nil {
+			failedCount++
+			results = append(results, gin.H{
+				"id": account.ID, "address": account.Address, "success": false, "error": err.Error(),
+			})
+			continue
+		}
+		successCount++
+		results = append(results, gin.H{
+			"id": account.ID, "address": account.Address, "success": true, "balance": account.Balance,
+		})
+	}
+
+	job.Status = "success"
+	if failedCount > 0 {
+		job.Status = "partial_success"
+	}
+	if successCount == 0 && failedCount > 0 {
+		job.Status = "failed"
+	}
+	job.Total = len(accounts)
+	job.Success = successCount
+	job.Failed = failedCount
+	job.Progress = 100
+	finishedAt := time.Now().Unix()
+	job.FinishedAt = &finishedAt
+	_ = utils.GetDB().Save(&job).Error
+
+	auditStatus := "success"
+	if failedCount > 0 {
+		auditStatus = "partial_success"
+	}
+	if successCount == 0 && failedCount > 0 {
+		auditStatus = "failure"
+	}
+	service.AuditAction(c, "account.batch_sync_balances", "job", strconv.FormatUint(uint64(job.ID), 10), "", auditStatus, "", gin.H{
+		"job": job, "total": len(accounts), "success": successCount, "failed": failedCount,
+	})
+	utils.ResponseWithData(c, "批量余额同步完成", gin.H{
+		"job": job, "total": len(accounts), "success": successCount, "failed": failedCount, "results": results,
+	})
 }
 
 func AccountTemplate(c *gin.Context) {

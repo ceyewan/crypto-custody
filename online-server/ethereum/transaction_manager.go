@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strings"
 	"sync"
 	"time"
 
@@ -176,6 +177,22 @@ func (tm *TransactionManager) CreateTransaction(fromAddress, toAddress string, a
 	return txRecord.ID, messageHash, nil
 }
 
+// RebindTransactionRecord makes the cached transaction lifecycle update a
+// caller-owned transaction row instead of the temporary row created while
+// building the unsigned Ethereum transaction.
+func (tm *TransactionManager) RebindTransactionRecord(messageHash string, transactionID uint) error {
+	tm.txMutex.Lock()
+	defer tm.txMutex.Unlock()
+
+	messageData, ok := tm.messageData[messageHash]
+	if !ok {
+		return ErrTransactionNotFound
+	}
+	messageData.TransID = transactionID
+	tm.messageData[messageHash] = messageData
+	return nil
+}
+
 // SignTransaction 使用提供的签名处理交易
 //
 // 参数:
@@ -215,7 +232,7 @@ func (tm *TransactionManager) SignTransaction(messageHash string, signature stri
 		return 0, fmt.Errorf("验证签名失败: %w", err)
 	}
 
-	if sender.Hex() != messageData.FromAddress {
+	if !strings.EqualFold(sender.Hex(), messageData.FromAddress) {
 		return 0, ErrInvalidSignature
 	}
 

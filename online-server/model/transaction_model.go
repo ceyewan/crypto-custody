@@ -33,11 +33,11 @@ type Transaction struct {
 	CoinType        string            `gorm:"size:20;default:'ETH';comment:币种"`
 	Reason          string            `gorm:"type:text;comment:交易事由"`
 	UnsignedPayload []byte            `gorm:"type:blob;comment:待签名交易数据"`
-	MessageHash     string            `gorm:"index;unique"` // 消息哈希 (例如交易数据的哈希)
-	TxHash          string            `gorm:"index;unique"` // 交易哈希 (Transaction Hash)
-	Signature       []byte            `gorm:"type:blob"`    // 交易签名
-	Receipt         []byte            `gorm:"type:blob"`    // 交易回执 (例如 JSON 序列化后的回执)
-	Status          TransactionStatus `gorm:"not null"`     // 交易状态
+	MessageHash     string            `gorm:"index"`     // 消息哈希 (例如交易数据的哈希)
+	TxHash          string            `gorm:"index"`     // 交易哈希 (Transaction Hash)
+	Signature       []byte            `gorm:"type:blob"` // 交易签名
+	Receipt         []byte            `gorm:"type:blob"` // 交易回执 (例如 JSON 序列化后的回执)
+	Status          TransactionStatus `gorm:"not null"`  // 交易状态
 	CreatedBy       string            `gorm:"size:80;comment:创建人"`
 	ApprovedBy      string            `gorm:"size:80;comment:审批人"`
 	ExportedAt      *int64            `gorm:"comment:签名任务导出时间Unix秒"`
