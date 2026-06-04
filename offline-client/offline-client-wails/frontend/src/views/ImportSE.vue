@@ -83,6 +83,10 @@
 import { seApi as wailsSeApi } from '../services/wails-api'
 import { seApi as serverSeApi } from '../services/api'
 
+function errorMessage(error) {
+    return error?.message || error?.detail || error?.error || String(error)
+}
+
 export default {
     name: 'ImportSE',
     data() {
@@ -169,7 +173,7 @@ export default {
                 }
                 this.$message.success('已读取当前 SE')
             } catch (error) {
-                this.$message.error('读取 SE 失败: ' + error.message)
+                this.$message.error('读取 SE 失败: ' + errorMessage(error))
             } finally {
                 this.reading = false
             }

@@ -1,6 +1,8 @@
 package config
 
 import (
+	"runtime"
+
 	"github.com/spf13/viper"
 )
 
@@ -33,7 +35,7 @@ func LoadConfig() (*Config, error) {
 
 	// 设置默认值
 	viper.SetDefault("debug", false)
-	viper.SetDefault("card_reader_name", "GOODIX GSE SmartCard Reader")
+	viper.SetDefault("card_reader_name", defaultCardReaderName())
 	viper.SetDefault("applet_aid", "A000000062CF0101") // 默认值
 	viper.SetDefault("port", "8080")
 	viper.SetDefault("temp_dir", "./temp")
@@ -63,4 +65,15 @@ func LoadConfig() (*Config, error) {
 	}
 
 	return &config, nil
+}
+
+func defaultCardReaderName() string {
+	switch runtime.GOOS {
+	case "windows":
+		return "GOODIX GSE20A SmartCard Reader 0"
+	case "darwin":
+		return "GOODIX GSE SmartCard Reader"
+	default:
+		return ""
+	}
 }

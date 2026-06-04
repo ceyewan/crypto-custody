@@ -21,7 +21,7 @@
                 </el-descriptions>
 
                 <el-form-item label="读卡器名称">
-                    <el-input v-model="form.cardReaderName" placeholder="GOODIX GSE SmartCard Reader"></el-input>
+                    <el-input v-model="form.cardReaderName" :placeholder="cardReaderPlaceholder"></el-input>
                 </el-form-item>
 
                 <el-collapse class="advanced">
@@ -56,8 +56,12 @@
 
 <script>
 import { mapGetters } from 'vuex'
-import { deriveWsUrl, normalizeHttpUrl } from '../services/settings'
+import { deriveWsUrl, getDefaultCardReaderName, normalizeHttpUrl } from '../services/settings'
 import { seApi } from '../services/wails-api'
+
+function errorMessage(error) {
+    return error?.message || error?.detail || error?.error || String(error)
+}
 
 export default {
     name: 'ClientSettings',
@@ -86,6 +90,9 @@ export default {
                 return '********'
             }
             return `${token.slice(0, 8)}...${token.slice(-8)}`
+        },
+        cardReaderPlaceholder() {
+            return getDefaultCardReaderName() || '留空自动选择读卡器'
         }
     },
     methods: {
@@ -131,7 +138,7 @@ export default {
                 this.form = { ...saved }
                 this.$message.success('客户端设置已保存')
             } catch (error) {
-                this.$message.error('保存客户端设置失败: ' + error.message)
+                this.$message.error('保存客户端设置失败: ' + errorMessage(error))
             } finally {
                 this.saving = false
             }
@@ -145,7 +152,7 @@ export default {
                     closeOnClickModal: true
                 })
             } catch (error) {
-                this.$message.error('检测 SE 失败: ' + error.message)
+                this.$message.error('检测 SE 失败: ' + errorMessage(error))
             } finally {
                 this.testingSe = false
             }

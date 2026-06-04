@@ -1,7 +1,15 @@
 const HTTP_URL_KEY = 'offline_client_server_http_url'
 const WS_URL_KEY = 'offline_client_server_ws_url'
 const CARD_READER_KEY = 'offline_client_card_reader_name'
-const DEFAULT_CARD_READER_NAME = 'GOODIX GSE SmartCard Reader'
+const MACOS_CARD_READER_NAME = 'GOODIX GSE SmartCard Reader'
+const WINDOWS_CARD_READER_NAME = 'GOODIX GSE20A SmartCard Reader 0'
+
+export function getDefaultCardReaderName() {
+    const platform = `${navigator.platform || ''} ${navigator.userAgent || ''}`.toLowerCase()
+    if (platform.includes('win')) return WINDOWS_CARD_READER_NAME
+    if (platform.includes('mac')) return MACOS_CARD_READER_NAME
+    return ''
+}
 
 function trimTrailingSlash(value) {
     return value.replace(/\/+$/, '')
@@ -78,14 +86,22 @@ export function loadClientSettings() {
     const serverHttpUrl = normalizeHttpUrl(localStorage.getItem(HTTP_URL_KEY) || getDefaultServerHttpUrl())
     const serverWsUrl = normalizeWsUrl(localStorage.getItem(WS_URL_KEY) || getDefaultServerWsUrl(serverHttpUrl), serverHttpUrl)
     const savedCardReaderName = (localStorage.getItem(CARD_READER_KEY) || '').trim()
-    const cardReaderName = savedCardReaderName === 'GOODIX GSE SmartCard Reader 01'
-        ? DEFAULT_CARD_READER_NAME
-        : (savedCardReaderName || DEFAULT_CARD_READER_NAME)
+    const defaultCardReaderName = getDefaultCardReaderName()
+    const cardReaderName = shouldMigrateCardReaderName(savedCardReaderName, defaultCardReaderName)
+        ? defaultCardReaderName
+        : (savedCardReaderName || defaultCardReaderName)
     return {
         serverHttpUrl,
         serverWsUrl,
         cardReaderName
     }
+}
+
+function shouldMigrateCardReaderName(savedCardReaderName, defaultCardReaderName) {
+    if (!savedCardReaderName) return false
+    if (savedCardReaderName === 'GOODIX GSE SmartCard Reader 01') return true
+    if (defaultCardReaderName === WINDOWS_CARD_READER_NAME && savedCardReaderName === MACOS_CARD_READER_NAME) return true
+    return false
 }
 
 export function saveClientSettings(settings) {

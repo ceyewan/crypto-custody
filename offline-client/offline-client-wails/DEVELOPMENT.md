@@ -70,7 +70,7 @@ frontend ws.js
 
 - `serverHttpUrl`：离线服务端 HTTP 地址，生产默认 `http://127.0.0.1:8080`。
 - `serverWsUrl`：离线服务端 WebSocket 地址，默认由 HTTP 地址推导为 `/ws`。
-- `cardReaderName`：读卡器名称，现场固定使用 `GOODIX GSE SmartCard Reader`，避免多读卡器环境下自动选择到 `GOODIX GSE SmartCard Reader 01`。
+- `cardReaderName`：读卡器名称，桌面端按平台设置默认值：Windows 使用 `GOODIX GSE20A SmartCard Reader 0`，macOS 使用 `GOODIX GSE SmartCard Reader`，Linux 留空自动选择。
 
 用户名和 token 仍由登录流程保存。修改 WebSocket 地址后，客户端会重置连接并按当前用户/token 重新注册。
 
