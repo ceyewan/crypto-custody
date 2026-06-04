@@ -164,7 +164,9 @@ export default {
                 if (!this.form.cplc) {
                     throw new Error('未读取到 CPLC')
                 }
-                this.form.seid = this.suggestSeId()
+                if (!this.form.seid.trim()) {
+                    this.form.seid = this.suggestSeId()
+                }
                 this.$message.success('已读取当前 SE')
             } catch (error) {
                 this.$message.error('读取 SE 失败: ' + error.message)
