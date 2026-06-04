@@ -21,7 +21,7 @@ func TestWebSocketSmokeKeygenSignErrorAndReconnect(t *testing.T) {
 
 	server, wsURL, runtime := startSmokeWebSocketServer(t)
 
-	coordinator := dialSmokeClient(t, wsURL, "coordinator", RoleAdmin)
+	coordinator := dialSmokeClient(t, wsURL, "admin", RoleAdmin)
 	defer coordinator.close()
 	u1 := dialSmokeClient(t, wsURL, "u1", RoleOfficer)
 	defer u1.close()

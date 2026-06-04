@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"offline-server/manager"
 	"offline-server/storage"
@@ -22,6 +23,8 @@ type SignHandler struct {
 	auditStorage      storage.IAuditStorage
 	sessionManager    *mem_storage.SessionManager
 	managerRuntime    manager.SessionRuntime
+	responseMu        sync.Mutex
+	resultMu          sync.Mutex
 }
 
 // NewSignHandler 创建签名消息处理器。
@@ -195,9 +198,15 @@ func (h *SignHandler) handleSignRequest(msg SignRequestMessage, sender *Client) 
 }
 
 func (h *SignHandler) handleSignResponse(msg SignResponseMessage, sender *Client) error {
+	h.responseMu.Lock()
+	defer h.responseMu.Unlock()
+
 	session := h.sessionManager.GetSignSession(msg.SessionKey)
 	if session == nil {
 		return fmt.Errorf("找不到签名会话: %s", msg.SessionKey)
+	}
+	if session.Status == model.StatusProcessing || session.Status == model.StatusCompleted {
+		return nil
 	}
 	idx := indexOfParticipant(session.Participants, sender.GetUserName())
 	if idx < 0 {
@@ -231,6 +240,8 @@ func (h *SignHandler) handleSignResponse(msg SignResponseMessage, sender *Client
 		return nil
 	}
 
+	session.Status = model.StatusProcessing
+	_ = h.signStorage.UpdateStatus(msg.SessionKey, model.StatusProcessing)
 	parties, err := parseParties(session.Parties)
 	if err != nil {
 		h.markSignFailed(msg.SessionKey)
@@ -279,16 +290,19 @@ func (h *SignHandler) handleSignResponse(msg SignResponseMessage, sender *Client
 			return fmt.Errorf("发送签名参数失败: %w", err)
 		}
 	}
-
-	session.Status = model.StatusProcessing
-	_ = h.signStorage.UpdateStatus(msg.SessionKey, model.StatusProcessing)
 	return nil
 }
 
 func (h *SignHandler) handleSignResult(msg SignResultMessage, sender *Client) error {
+	h.resultMu.Lock()
+	defer h.resultMu.Unlock()
+
 	session := h.sessionManager.GetSignSession(msg.SessionKey)
 	if session == nil {
 		return fmt.Errorf("找不到签名会话: %s", msg.SessionKey)
+	}
+	if session.Status == model.StatusCompleted {
+		return nil
 	}
 	idx := indexOfParticipant(session.Participants, sender.GetUserName())
 	if idx < 0 {

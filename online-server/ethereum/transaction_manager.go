@@ -219,21 +219,15 @@ func (tm *TransactionManager) SignTransaction(messageHash string, signature stri
 	if err != nil {
 		return 0, fmt.Errorf("解码签名失败: %w", err)
 	}
-
-	// 3. 为交易附加签名
-	signedTx, err := rawTx.WithSignature(signer, signatureBytes)
-	if err != nil {
-		return 0, fmt.Errorf("附加签名失败: %w", err)
+	if err := NormalizeRecoveryID(signatureBytes); err != nil {
+		return 0, err
 	}
 
-	// 4. 验证签名有效性
-	sender, err := types.Sender(signer, signedTx)
+	// 3. 为交易附加签名。MPC 输出的 recovery id 可能与以太坊地址
+	// 恢复方向相反，因此对同一组 r/s 尝试 v=0 和 v=1。
+	signedTx, signatureBytes, err := signTransactionForSender(rawTx, signer, signatureBytes, messageData.FromAddress)
 	if err != nil {
-		return 0, fmt.Errorf("验证签名失败: %w", err)
-	}
-
-	if !strings.EqualFold(sender.Hex(), messageData.FromAddress) {
-		return 0, ErrInvalidSignature
+		return 0, err
 	}
 
 	// 5. 更新交易记录
@@ -249,6 +243,45 @@ func (tm *TransactionManager) SignTransaction(messageHash string, signature stri
 	tm.txMutex.Unlock()
 
 	return txID, nil
+}
+
+func signTransactionForSender(rawTx *types.Transaction, signer types.Signer, signatureBytes []byte, fromAddress string) (*types.Transaction, []byte, error) {
+	if len(signatureBytes) != 65 {
+		return nil, nil, fmt.Errorf("签名长度错误: 需要 65 字节，实际 %d 字节", len(signatureBytes))
+	}
+	for _, recoveryID := range []byte{signatureBytes[64], 1 - signatureBytes[64]} {
+		candidate := append([]byte(nil), signatureBytes...)
+		candidate[64] = recoveryID
+		signedTx, err := rawTx.WithSignature(signer, candidate)
+		if err != nil {
+			continue
+		}
+		sender, err := types.Sender(signer, signedTx)
+		if err != nil {
+			continue
+		}
+		if strings.EqualFold(sender.Hex(), fromAddress) {
+			return signedTx, candidate, nil
+		}
+	}
+	return nil, nil, ErrInvalidSignature
+}
+
+// NormalizeRecoveryID accepts both common Ethereum signature encodings:
+// r||s||v where v is 0/1, and r||s||v where v is 27/28.
+func NormalizeRecoveryID(signatureBytes []byte) error {
+	if len(signatureBytes) != 65 {
+		return fmt.Errorf("签名长度错误: 需要 65 字节，实际 %d 字节", len(signatureBytes))
+	}
+	switch signatureBytes[64] {
+	case 0, 1:
+		return nil
+	case 27, 28:
+		signatureBytes[64] -= 27
+		return nil
+	default:
+		return fmt.Errorf("签名 recovery id 无效: %d", signatureBytes[64])
+	}
 }
 
 // SendTransaction 将已签名的交易发送到以太坊网络

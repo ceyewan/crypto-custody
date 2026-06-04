@@ -125,9 +125,9 @@ func (s *TransactionService) SignTransaction(id uint, signature []byte) (*model.
 		return nil, err
 	}
 
-	// 检查交易状态
-	if tx.Status != model.StatusPending {
-		return nil, errors.New("只能为处于 Pending 状态的交易添加签名")
+	// 签名任务导出后仍处于等待离线签名返回的合法状态。
+	if tx.Status != model.StatusPending && tx.Status != model.StatusSignatureExported {
+		return nil, errors.New("只能为处于 Pending 或 SignatureExported 状态的交易添加签名")
 	}
 
 	tx.Signature = signature

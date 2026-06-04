@@ -1,4 +1,5 @@
 .DS_Store
+**/.DS_Store
 .env
 */.DS_Store
 offline-client/.DS_Store
@@ -19,6 +20,9 @@ offline-server/bin/offline-server
 offline-client/electron-app/*
 security-chip-handoff/
 security-chip-handoff.zip
+安全芯片Applet交付包/
+安全芯片Applet交付包.zip
+e2e/custody-flow/runs/
 offline-server-handoff/
 offline-server-handoff.zip
 online-system-handoff/

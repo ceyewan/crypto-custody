@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"net/http"
 	"online-server/dto"
+	"online-server/ethereum"
 	"online-server/model"
 	"online-server/service"
 	"online-server/utils"
@@ -320,19 +321,29 @@ func ImportTransactionSignature(c *gin.Context) {
 		utils.ResponseWithError(c, http.StatusBadRequest, "签名格式错误: "+err.Error())
 		return
 	}
+	if err := ethereum.NormalizeRecoveryID(sigBytes); err != nil {
+		utils.ResponseWithError(c, http.StatusBadRequest, err.Error())
+		return
+	}
 	if tx.MessageHash != "" {
 		tm, err := getTransactionManager()
 		if err != nil {
 			utils.ResponseWithError(c, http.StatusInternalServerError, "获取交易管理器失败: "+err.Error())
 			return
 		}
-		if _, err := tm.SignTransaction(tx.MessageHash, sig); err != nil {
+		if _, err := tm.SignTransaction(tx.MessageHash, hex.EncodeToString(sigBytes)); err != nil {
 			utils.ResponseWithError(c, http.StatusBadRequest, "签名验证或附加失败: "+err.Error())
+			return
+		}
+		if err := utils.GetDB().First(&tx, id).Error; err != nil {
+			utils.ResponseWithError(c, http.StatusInternalServerError, "重新加载交易失败: "+err.Error())
 			return
 		}
 	}
 	now := time.Now().Unix()
-	tx.Signature = sigBytes
+	if tx.MessageHash == "" {
+		tx.Signature = sigBytes
+	}
 	tx.Status = model.StatusSigned
 	tx.SignedAt = &now
 	if req.MessageHash != "" {

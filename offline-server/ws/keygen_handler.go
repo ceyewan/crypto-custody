@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"sync"
 
 	"offline-server/manager"
 	"offline-server/storage"
@@ -21,6 +22,8 @@ type KeyGenHandler struct {
 	auditStorage      storage.IAuditStorage
 	sessionManager    *mem_storage.SessionManager
 	managerRuntime    manager.SessionRuntime
+	responseMu        sync.Mutex
+	resultMu          sync.Mutex
 }
 
 // NewKeyGenHandler 创建密钥生成消息处理器。
@@ -165,9 +168,15 @@ func (h *KeyGenHandler) handleKeyGenRequest(msg KeyGenRequestMessage, sender *Cl
 }
 
 func (h *KeyGenHandler) handleKeyGenResponse(msg KeyGenResponseMessage, sender *Client) error {
+	h.responseMu.Lock()
+	defer h.responseMu.Unlock()
+
 	session := h.sessionManager.GetKeyGenSession(msg.SessionKey)
 	if session == nil {
 		return fmt.Errorf("找不到密钥生成会话: %s", msg.SessionKey)
+	}
+	if session.Status == model.StatusProcessing || session.Status == model.StatusCompleted {
+		return nil
 	}
 	idx := msg.PartyIndex - 1
 	if idx < 0 || idx >= len(session.Participants) {
@@ -198,6 +207,8 @@ func (h *KeyGenHandler) handleKeyGenResponse(msg KeyGenResponseMessage, sender *
 		return nil
 	}
 
+	session.Status = model.StatusProcessing
+	_ = h.keyGenStorage.UpdateStatus(msg.SessionKey, model.StatusProcessing)
 	for i, participant := range session.Participants {
 		recordID := deriveRecordID(session.OfflineKeyID, i+1, 1)
 		paramsMsg := KeyGenParamsMessage{
@@ -222,16 +233,19 @@ func (h *KeyGenHandler) handleKeyGenResponse(msg KeyGenResponseMessage, sender *
 			return fmt.Errorf("发送 keygen 参数失败: %w", err)
 		}
 	}
-
-	session.Status = model.StatusProcessing
-	_ = h.keyGenStorage.UpdateStatus(msg.SessionKey, model.StatusProcessing)
 	return nil
 }
 
 func (h *KeyGenHandler) handleKeyGenResult(msg KeyGenResultMessage, sender *Client) error {
+	h.resultMu.Lock()
+	defer h.resultMu.Unlock()
+
 	session := h.sessionManager.GetKeyGenSession(msg.SessionKey)
 	if session == nil {
 		return fmt.Errorf("找不到密钥生成会话: %s", msg.SessionKey)
+	}
+	if session.Status == model.StatusCompleted {
+		return nil
 	}
 	idx := msg.PartyIndex - 1
 	if idx < 0 || idx >= len(session.Participants) {

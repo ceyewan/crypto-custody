@@ -66,6 +66,7 @@ func SignData(recordID, address string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("签名失败: %v", err)
 	}
+	s = normalizeECDSALowS(privateKey, s)
 
 	// 将r和s转换为DER格式
 	signature, err := marshalECDSASignature(r, s)
@@ -75,6 +76,21 @@ func SignData(recordID, address string) (string, error) {
 
 	// 转为base64
 	return base64.StdEncoding.EncodeToString(signature), nil
+}
+
+func normalizeECDSALowS(privateKey *ecdsa.PrivateKey, s *big.Int) *big.Int {
+	if privateKey == nil || privateKey.Curve == nil || privateKey.Curve.Params() == nil || s == nil {
+		return s
+	}
+	order := privateKey.Curve.Params().N
+	if order == nil {
+		return s
+	}
+	halfOrder := new(big.Int).Rsh(new(big.Int).Set(order), 1)
+	if s.Cmp(halfOrder) <= 0 {
+		return s
+	}
+	return new(big.Int).Sub(order, s)
 }
 
 // 将ECDSA签名转换为DER格式
