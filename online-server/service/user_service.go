@@ -68,7 +68,7 @@ func (s *UserService) Login(username, password string) (*model.User, string, err
 
 // Register 用户注册
 //
-// 使用提供的信息创建新用户账户，新用户默认被分配游客角色
+// 使用提供的信息创建新用户账户，新用户默认被分配警员角色
 //
 // 参数：
 // - username：新账户的用户名（必须唯一）
@@ -98,12 +98,12 @@ func (s *UserService) Register(username, password, email string) (*model.User, e
 		return nil, fmt.Errorf("密码加密失败: %w", err)
 	}
 
-	// 创建新用户，默认为游客角色
+	// 创建新用户，默认为警员角色
 	user := model.User{
 		Username: username,
 		Password: hashedPassword,
 		Email:    email,
-		Role:     model.RoleGuest, // 默认角色为游客
+		Role:     model.RoleOfficer,
 	}
 
 	if err := utils.GetDB().Create(&user).Error; err != nil {

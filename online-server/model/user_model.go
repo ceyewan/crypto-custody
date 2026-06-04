@@ -9,7 +9,6 @@ const (
 	RoleAdmin   Role = "admin"   // 管理员
 	RoleOfficer Role = "officer" // 警员
 	RoleAuditor Role = "auditor" // 审计员
-	RoleGuest   Role = "guest"   // 游客
 )
 
 // User 表示用户模型，包含用户的基本信息和角色。

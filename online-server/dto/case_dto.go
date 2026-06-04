@@ -1,7 +1,7 @@
 package dto
 
 type CaseRequest struct {
-	CaseNo      string `json:"caseNo" binding:"required"`
+	CaseNo      string `json:"caseNo"`
 	Name        string `json:"name" binding:"required"`
 	Description string `json:"description"`
 	Status      string `json:"status"`

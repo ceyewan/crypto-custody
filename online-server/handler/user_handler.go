@@ -316,7 +316,7 @@ func UpdateUserRole(c *gin.Context) {
 	// 验证角色值是否有效
 	var newRole model.Role
 	switch model.Role(roleReq.Role) {
-	case model.RoleAdmin, model.RoleOfficer, model.RoleGuest:
+	case model.RoleAdmin, model.RoleOfficer, model.RoleAuditor:
 		newRole = model.Role(roleReq.Role)
 	default:
 		utils.ResponseWithError(c, http.StatusBadRequest, "无效的角色值")

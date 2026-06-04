@@ -5,7 +5,7 @@
 ## 核心能力
 
 - 用户管理：注册、登录、登出、密码修改、管理员用户管理。
-- 权限控制：支持 `admin`、`officer`、`guest` 三类角色。
+- 权限控制：支持 `admin`、`officer`、`auditor` 三类角色。
 - 账户管理：查询账户、创建账户、批量导入账户、管理员查看和删除账户。
 - 交易管理：准备交易、提交签名并发送交易、查询交易列表和统计信息。
 - 区块链交互：连接 Sepolia 测试网，查询余额、广播交易、检查交易收据。
@@ -73,7 +73,7 @@ online-server/
 | --- | --- |
 | `admin` | 用户管理、账户管理、交易查询和交易删除等管理能力 |
 | `officer` | 账户创建/导入、交易准备、签名提交、交易列表和统计查询 |
-| `guest` | 基础登录态能力和允许公开访问的查询 |
+| `auditor` | 审计日志、用户、案件、账户和交易的只读查询能力 |
 
 ## 主要接口
 
@@ -127,10 +127,10 @@ online-server/
 | --- | --- |
 | `ETH_RPC` | Sepolia Infura 项目标识，服务会拼接为 `https://sepolia.infura.io/v3/<ETH_RPC>` |
 | `JWT_SECRET_KEY` | JWT 签名密钥 |
-| `DEFAULT_ADMIN_PASSWORD` | 首次初始化默认管理员账号时使用的密码 |
+| `DEFAULT_ADMIN_PASSWORD` | 首次初始化默认管理员账号时使用的密码，未设置时为 `admin123` |
 | `ENV` | 日志环境标识，设置为 `production` 时使用生产日志配置 |
 
-服务启动时会读取 `.env` 文件；如果该文件不存在或变量缺失，启动或相关功能可能失败。
+服务启动时会读取 `.env` 文件；初始化数据库时会确保 `admin/admin123`、`u1/officer123`、`u2/officer123`、`u3/officer123`、`auditor/auditor123` 存在。
 
 ## 本地运行
 

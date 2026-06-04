@@ -54,7 +54,7 @@
 
     <el-dialog :title="form.ID ? '编辑案件' : '新建案件'" :visible.sync="caseDialog" width="520px">
       <el-form :model="form" label-width="90px">
-        <el-form-item label="案件编号"><el-input v-model="form.caseNo" /></el-form-item>
+        <el-form-item label="案件编号"><el-input v-model="form.caseNo" placeholder="留空自动生成" /></el-form-item>
         <el-form-item label="案件名称"><el-input v-model="form.name" /></el-form-item>
         <el-form-item label="状态">
           <el-select v-model="form.status" style="width:100%">
@@ -149,6 +149,10 @@ export default {
       this.caseDialog = true
     },
     async saveCase () {
+      if (!this.form.name || !this.form.name.trim()) {
+        this.$message.warning('请输入案件名称')
+        return
+      }
       if (this.form.ID) {
         await caseApi.update(this.form.ID, this.form)
       } else {

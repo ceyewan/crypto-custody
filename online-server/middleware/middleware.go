@@ -192,7 +192,7 @@ func OfficerRequired() gin.HandlerFunc {
 
 		// 检查是否为管理员或警员
 		if role.(string) != string(model.RoleAdmin) && role.(string) != string(model.RoleOfficer) {
-			logger.Warn("游客尝试访问警员资源",
+			logger.Warn("非警员用户尝试访问警员资源",
 				clog.String("username", c.GetString("Username")),
 				clog.String("role", role.(string)),
 				clog.String("path", c.Request.URL.Path),

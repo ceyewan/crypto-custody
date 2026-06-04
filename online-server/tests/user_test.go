@@ -37,19 +37,19 @@ var (
 		Email:    "officer@example.com",
 		Role:     model.RoleOfficer,
 	}
-	guestUser = model.User{
-		Username: "guest",
-		Email:    "guest@example.com",
-		Role:     model.RoleGuest,
+	auditorUser = model.User{
+		Username: "auditor",
+		Email:    "auditor@example.com",
+		Role:     model.RoleAuditor,
 	}
-	testPassword = "password123"
+	testPassword = "officer123"
 )
 
 // 测试用的 Token
 var (
 	adminToken   string
 	officerToken string
-	guestToken   string
+	auditorToken string
 	invalidToken = "invalid.token.value"
 )
 
@@ -83,7 +83,7 @@ func setupTestEnv(t *testing.T) {
 	}
 	adminUser.Password = hashedPassword
 	officerUser.Password = hashedPassword
-	guestUser.Password = hashedPassword
+	auditorUser.Password = hashedPassword
 
 	// 保存到数据库
 	if err := testDB.Create(&adminUser).Error; err != nil {
@@ -92,8 +92,8 @@ func setupTestEnv(t *testing.T) {
 	if err := testDB.Create(&officerUser).Error; err != nil {
 		t.Fatalf("Failed to create officer user: %v", err)
 	}
-	if err := testDB.Create(&guestUser).Error; err != nil {
-		t.Fatalf("Failed to create guest user: %v", err)
+	if err := testDB.Create(&auditorUser).Error; err != nil {
+		t.Fatalf("Failed to create auditor user: %v", err)
 	}
 
 	// 生成令牌
@@ -108,9 +108,9 @@ func setupTestEnv(t *testing.T) {
 		t.Fatalf("Failed to generate officer token: %v", tokenErr)
 	}
 
-	guestToken, tokenErr = utils.GenerateToken(guestUser.Username, string(guestUser.Role), time.Hour)
+	auditorToken, tokenErr = utils.GenerateToken(auditorUser.Username, string(auditorUser.Role), time.Hour)
 	if tokenErr != nil {
-		t.Fatalf("Failed to generate guest token: %v", tokenErr)
+		t.Fatalf("Failed to generate auditor token: %v", tokenErr)
 	}
 
 	// 创建测试路由器
@@ -146,9 +146,9 @@ func setupTestEnv(t *testing.T) {
 		case officerToken:
 			username = officerUser.Username
 			role = string(officerUser.Role)
-		case guestToken:
-			username = guestUser.Username
-			role = string(guestUser.Role)
+		case auditorToken:
+			username = auditorUser.Username
+			role = string(auditorUser.Role)
 		default:
 			err = fmt.Errorf("无效令牌")
 		}
@@ -162,7 +162,10 @@ func setupTestEnv(t *testing.T) {
 		// 设置用户信息到上下文
 		c.Set("Username", username)
 		c.Set("Role", role)
-		c.Set("UserID", getUserIDByUsername(username))
+		if user := getUserByUsername(username); user != nil {
+			c.Set("UserID", user.ID)
+			c.Set("user", user)
+		}
 
 		c.Next()
 	})
@@ -206,13 +209,21 @@ func teardownTestEnv(t *testing.T) {
 
 // 辅助函数：通过用户名获取用户ID
 func getUserIDByUsername(username string) uint {
+	user := getUserByUsername(username)
+	if user == nil {
+		return 0
+	}
+	return user.ID
+}
+
+func getUserByUsername(username string) *model.User {
 	var user model.User
 	err := testDB.Where("username = ?", username).First(&user).Error
 	if err != nil {
 		log.Printf("Error finding user by username: %v", err)
-		return 0
+		return nil
 	}
-	return user.ID
+	return &user
 }
 
 // 测试用户注册
@@ -224,7 +235,7 @@ func TestRegister(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		reqBody := map[string]string{
 			"username": "newuser",
-			"password": "password123",
+			"password": testPassword,
 			"email":    "newuser@example.com",
 		}
 		jsonData, _ := json.Marshal(reqBody)
@@ -254,7 +265,7 @@ func TestRegister(t *testing.T) {
 	t.Run("UserExists", func(t *testing.T) {
 		reqBody := map[string]string{
 			"username": adminUser.Username, // 使用已存在的用户名
-			"password": "password123",
+			"password": testPassword,
 			"email":    "unique@example.com",
 		}
 		jsonData, _ := json.Marshal(reqBody)
@@ -277,7 +288,7 @@ func TestRegister(t *testing.T) {
 	t.Run("EmailExists", func(t *testing.T) {
 		reqBody := map[string]string{
 			"username": "uniqueuser",
-			"password": "password123",
+			"password": testPassword,
 			"email":    adminUser.Email, // 使用已存在的邮箱
 		}
 		jsonData, _ := json.Marshal(reqBody)
@@ -466,7 +477,7 @@ func TestUpdateUserRole(t *testing.T) {
 		}
 		jsonData, _ := json.Marshal(reqBody)
 
-		url := fmt.Sprintf("/api/users/admin/users/%d/role", guestUser.ID)
+		url := fmt.Sprintf("/api/users/admin/users/%d/role", auditorUser.ID)
 		req, _ := http.NewRequest("PUT", url, bytes.NewBuffer(jsonData))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", adminToken)
@@ -477,14 +488,14 @@ func TestUpdateUserRole(t *testing.T) {
 
 		// 验证角色已更新
 		var updatedUser model.User
-		testDB.First(&updatedUser, guestUser.ID)
+		testDB.First(&updatedUser, auditorUser.ID)
 		assert.Equal(t, model.RoleOfficer, updatedUser.Role)
 	})
 
 	// 测试场景：尝试更新管理员角色
 	t.Run("UpdateAdmin", func(t *testing.T) {
 		reqBody := map[string]string{
-			"role": string(model.RoleGuest),
+			"role": string(model.RoleAuditor),
 		}
 		jsonData, _ := json.Marshal(reqBody)
 
@@ -506,11 +517,11 @@ func TestUpdateUserRole(t *testing.T) {
 	// 测试场景：非管理员尝试更新角色
 	t.Run("NonAdmin", func(t *testing.T) {
 		reqBody := map[string]string{
-			"role": string(model.RoleGuest),
+			"role": string(model.RoleAuditor),
 		}
 		jsonData, _ := json.Marshal(reqBody)
 
-		url := fmt.Sprintf("/api/users/admin/users/%d/role", guestUser.ID)
+		url := fmt.Sprintf("/api/users/admin/users/%d/role", auditorUser.ID)
 		req, _ := http.NewRequest("PUT", url, bytes.NewBuffer(jsonData))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", officerToken) // 使用警员令牌
@@ -528,13 +539,13 @@ func TestUpdateUserID(t *testing.T) {
 
 	// 测试场景：管理员成功更新用户名
 	t.Run("AdminSuccess", func(t *testing.T) {
-		newUsername := "updated_guest"
+		newUsername := "updated_auditor"
 		reqBody := map[string]string{
 			"username": newUsername,
 		}
 		jsonData, _ := json.Marshal(reqBody)
 
-		url := fmt.Sprintf("/api/users/admin/users/%d/username", guestUser.ID)
+		url := fmt.Sprintf("/api/users/admin/users/%d/username", auditorUser.ID)
 		req, _ := http.NewRequest("PUT", url, bytes.NewBuffer(jsonData))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", adminToken)
@@ -545,7 +556,7 @@ func TestUpdateUserID(t *testing.T) {
 
 		// 验证用户名已更新
 		var updatedUser model.User
-		testDB.First(&updatedUser, guestUser.ID)
+		testDB.First(&updatedUser, auditorUser.ID)
 		assert.Equal(t, newUsername, updatedUser.Username)
 	})
 
@@ -556,7 +567,7 @@ func TestUpdateUserID(t *testing.T) {
 		}
 		jsonData, _ := json.Marshal(reqBody)
 
-		url := fmt.Sprintf("/api/users/admin/users/%d/username", guestUser.ID)
+		url := fmt.Sprintf("/api/users/admin/users/%d/username", auditorUser.ID)
 		req, _ := http.NewRequest("PUT", url, bytes.NewBuffer(jsonData))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", adminToken)
@@ -599,7 +610,7 @@ func TestDeleteUser(t *testing.T) {
 		Username: "deleteuser",
 		Password: "password",
 		Email:    "delete@example.com",
-		Role:     model.RoleGuest,
+		Role:     model.RoleOfficer,
 	}
 	testDB.Create(&deleteUser)
 
@@ -626,13 +637,13 @@ func TestDeleteUser(t *testing.T) {
 			Username: "anotheruser",
 			Password: "password",
 			Email:    "another@example.com",
-			Role:     model.RoleGuest,
+			Role:     model.RoleAuditor,
 		}
 		testDB.Create(&anotherUser)
 
 		url := fmt.Sprintf("/api/users/admin/users/%d", anotherUser.ID)
 		req, _ := http.NewRequest("DELETE", url, nil)
-		req.Header.Set("Authorization", guestToken) // 使用游客令牌
+		req.Header.Set("Authorization", auditorToken) // 使用审计员令牌
 		resp := httptest.NewRecorder()
 		testRouter.ServeHTTP(resp, req)
 

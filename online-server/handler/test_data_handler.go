@@ -124,7 +124,7 @@ func seedUser(username, email string, role model.Role) {
 	if count > 0 {
 		return
 	}
-	password, _ := utils.HashPassword("password123")
+	password, _ := utils.HashPassword("officer123")
 	user := model.User{Username: username, Email: email, Password: password, Role: role, Status: "active"}
 	_ = utils.GetDB().Create(&user).Error
 }

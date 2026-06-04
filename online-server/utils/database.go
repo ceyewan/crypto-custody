@@ -222,48 +222,78 @@ func ensureAdminUser() error {
 		return fmt.Errorf("数据库未初始化")
 	}
 
-	// 检查是否已存在admin用户
-	var count int64
-	instance.Model(&model.User{}).Where("username = ?", "admin").Count(&count)
-	dbLogger.Info("检查管理员用户", clog.Int64("found", count))
-
-	// 如果不存在admin用户，则创建
-	if count == 0 {
-		dbLogger.Info("未检测到管理员用户，正在创建默认管理员...")
-
-		// 设置默认管理员密码
-		defaultPassword := strings.TrimSpace(os.Getenv("DEFAULT_ADMIN_PASSWORD"))
-		if defaultPassword == "" {
-			return fmt.Errorf("DEFAULT_ADMIN_PASSWORD 未设置，无法创建默认管理员")
-		}
-
-		// 使用bcrypt生成密码哈希
-		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(defaultPassword), bcrypt.DefaultCost)
-		if err != nil {
-			dbLogger.Error("生成密码哈希失败", clog.Err(err))
-			return fmt.Errorf("生成密码哈希失败: %w", err)
-		}
-
-		// 创建默认admin用户
-		admin := model.User{
-			Username: "admin",
-			Password: string(hashedPassword),
-			Email:    "admin@example.com",
-			Role:     model.RoleAdmin,
-		}
-
-		if err := instance.Create(&admin).Error; err != nil {
-			dbLogger.Error("创建管理员用户失败", clog.Err(err))
-			return fmt.Errorf("创建管理员用户失败: %w", err)
-		}
-
-		dbLogger.Info("默认管理员用户创建成功",
-			clog.String("username", "admin"),
-			clog.String("role", string(model.RoleAdmin)))
-	} else {
-		dbLogger.Info("管理员用户已存在，无需创建")
+	if err := migrateLegacyUserRoles(); err != nil {
+		return err
 	}
 
+	adminPassword := strings.TrimSpace(os.Getenv("DEFAULT_ADMIN_PASSWORD"))
+	if adminPassword == "" {
+		adminPassword = "admin123"
+	}
+	if err := ensureDefaultUser("admin", "admin@example.com", adminPassword, model.RoleAdmin); err != nil {
+		return err
+	}
+
+	defaultOfficers := []struct {
+		username string
+		email    string
+	}{
+		{"u1", "u1@example.com"},
+		{"u2", "u2@example.com"},
+		{"u3", "u3@example.com"},
+	}
+	for _, officer := range defaultOfficers {
+		if err := ensureDefaultUser(officer.username, officer.email, "officer123", model.RoleOfficer); err != nil {
+			return err
+		}
+	}
+
+	if err := ensureDefaultUser("auditor", "auditor@example.com", "auditor123", model.RoleAuditor); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func migrateLegacyUserRoles() error {
+	if err := instance.Model(&model.User{}).
+		Where("role = ?", "guest").
+		Update("role", model.RoleOfficer).Error; err != nil {
+		return fmt.Errorf("迁移历史用户角色失败: %w", err)
+	}
+	return nil
+}
+
+func ensureDefaultUser(username, email, password string, role model.Role) error {
+	dbLogger := clog.Module("database")
+
+	var count int64
+	instance.Model(&model.User{}).Where("username = ?", username).Count(&count)
+	if count > 0 {
+		dbLogger.Info("默认用户已存在，无需创建", clog.String("username", username), clog.String("role", string(role)))
+		return nil
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		dbLogger.Error("生成密码哈希失败", clog.String("username", username), clog.Err(err))
+		return fmt.Errorf("生成默认用户密码哈希失败: %w", err)
+	}
+
+	user := model.User{
+		Username: username,
+		Password: string(hashedPassword),
+		Email:    email,
+		Role:     role,
+		Status:   "active",
+	}
+
+	if err := instance.Create(&user).Error; err != nil {
+		dbLogger.Error("创建默认用户失败", clog.String("username", username), clog.Err(err))
+		return fmt.Errorf("创建默认用户 %s 失败: %w", username, err)
+	}
+
+	dbLogger.Info("默认用户创建成功", clog.String("username", username), clog.String("role", string(role)))
 	return nil
 }
 

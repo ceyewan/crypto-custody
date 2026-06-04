@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1.7
-
 ARG TARGETPLATFORM=linux/amd64
 
 FROM --platform=$TARGETPLATFORM golang:1.24-bookworm AS builder

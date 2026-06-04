@@ -7,6 +7,7 @@ import (
 	"online-server/service"
 	"online-server/utils"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -20,15 +21,24 @@ func CreateCase(c *gin.Context) {
 	if req.Status != "" {
 		status = model.CaseStatus(req.Status)
 	}
+	caseNo := strings.TrimSpace(req.CaseNo)
+	if caseNo == "" {
+		generated, err := service.NewCaseService().GenerateCaseNo()
+		if err != nil {
+			utils.ResponseWithError(c, http.StatusInternalServerError, err.Error())
+			return
+		}
+		caseNo = generated
+	}
 	cs := model.Case{
-		CaseNo:      req.CaseNo,
+		CaseNo:      caseNo,
 		Name:        req.Name,
 		Description: req.Description,
 		Status:      status,
 		CreatedBy:   c.GetString("Username"),
 	}
 	if err := utils.GetDB().Create(&cs).Error; err != nil {
-		service.AuditAction(c, "case.create", "case", "", req.CaseNo, "failure", err.Error(), nil)
+		service.AuditAction(c, "case.create", "case", "", caseNo, "failure", err.Error(), nil)
 		utils.ResponseWithError(c, http.StatusBadRequest, "创建案件失败: "+err.Error())
 		return
 	}

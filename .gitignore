@@ -17,3 +17,9 @@ online-client/frontend/dist/
 online-server/tmp/*
 offline-server/bin/offline-server
 offline-client/electron-app/*
+security-chip-handoff/
+security-chip-handoff.zip
+offline-server-handoff/
+offline-server-handoff.zip
+online-system-handoff/
+online-system-handoff.zip

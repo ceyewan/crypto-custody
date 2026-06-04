@@ -166,38 +166,57 @@ func ensureAdminUser() error {
 		return fmt.Errorf("数据库未初始化")
 	}
 
-	// 检查是否已存在admin用户
-	var count int64
-	instance.Model(&model.User{}).Where("username = ?", "admin").Count(&count)
-
-	// 如果不存在admin用户，则创建
-	if count == 0 {
-		log.Println("未检测到管理员用户，正在创建默认管理员...")
-
-		// 设置默认管理员密码
-		defaultPassword := "admin123"
-
-		// 使用bcrypt生成密码哈希
-		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(defaultPassword), bcrypt.DefaultCost)
-		if err != nil {
-			return fmt.Errorf("生成密码哈希失败: %w", err)
-		}
-
-		// 创建默认admin用户
-		admin := model.User{
-			Username: "admin",
-			Nickname: "系统管理员",
-			Password: string(hashedPassword),
-			Email:    "admin@example.com",
-			Role:     model.RoleAdmin,
-		}
-
-		if err := instance.Create(&admin).Error; err != nil {
-			return fmt.Errorf("创建管理员用户失败: %w", err)
-		}
-
-		log.Println("默认管理员用户创建成功: admin (默认密码: admin123)")
+	if err := ensureDefaultUser("admin", "系统管理员", "admin@example.com", "admin123", model.RoleAdmin); err != nil {
+		return err
 	}
 
+	defaultOfficers := []struct {
+		username string
+		nickname string
+		email    string
+	}{
+		{"u1", "测试警员1", "u1@offline.local"},
+		{"u2", "测试警员2", "u2@offline.local"},
+		{"u3", "测试警员3", "u3@offline.local"},
+	}
+	for _, officer := range defaultOfficers {
+		if err := ensureDefaultUser(officer.username, officer.nickname, officer.email, "officer123", model.RoleOfficer); err != nil {
+			return err
+		}
+	}
+
+	if err := ensureDefaultUser("auditor", "测试审计员", "auditor@offline.local", "auditor123", model.RoleAuditor); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func ensureDefaultUser(username, nickname, email, password string, role model.Role) error {
+	var count int64
+	instance.Model(&model.User{}).Where("username = ?", username).Count(&count)
+	if count > 0 {
+		return nil
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("生成默认用户密码哈希失败: %w", err)
+	}
+
+	user := model.User{
+		Username: username,
+		Nickname: nickname,
+		Password: string(hashedPassword),
+		Email:    email,
+		Role:     role,
+		Status:   model.UserStatusActive,
+	}
+
+	if err := instance.Create(&user).Error; err != nil {
+		return fmt.Errorf("创建默认用户 %s 失败: %w", username, err)
+	}
+
+	log.Printf("默认用户创建成功: %s (%s)", username, role)
 	return nil
 }

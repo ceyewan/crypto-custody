@@ -62,9 +62,9 @@ func TestGetCurrentUser(t *testing.T) {
 		t.Errorf("预期邮箱 %s, 但收到 %s", email, user.Email)
 	}
 
-	// 验证角色是 guest (默认角色)
-	if user.Role != "guest" {
-		t.Errorf("预期角色 guest, 但收到 %s", user.Role)
+	// 验证角色是 officer (默认角色)
+	if user.Role != "officer" {
+		t.Errorf("预期角色 officer, 但收到 %s", user.Role)
 	}
 }
 

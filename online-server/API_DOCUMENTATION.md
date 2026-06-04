@@ -94,7 +94,7 @@
     "id": 2,
     "username": "newuser",
     "email": "newuser@example.com",
-    "role": "guest"
+    "role": "officer"
   }
 }
 ```
@@ -278,7 +278,7 @@ Authorization: Bearer <token>
 ### 请求参数
 ```json
 {
-  "role": "string" // 角色: "admin", "officer", "guest"
+  "role": "string" // 角色: "admin", "officer", "auditor"
 }
 ```
 

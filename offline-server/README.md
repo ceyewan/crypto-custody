@@ -24,17 +24,23 @@ offline-server/
 ├── tools/         # JWT 等辅助工具
 ├── web/           # HTTP API 服务
 ├── ws/            # WebSocket 协调服务
+├── Dockerfile
+├── docker-compose.yml
+├── docker-build-image.sh
+├── docker-push-image.sh
+├── docker-run-local.sh
 ├── go.mod         # Go 依赖定义
 └── main.go        # 服务启动入口
 ```
 
 ## 服务端口
 
-默认启动两个服务：
+默认启动两个固定服务，并按会话启动临时 manager：
 
 ```text
-HTTP API:  http://localhost:8080
-WebSocket: ws://0.0.0.0:8081/ws
+HTTP API:       http://localhost:8080
+WebSocket:      ws://localhost:8081/ws
+MPC managers:   18001-18100
 ```
 
 启动参数可调整端口：
@@ -76,11 +82,74 @@ OFFLINE_MANAGER_PORT_END=18100
 - `offline-server` 服务端可执行文件。
 - `bin/gg20_sm_manager_linux_amd64`。
 
-构建并推送镜像：
+### 构建镜像
+
+本地开发机或 Linux 服务器都可以执行。默认构建到本地 Docker 镜像仓库：
 
 ```bash
 cd offline-server
-./docker-build-push.sh ceyewan crypto-custody-offline-server latest
+./docker-build-image.sh
+```
+
+也可以指定镜像名：
+
+```bash
+./docker-build-image.sh ceyewan/crypto-custody-offline-server:latest
+```
+
+### 推送镜像
+
+推送前需要先完成 `docker login`。
+
+```bash
+./docker-push-image.sh crypto-custody-offline-server:local ceyewan/crypto-custody-offline-server:latest
+```
+
+### 本地 Docker 启动
+
+默认使用本地镜像 `crypto-custody-offline-server:local`：
+
+```bash
+./docker-run-local.sh
+```
+
+也可以选择 DockerHub 镜像：
+
+```bash
+./docker-run-local.sh ceyewan/crypto-custody-offline-server:latest
+```
+
+本地启动会挂载：
+
+```text
+./data         -> /app/data
+./logs         -> /app/logs
+./private_keys -> /app/private_keys
+```
+
+运行前需要准备 `private_keys/ec_private_key.pem`。
+
+Docker 需要开放三类端口：
+
+```text
+8080          HTTP API
+8081          WebSocket
+18001-18100   会话级 gg20 manager 端口池
+```
+
+每次 keygen/sign 会话会启动一个独立的 `gg20_sm_manager`，服务端从 `OFFLINE_MANAGER_PORT_START` 到 `OFFLINE_MANAGER_PORT_END` 分配端口，并把 `manager_addr` 下发给桌面客户端。因此容器需要把这段端口范围映射到宿主机：
+
+```yaml
+ports:
+  - "8080:8080"
+  - "8081:8081"
+  - "18001-18100:18001-18100"
+```
+
+本机演示时默认 `OFFLINE_MANAGER_PUBLIC_HOST=127.0.0.1`。如果桌面客户端在其他机器上，需要改成离线服务器的局域网 IP 或 DNS：
+
+```bash
+OFFLINE_MANAGER_PUBLIC_HOST=192.168.1.10 ./docker-run-local.sh
 ```
 
 部署入口统一放在根目录的独立部署目录：

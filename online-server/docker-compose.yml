@@ -1,5 +1,6 @@
 services:
   online-server:
+    platform: ${DOCKER_PLATFORM:-linux/amd64}
     build:
       context: .
     image: ceyewan/crypto-custody-online-server:latest

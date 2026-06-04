@@ -86,16 +86,15 @@
                     </div>
 
                     <div v-else class="permission-item">
-                        <i class="el-icon-view permission-icon guest"></i>
+                        <i class="el-icon-view permission-icon auditor"></i>
                         <div class="permission-text">
-                            <h4>访客权限</h4>
-                            <p>您当前是访客身份，权限受限</p>
+                            <h4>审计员权限</h4>
+                            <p>您具有审计查询权限，可以查看系统记录但不能发起业务操作</p>
                             <ul>
-                                <li>查看个人资料</li>
+                                <li>查看审计日志</li>
+                                <li>查看用户、案件、账户和交易摘要</li>
                                 <li>修改个人密码</li>
-                                <li>浏览公开信息</li>
                             </ul>
-                            <p class="upgrade-hint">如需更多权限，请联系管理员</p>
                         </div>
                     </div>
                 </div>
@@ -171,7 +170,7 @@ export default {
       'currentUser',
       'isAdmin',
       'isOfficer',
-      'isGuest'
+      'isAuditor'
     ]),
     user () {
       return this.currentUser || {}
@@ -254,7 +253,7 @@ export default {
       const roleMap = {
         admin: '管理员',
         officer: '警员',
-        guest: '访客'
+        auditor: '审计员'
       }
       return roleMap[role] || role
     },
@@ -263,7 +262,7 @@ export default {
       const typeMap = {
         admin: 'danger',
         officer: 'warning',
-        guest: 'info'
+        auditor: 'success'
       }
       return typeMap[role] || 'info'
     }
@@ -306,8 +305,8 @@ export default {
     color: #E6A23C;
 }
 
-.permission-icon.guest {
-    color: #909399;
+.permission-icon.auditor {
+    color: #67C23A;
 }
 
 .permission-text h4 {
@@ -329,12 +328,6 @@ export default {
 
 .permission-text li {
     margin-bottom: 5px;
-}
-
-.upgrade-hint {
-    color: #F56C6C !important;
-    font-weight: bold;
-    margin-top: 10px !important;
 }
 
 .stat-item {

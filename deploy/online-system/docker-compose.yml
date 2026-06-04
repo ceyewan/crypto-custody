@@ -1,0 +1,29 @@
+services:
+  online-system:
+    image: ${ONLINE_SYSTEM_IMAGE:-crypto-custody-online-system:local}
+    platform: ${DOCKER_PLATFORM:-linux/amd64}
+    pull_policy: ${ONLINE_SYSTEM_PULL_POLICY:-missing}
+    container_name: crypto-custody-online-system
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      TZ: ${TZ:-Asia/Singapore}
+      WEB_PORT: ${WEB_PORT:-8088}
+      BACKEND_BIND_ADDR: ${BACKEND_BIND_ADDR:-127.0.0.1}
+      BACKEND_PORT: ${BACKEND_PORT:-22221}
+      DATABASE_PATH: ${DATABASE_PATH:-/app/database/crypto-custody.db}
+      DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD:-admin123}
+    ports:
+      - "${WEB_HOST_PORT:-8088}:${WEB_PORT:-8088}"
+    volumes:
+      - ./database:/app/database
+      - ./logs:/app/logs
+      - ./backups:/app/backups
+    networks:
+      - crypto-custody-online-system-net
+
+networks:
+  crypto-custody-online-system-net:
+    name: crypto-custody-online-system-net
+    driver: bridge
