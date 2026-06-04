@@ -37,7 +37,7 @@
             </el-col>
         </el-row>
 
-        <el-row v-if="isOfficer" :gutter="16" class="section-row">
+        <el-row v-if="canParticipateMpc" :gutter="16" class="section-row">
             <el-col :span="12">
                 <el-card>
                     <div slot="header" class="card-header">
@@ -91,7 +91,7 @@
             <el-col :span="isAdmin ? 14 : 24">
                 <el-card>
                     <div slot="header" class="card-header">
-                        <span>{{ isOfficer ? '待处理邀请' : '最近任务状态' }}</span>
+                        <span>{{ canParticipateMpc ? '待处理邀请' : '最近任务状态' }}</span>
                         <el-button type="text" @click="$router.push(statusRoute)">查看全部</el-button>
                     </div>
                     <div v-if="pendingInvitations.length" class="invite-list">
@@ -109,14 +109,13 @@
 
             <el-col v-if="isAdmin" :span="10">
                 <el-card>
-                    <div slot="header">管理员快捷操作</div>
-                    <div class="quick-actions">
-                        <el-button icon="el-icon-upload2" @click="$router.push('/offline-tasks')">导入 JSON 任务包</el-button>
-                        <el-button icon="el-icon-key" @click="$router.push('/keygen')">生成私钥</el-button>
-                        <el-button icon="el-icon-s-finance" @click="$router.push('/sign')">交易签名</el-button>
-                        <el-button icon="el-icon-cpu" @click="$router.push('/security-elements')">安全芯片管理</el-button>
-                    </div>
-                </el-card>
+                        <div slot="header">管理员快捷操作</div>
+                        <div class="quick-actions">
+                            <el-button icon="el-icon-upload2" @click="$router.push('/offline-tasks')">导入 JSON 任务包</el-button>
+                            <el-button icon="el-icon-bell" @click="$router.push('/notifications')">待处理邀请</el-button>
+                            <el-button icon="el-icon-cpu" @click="$router.push('/security-elements')">安全芯片管理</el-button>
+                        </div>
+                    </el-card>
             </el-col>
         </el-row>
     </div>
@@ -135,14 +134,15 @@ export default {
         }
     },
     computed: {
-        ...mapGetters(['currentUser', 'isAdmin', 'isOfficer', 'isAuditor', 'notifications', 'mpcTasks', 'wsConnected']),
+        ...mapGetters(['currentUser', 'isAdmin', 'isOfficer', 'isAuditor', 'notifications', 'mpcTasks', 'wsConnected', 'canParticipateMpc']),
         title() {
-            if (this.isOfficer) return '我的工作台'
+            if (this.canParticipateMpc && !this.isAdmin) return '我的工作台'
             if (this.isAuditor) return '审计工作台'
             return '离线工作台'
         },
         subtitle() {
-            if (this.isOfficer) return '处理私钥生成、签名等邀请，查看自己的私钥分片和参与记录。'
+            if (this.isAdmin) return '导入在线任务包、发起离线任务，并可按需参与私钥生成和交易签名。'
+            if (this.canParticipateMpc) return '处理私钥生成、签名等邀请，查看自己的私钥分片和参与记录。'
             if (this.isAuditor) return '查看离线系统任务、密钥和安全操作审计。'
             return '通过 JSON 任务包生成托管地址和私钥分片，完成签名后导出结果包回传在线系统。'
         },
@@ -163,7 +163,7 @@ export default {
         }
     },
     created() {
-        if (this.isOfficer) {
+        if (this.canParticipateMpc) {
             this.loadOfficerSnapshot()
         }
     },

@@ -37,6 +37,9 @@ type IUserStorage interface {
 
 	// UpdateUserRole 更新用户角色
 	UpdateUserRole(username string, role string) error
+
+	// UpdateUserStatus 更新用户状态
+	UpdateUserStatus(username string, status model.UserStatus) error
 }
 
 // IShareStorage 定义离线密钥分片存储接口

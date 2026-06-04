@@ -113,6 +113,11 @@ func JWTAuth() gin.HandlerFunc {
 		if err == nil {
 			user, err := userService.GetUserByUsername(userName)
 			if err == nil {
+				if user.Status != model.UserStatusActive {
+					utils.ResponseWithError(c, http.StatusUnauthorized, "账号已停用")
+					c.Abort()
+					return
+				}
 				// 设置完整的用户模型到上下文中
 				c.Set("user", user)
 			}

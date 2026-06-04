@@ -3,9 +3,12 @@
     <router-view v-if="isPublicRoute" />
     <el-container v-else class="app-shell">
       <el-header class="app-header">
-        <div class="logo">在线加密货币托管系统</div>
+        <div class="brand">
+          <span class="brand-title">在线虚拟货币存管提控系统</span>
+          <span class="brand-subtitle">案件 / 账户 / 交易工作台</span>
+        </div>
         <div class="user-info">
-          <span>{{ user.username }} / {{ roleText }}</span>
+          <span>{{ user.nickname || user.username }} / {{ roleText }}</span>
           <el-button type="text" @click="$router.push('/profile')">个人资料</el-button>
           <el-button type="text" @click="logout">退出</el-button>
         </div>
@@ -93,9 +96,20 @@ html {
   color: #fff;
 }
 
-.logo {
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.brand-title {
   font-size: 18px;
   font-weight: 600;
+}
+
+.brand-subtitle {
+  color: #bfcbd9;
+  font-size: 12px;
 }
 
 .user-info {
@@ -120,5 +134,28 @@ html {
   min-height: calc(100vh - 60px);
   padding: 0;
   background: #f0f2f5;
+}
+
+.page {
+  padding: 20px;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.page-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.page-subtitle {
+  margin: 6px 0 0;
+  color: #606266;
+  font-size: 13px;
 }
 </style>

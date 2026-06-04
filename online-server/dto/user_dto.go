@@ -2,15 +2,18 @@ package dto
 
 // LoginRequest 用户登录请求结构体
 type LoginRequest struct {
-	Username string `json:"username" binding:"required"` // 用户名，必填
-	Password string `json:"password" binding:"required"` // 密码，必填
+	Username   string `json:"username"`                    // 兼容旧字段
+	Identifier string `json:"identifier"`                  // 登录标识
+	Password   string `json:"password" binding:"required"` // 密码，必填
 }
 
 // RegisterRequest 用户注册请求结构体
 type RegisterRequest struct {
-	Username string `json:"username" binding:"required"`    // 用户名，必填
-	Password string `json:"password" binding:"required"`    // 密码，必填
-	Email    string `json:"email" binding:"required,email"` // 电子邮箱，必填，必须符合邮箱格式
+	Username   string `json:"username"`                    // 兼容旧字段
+	Identifier string `json:"identifier"`                  // 登录标识
+	Nickname   string `json:"nickname"`                    // 昵称
+	Password   string `json:"password" binding:"required"` // 密码，必填
+	Email      string `json:"email"`                       // 历史兼容字段
 }
 
 // ChangePasswordRequest 修改密码请求结构体
@@ -34,6 +37,11 @@ type UpdateUsernameRequest struct {
 	Username string `json:"username" binding:"required"` // 用户名，必填
 }
 
+// UpdateUserStatusRequest 更新用户状态请求结构体
+type UpdateUserStatusRequest struct {
+	Status string `json:"status" binding:"required"` // 状态，必填
+}
+
 // CheckAuthRequest 验证令牌请求结构体
 type CheckAuthRequest struct {
 	Token string `json:"token" binding:"required"` // 令牌，必填
@@ -41,10 +49,13 @@ type CheckAuthRequest struct {
 
 // UserResponse 用户信息响应结构体
 type UserResponse struct {
-	ID       uint   `json:"id"`       // 用户ID
-	Username string `json:"username"` // 用户名
-	Email    string `json:"email"`    // 电子邮箱
-	Role     string `json:"role"`     // 角色
+	ID         uint   `json:"id"`         // 用户ID
+	Username   string `json:"username"`   // 登录标识
+	Identifier string `json:"identifier"` // 登录标识
+	Nickname   string `json:"nickname"`   // 昵称
+	Email      string `json:"email"`      // 历史邮箱字段
+	Role       string `json:"role"`       // 角色
+	Status     string `json:"status"`     // 状态
 }
 
 // LoginResponse 登录响应结构体

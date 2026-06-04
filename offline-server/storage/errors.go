@@ -35,6 +35,9 @@ var (
 	// 在用户登录时提供错误的用户名或密码会触发此错误
 	ErrInvalidCredentials = errors.New("用户名或密码错误")
 
+	// ErrUserDisabled 表示用户已被停用
+	ErrUserDisabled = errors.New("账号已停用")
+
 	// ErrInvalidRole 表示当提供的角色类型无效时返回的错误
 	// 在尝试将用户角色设置为非预定义角色时会触发此错误
 	ErrInvalidRole = errors.New("无效的角色类型")

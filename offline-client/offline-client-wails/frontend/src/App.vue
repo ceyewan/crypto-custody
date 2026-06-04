@@ -34,14 +34,6 @@
                                 <i class="el-icon-upload2"></i>
                                 <span>离线任务</span>
                             </el-menu-item>
-                            <el-menu-item index="/keygen">
-                                <i class="el-icon-key"></i>
-                                <span>生成私钥</span>
-                            </el-menu-item>
-                            <el-menu-item index="/sign">
-                                <i class="el-icon-s-finance"></i>
-                                <span>交易签名</span>
-                            </el-menu-item>
                             <el-menu-item index="/keys">
                                 <i class="el-icon-wallet"></i>
                                 <span>地址与私钥</span>
@@ -60,7 +52,7 @@
                             </el-menu-item>
                         </template>
 
-                        <template v-if="isOfficer">
+                        <template v-if="canParticipateMpc">
                             <el-menu-item index="/notifications">
                                 <i class="el-icon-bell"></i>
                                 <span>待处理邀请</span>
@@ -115,7 +107,7 @@ export default {
     name: 'App',
     components: { WsStatusIndicator },
     computed: {
-        ...mapGetters(['isLoggedIn', 'currentUser', 'isAdmin', 'isOfficer', 'isAuditor', 'notifications']),
+        ...mapGetters(['isLoggedIn', 'currentUser', 'isAdmin', 'isOfficer', 'isAuditor', 'notifications', 'canParticipateMpc']),
         isPublicRoute() {
             return this.$route.path === '/login' || this.$route.path === '/register' || this.$route.path === '/server-settings'
         },

@@ -25,8 +25,12 @@
                         <el-tag :type="roleTag(scope.row.role)">{{ roleText(scope.row.role) }}</el-tag>
                     </template>
                 </el-table-column>
-                <el-table-column prop="status" label="状态" width="120"></el-table-column>
-                <el-table-column label="操作" width="320">
+                <el-table-column label="状态" width="120">
+                    <template slot-scope="scope">
+                        <el-tag :type="statusTag(scope.row.status)">{{ statusText(scope.row.status) }}</el-tag>
+                    </template>
+                </el-table-column>
+                <el-table-column label="操作" width="420">
                     <template slot-scope="scope">
                         <el-select v-model="scope.row.newRole" placeholder="选择角色" size="small">
                             <el-option label="管理员" value="admin"></el-option>
@@ -40,6 +44,13 @@
                             @click="updateUserRole(scope.row)"
                             style="margin-left: 10px">
                             更新角色
+                        </el-button>
+                        <el-button
+                            :type="scope.row.status === 'disabled' ? 'success' : 'warning'"
+                            size="small"
+                            style="margin-left: 10px"
+                            @click="toggleUserStatus(scope.row)">
+                            {{ scope.row.status === 'disabled' ? '启用用户' : '停用用户' }}
                         </el-button>
                     </template>
                 </el-table-column>
@@ -91,6 +102,18 @@ export default {
             }
         },
 
+        async toggleUserStatus(user) {
+            const nextStatus = user.status === 'disabled' ? 'active' : 'disabled'
+            const actionText = nextStatus === 'active' ? '启用' : '停用'
+            try {
+                await userApi.updateUserStatus(user.username || user.identifier, nextStatus)
+                user.status = nextStatus
+                this.$message.success(`已${actionText}用户 ${user.nickname || user.username}`)
+            } catch (error) {
+                this.$message.error(error.response?.data?.error || `${actionText}用户失败`)
+            }
+        },
+
         roleText(role) {
             const map = { admin: '管理员', officer: '警员', auditor: '审计员' }
             return map[role] || role
@@ -100,6 +123,14 @@ export default {
             if (role === 'admin') return 'danger'
             if (role === 'auditor') return 'info'
             return 'success'
+        },
+
+        statusText(status) {
+            return status === 'disabled' ? '已停用' : '正常'
+        },
+
+        statusTag(status) {
+            return status === 'disabled' ? 'warning' : 'success'
         }
     }
 }

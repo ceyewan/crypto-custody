@@ -37,8 +37,8 @@
                             <el-descriptions v-else :column="1" border size="small">
                                 <el-descriptions-item label="任务编号">{{ currentTaskNo }}</el-descriptions-item>
                                 <el-descriptions-item label="任务类型">{{ taskTypeText }}</el-descriptions-item>
-                                <el-descriptions-item label="案件编号">{{ payload.case_no || '-' }}</el-descriptions-item>
-                                <el-descriptions-item v-if="isSignTask" label="交易编号">{{ payload.transaction_no || '-' }}</el-descriptions-item>
+                                <el-descriptions-item label="关联案件编号">{{ payload.case_no || '-' }}</el-descriptions-item>
+                                <el-descriptions-item v-if="isSignTask" label="关联交易编号">{{ payload.transaction_no || '-' }}</el-descriptions-item>
                                 <el-descriptions-item v-if="isSignTask" label="签名地址">{{ payload.from_address || '-' }}</el-descriptions-item>
                                 <el-descriptions-item v-if="isSignTask" label="消息哈希">{{ payload.message_hash || '-' }}</el-descriptions-item>
                                 <el-descriptions-item v-if="isKeygenTask" label="门限策略">
@@ -68,7 +68,7 @@
                             </el-radio-group>
                         </el-form-item>
                         <el-form-item label="任务编号">
-                            <el-input v-model="manualForm.taskNo" placeholder="系统可自动生成">
+                            <el-input v-model="manualForm.taskNo" placeholder="留空自动生成，例如 TASK-20260604-001">
                                 <el-button slot="append" @click="refreshManualTaskNo">自动生成</el-button>
                             </el-input>
                         </el-form-item>
@@ -161,7 +161,7 @@
                         <div>
                             <h3>参与方</h3>
                             <p class="muted">
-                                管理员和警员都可以作为 MPC 参与方；审计员不会出现在候选列表中。
+                                管理员既可以发起任务，也可以作为参与方；警员可以参与；审计员只查看，不会出现在候选列表中。
                             </p>
                             <el-select
                                 v-model="selectedParticipants"
@@ -235,7 +235,7 @@
                             <p class="muted">托管地址和私钥生成完成后下载 custody_keygen_result，签名完成后下载 sign_result。</p>
                             <el-form label-width="100px">
                                 <el-form-item label="任务编号">
-                                    <el-input v-model="resultTaskNo" placeholder="例如 TASK-2026-0001"></el-input>
+                                    <el-input v-model="resultTaskNo" placeholder="例如 TASK-20260604-001"></el-input>
                                 </el-form-item>
                                 <el-form-item>
                                     <el-button type="primary" icon="el-icon-download" :loading="downloading" @click="downloadResult">
@@ -711,9 +711,9 @@ export default {
         refreshManualTaskNo() {
             const now = new Date()
             const pad = value => String(value).padStart(2, '0')
-            const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
-            const prefix = this.manualForm.taskType === 'sign' ? 'MANUAL-SIGN' : 'MANUAL-KEYGEN'
-            this.manualForm.taskNo = `${prefix}-${stamp}`
+            const datePart = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`
+            const seqPart = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
+            this.manualForm.taskNo = `TASK-${datePart}-${seqPart}`
         },
 
         taskTypeLabel(type) {

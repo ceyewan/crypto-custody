@@ -103,6 +103,10 @@ export const userApi = {
     return apiClient.put(`/api/users/admin/users/${id}/role`, { role })
   },
 
+  updateUserStatus (id, status) {
+    return apiClient.put(`/api/users/admin/users/${id}/status`, { status })
+  },
+
   // 更新用户名 (管理员)
   updateUsername (id, username) {
     return apiClient.put(`/api/users/admin/users/${id}/username`, { username })

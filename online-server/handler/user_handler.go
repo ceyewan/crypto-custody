@@ -8,6 +8,7 @@ import (
 	"online-server/service"
 	"online-server/utils"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -33,13 +34,19 @@ func Login(c *gin.Context) {
 		return
 	}
 
+	identifier := strings.TrimSpace(firstNonEmpty(loginReq.Identifier, loginReq.Username))
+	if identifier == "" {
+		utils.ResponseWithError(c, http.StatusBadRequest, "登录标识不能为空")
+		return
+	}
+
 	// 调用用户服务处理登录
 	userService, err := service.GetUserServiceInstance()
 	if utils.HandleServiceInitError(c, err) {
 		return
 	}
 
-	user, token, err := userService.Login(loginReq.Username, loginReq.Password)
+	user, token, err := userService.Login(identifier, loginReq.Password)
 	if err != nil {
 		utils.ResponseWithError(c, http.StatusUnauthorized, err.Error())
 		return
@@ -47,10 +54,13 @@ func Login(c *gin.Context) {
 
 	// 准备响应数据
 	userResp := dto.UserResponse{
-		ID:       user.ID,
-		Username: user.Username,
-		Email:    user.Email,
-		Role:     string(user.Role),
+		ID:         user.ID,
+		Username:   user.Username,
+		Identifier: user.Username,
+		Nickname:   user.Nickname,
+		Email:      user.Email,
+		Role:       string(user.Role),
+		Status:     string(user.Status),
 	}
 
 	utils.ResponseWithData(c, "登录成功", dto.LoginResponse{
@@ -78,13 +88,19 @@ func Register(c *gin.Context) {
 		return
 	}
 
+	identifier := strings.TrimSpace(firstNonEmpty(registerReq.Identifier, registerReq.Username))
+	if identifier == "" {
+		utils.ResponseWithError(c, http.StatusBadRequest, "登录标识不能为空")
+		return
+	}
+
 	// 调用用户服务处理注册
 	userService, err := service.GetUserServiceInstance()
 	if utils.HandleServiceInitError(c, err) {
 		return
 	}
 
-	user, err := userService.Register(registerReq.Username, registerReq.Password, registerReq.Email)
+	user, err := userService.Register(identifier, registerReq.Password, registerReq.Nickname, registerReq.Email)
 	if err != nil {
 		utils.ResponseWithError(c, http.StatusBadRequest, err.Error())
 		return
@@ -92,10 +108,13 @@ func Register(c *gin.Context) {
 
 	// 准备响应数据
 	userResp := dto.UserResponse{
-		ID:       user.ID,
-		Username: user.Username,
-		Email:    user.Email,
-		Role:     string(user.Role),
+		ID:         user.ID,
+		Username:   user.Username,
+		Identifier: user.Username,
+		Nickname:   user.Nickname,
+		Email:      user.Email,
+		Role:       string(user.Role),
+		Status:     string(user.Status),
 	}
 
 	utils.ResponseWithData(c, "注册成功", userResp)
@@ -155,10 +174,13 @@ func GetUsers(c *gin.Context) {
 	var userList []dto.UserResponse
 	for _, user := range users {
 		userList = append(userList, dto.UserResponse{
-			ID:       user.ID,
-			Username: user.Username,
-			Email:    user.Email,
-			Role:     string(user.Role),
+			ID:         user.ID,
+			Username:   user.Username,
+			Identifier: user.Username,
+			Nickname:   user.Nickname,
+			Email:      user.Email,
+			Role:       string(user.Role),
+			Status:     string(user.Status),
 		})
 	}
 
@@ -196,10 +218,13 @@ func GetUserByID(c *gin.Context) {
 
 	// 准备响应数据
 	userResp := dto.UserResponse{
-		ID:       user.ID,
-		Username: user.Username,
-		Email:    user.Email,
-		Role:     string(user.Role),
+		ID:         user.ID,
+		Username:   user.Username,
+		Identifier: user.Username,
+		Nickname:   user.Nickname,
+		Email:      user.Email,
+		Role:       string(user.Role),
+		Status:     string(user.Status),
 	}
 
 	utils.ResponseWithData(c, "获取用户信息成功", userResp)
@@ -273,10 +298,13 @@ func GetCurrentUser(c *gin.Context) {
 
 	// 准备响应数据
 	userResp := dto.UserResponse{
-		ID:       user.ID,
-		Username: user.Username,
-		Email:    user.Email,
-		Role:     string(user.Role),
+		ID:         user.ID,
+		Username:   user.Username,
+		Identifier: user.Username,
+		Nickname:   user.Nickname,
+		Email:      user.Email,
+		Role:       string(user.Role),
+		Status:     string(user.Status),
 	}
 
 	utils.ResponseWithData(c, "获取当前用户信息成功", userResp)
@@ -335,6 +363,42 @@ func UpdateUserRole(c *gin.Context) {
 	}
 
 	utils.ResponseWithSuccess(c, "用户角色更新成功")
+}
+
+// UpdateUserStatus 更新用户状态
+func UpdateUserStatus(c *gin.Context) {
+	if !utils.CheckAdminRole(c) {
+		return
+	}
+
+	userID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		utils.ResponseWithError(c, http.StatusBadRequest, utils.ErrorInvalidID)
+		return
+	}
+
+	var statusReq dto.UpdateUserStatusRequest
+	if !utils.BindJSON(c, &statusReq) {
+		return
+	}
+
+	targetStatus := model.UserStatus(strings.TrimSpace(statusReq.Status))
+	if targetStatus != model.UserStatusActive && targetStatus != model.UserStatusDisabled {
+		utils.ResponseWithError(c, http.StatusBadRequest, "无效的用户状态")
+		return
+	}
+
+	userService, err := service.GetUserServiceInstance()
+	if utils.HandleServiceInitError(c, err) {
+		return
+	}
+
+	if err := userService.UpdateUserStatus(uint(userID), targetStatus); err != nil {
+		utils.ResponseWithError(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	utils.ResponseWithSuccess(c, "用户状态更新成功")
 }
 
 // DeleteUser 删除用户
@@ -439,13 +503,26 @@ func CheckAuth(c *gin.Context) {
 		})
 		return
 	}
+	if user.Status != model.UserStatusActive {
+		c.JSON(http.StatusUnauthorized, dto.AuthResponse{
+			StandardResponse: dto.StandardResponse{
+				Code:    http.StatusUnauthorized,
+				Message: "账号已停用",
+			},
+			Valid: false,
+		})
+		return
+	}
 
 	// 准备响应数据
 	userResp := dto.UserResponse{
-		ID:       user.ID,
-		Username: user.Username,
-		Email:    user.Email,
-		Role:     role,
+		ID:         user.ID,
+		Username:   user.Username,
+		Identifier: user.Username,
+		Nickname:   user.Nickname,
+		Email:      user.Email,
+		Role:       role,
+		Status:     string(user.Status),
 	}
 
 	// 注意：这里仍然使用 c.JSON，因为需要返回自定义的 AuthResponse 类型
@@ -551,4 +628,14 @@ func AdminChangePassword(c *gin.Context) {
 	}
 
 	utils.ResponseWithSuccess(c, "用户密码修改成功")
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }

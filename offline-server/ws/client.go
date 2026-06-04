@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"offline-server/clog"
+	"offline-server/storage/model"
 	"offline-server/tools"
+	"offline-server/web/service"
 	"sync"
 	"time"
 
@@ -389,6 +391,14 @@ func (c *Client) handleRegisterMessage(msg RegisterMessage) error {
 			clog.String("token_role", role),
 			clog.String("msg_role", string(msg.Role)))
 		return fmt.Errorf("token中的角色与消息中的角色不匹配")
+	}
+
+	user, err := service.GetUserByUserName(username)
+	if err != nil {
+		return fmt.Errorf("用户不存在")
+	}
+	if user.Status != model.UserStatusActive {
+		return fmt.Errorf("账号已停用")
 	}
 
 	// 设置客户端属性

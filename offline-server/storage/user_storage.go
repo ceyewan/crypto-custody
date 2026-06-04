@@ -80,6 +80,7 @@ func (s *UserStorage) CreateUser(username, password, nickname string) (*model.Us
 		Password: string(hashedPassword),
 		Email:    email,
 		Role:     model.RoleOfficer,
+		Status:   model.UserStatusActive,
 	}
 
 	if err := database.Create(&user).Error; err != nil {
@@ -122,6 +123,10 @@ func (s *UserStorage) GetUserByCredentials(username, password string) (*model.Us
 		}
 		log.Printf("查询用户失败: %v", err)
 		return nil, ErrOperationFailed
+	}
+
+	if user.Status != model.UserStatusActive {
+		return nil, ErrUserDisabled
 	}
 
 	// 验证密码
@@ -223,6 +228,35 @@ func (s *UserStorage) UpdateUserRole(username string, role string) error {
 		return ErrOperationFailed
 	}
 
+	if result.RowsAffected == 0 {
+		return ErrUserNotFound
+	}
+
+	return nil
+}
+
+// UpdateUserStatus 更新用户状态
+func (s *UserStorage) UpdateUserStatus(username string, status model.UserStatus) error {
+	if username == "" {
+		return ErrInvalidParameter
+	}
+	if status != model.UserStatusActive && status != model.UserStatusDisabled {
+		return ErrInvalidParameter
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	database := db.GetDB()
+	if database == nil {
+		return ErrDatabaseNotInitialized
+	}
+
+	result := database.Model(&model.User{}).Where("username = ?", username).Update("status", status)
+	if result.Error != nil {
+		log.Printf("更新用户状态失败: %v", result.Error)
+		return ErrOperationFailed
+	}
 	if result.RowsAffected == 0 {
 		return ErrUserNotFound
 	}

@@ -36,8 +36,13 @@ func CreateTransactionDraft(c *gin.Context) {
 	if req.FromAccountID != 0 {
 		fromAccountID = &req.FromAccountID
 	}
+	txNo, err := service.NewTransactionNo()
+	if err != nil {
+		utils.ResponseWithError(c, http.StatusInternalServerError, "生成交易编号失败: "+err.Error())
+		return
+	}
 	tx := model.Transaction{
-		TxNo: service.NewBusinessNo("TX"), CaseID: caseID, CaseNo: req.CaseNo,
+		TxNo: txNo, CaseID: caseID, CaseNo: req.CaseNo,
 		TxType: txType, FromAccountID: fromAccountID, FromAddress: req.FromAddress,
 		ToAddress: req.ToAddress, Value: req.Value, CoinType: coinType,
 		Reason: req.Reason, Status: model.StatusDraft, CreatedBy: c.GetString("Username"),
@@ -133,7 +138,11 @@ func ExportSignTask(c *gin.Context) {
 		utils.ResponseWithError(c, http.StatusBadRequest, "交易尚未生成待签名哈希")
 		return
 	}
-	taskNo := service.NewBusinessNo("TASK")
+	taskNo, err := service.NewOfflineTaskNo()
+	if err != nil {
+		utils.ResponseWithError(c, http.StatusInternalServerError, "生成任务编号失败: "+err.Error())
+		return
+	}
 	payload := signTaskPayload(tx)
 	payloadHash := hashPayload(payload)
 	taskPackage := buildOfflineTaskPackage(taskNo, "sign", c.GetString("Username"), time.Now().UTC().Format(time.RFC3339), payload, payloadHash)

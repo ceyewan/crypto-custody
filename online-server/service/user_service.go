@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"online-server/model"
 	"online-server/utils"
+	"strings"
 	"sync"
 	"time"
 )
@@ -51,6 +52,9 @@ func (s *UserService) Login(username, password string) (*model.User, string, err
 	if err := utils.GetDB().Where("username = ?", username).First(&user).Error; err != nil {
 		return nil, "", errors.New("用户名或密码错误")
 	}
+	if user.Status != model.UserStatusActive {
+		return nil, "", errors.New("账号已停用")
+	}
 
 	// 验证密码哈希值
 	if !utils.CheckPasswordHash(password, user.Password) {
@@ -78,7 +82,11 @@ func (s *UserService) Login(username, password string) (*model.User, string, err
 // 返回：
 // - *model.User：新创建的用户记录
 // - error：注册过程中的错误（例如，用户名重复）
-func (s *UserService) Register(username, password, email string) (*model.User, error) {
+func (s *UserService) Register(username, password, nickname, email string) (*model.User, error) {
+	username = strings.TrimSpace(username)
+	nickname = strings.TrimSpace(nickname)
+	email = strings.TrimSpace(email)
+
 	// 检查用户名是否已存在
 	var count int64
 	utils.GetDB().Model(&model.User{}).Where("username = ?", username).Count(&count)
@@ -86,10 +94,13 @@ func (s *UserService) Register(username, password, email string) (*model.User, e
 		return nil, errors.New("用户名已存在")
 	}
 
-	// 检查邮箱是否已存在
-	utils.GetDB().Model(&model.User{}).Where("email = ?", email).Count(&count)
-	if count > 0 {
-		return nil, errors.New("邮箱已被使用")
+	if email == "" {
+		email = legacyEmailForIdentifier(username)
+	} else {
+		utils.GetDB().Model(&model.User{}).Where("email = ?", email).Count(&count)
+		if count > 0 {
+			return nil, errors.New("邮箱已被使用")
+		}
 	}
 
 	// 哈希处理密码
@@ -101,9 +112,11 @@ func (s *UserService) Register(username, password, email string) (*model.User, e
 	// 创建新用户，默认为警员角色
 	user := model.User{
 		Username: username,
+		Nickname: nickname,
 		Password: hashedPassword,
 		Email:    email,
 		Role:     model.RoleOfficer,
+		Status:   model.UserStatusActive,
 	}
 
 	if err := utils.GetDB().Create(&user).Error; err != nil {
@@ -111,6 +124,10 @@ func (s *UserService) Register(username, password, email string) (*model.User, e
 	}
 
 	return &user, nil
+}
+
+func legacyEmailForIdentifier(identifier string) string {
+	return fmt.Sprintf("%s@online.local", identifier)
 }
 
 // Logout 用户登出
@@ -197,14 +214,51 @@ func (s *UserService) UpdateUserRole(userID uint, role model.Role) error {
 		return fmt.Errorf("查询用户失败: %w", err)
 	}
 
-	// 防止修改管理员用户的角色
-	if targetUser.Role == model.RoleAdmin {
-		return errors.New("不允许修改管理员用户的角色")
+	// 防止系统失去最后一个启用中的管理员
+	if targetUser.Role == model.RoleAdmin && role != model.RoleAdmin {
+		var count int64
+		if err := utils.GetDB().Model(&model.User{}).
+			Where("role = ? AND status = ? AND id <> ?", model.RoleAdmin, model.UserStatusActive, userID).
+			Count(&count).Error; err != nil {
+			return fmt.Errorf("检查管理员数量失败: %w", err)
+		}
+		if count == 0 {
+			return errors.New("系统需要至少一个启用中的管理员账户")
+		}
 	}
 
 	// 更新用户角色
 	if err := utils.GetDB().Model(&model.User{}).Where("id = ?", userID).Update("role", role).Error; err != nil {
 		return fmt.Errorf("更新用户角色失败: %w", err)
+	}
+	return nil
+}
+
+// UpdateUserStatus 更新用户状态
+func (s *UserService) UpdateUserStatus(userID uint, status model.UserStatus) error {
+	if status != model.UserStatusActive && status != model.UserStatusDisabled {
+		return errors.New("无效的用户状态")
+	}
+
+	var targetUser model.User
+	if err := utils.GetDB().First(&targetUser, userID).Error; err != nil {
+		return fmt.Errorf("查询用户失败: %w", err)
+	}
+
+	if targetUser.Role == model.RoleAdmin && status != model.UserStatusActive {
+		var count int64
+		if err := utils.GetDB().Model(&model.User{}).
+			Where("role = ? AND status = ? AND id <> ?", model.RoleAdmin, model.UserStatusActive, userID).
+			Count(&count).Error; err != nil {
+			return fmt.Errorf("检查管理员数量失败: %w", err)
+		}
+		if count == 0 {
+			return errors.New("系统需要至少一个启用中的管理员账户")
+		}
+	}
+
+	if err := utils.GetDB().Model(&model.User{}).Where("id = ?", userID).Update("status", status).Error; err != nil {
+		return fmt.Errorf("更新用户状态失败: %w", err)
 	}
 	return nil
 }

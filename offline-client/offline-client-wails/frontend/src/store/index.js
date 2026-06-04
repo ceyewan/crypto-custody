@@ -60,6 +60,7 @@ export default new Vuex.Store({
         isAdmin: state => state.user && state.user.role === 'admin',
         isOfficer: state => state.user && state.user.role === 'officer',
         isAuditor: state => state.user && state.user.role === 'auditor',
+        canParticipateMpc: state => state.user && (state.user.role === 'admin' || state.user.role === 'officer'),
         wsConnected: state => state.wsConnected,
         notifications: state => state.notifications,
         currentSession: state => state.currentSession,

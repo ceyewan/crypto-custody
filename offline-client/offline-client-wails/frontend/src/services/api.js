@@ -65,6 +65,11 @@ export const userApi = {
     // 更新用户角色 (仅管理员)
     updateUserRole(username, role) {
         return apiClient.put(`/user/admin/users/${username}/role`, { role })
+    },
+
+    // 更新用户状态 (仅管理员)
+    updateUserStatus(username, status) {
+        return apiClient.put(`/user/admin/users/${username}/status`, { status })
     }
 }
 

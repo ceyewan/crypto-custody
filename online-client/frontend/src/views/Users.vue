@@ -1,64 +1,63 @@
 <template>
-    <div class="users-container">
-        <el-card>
-            <div slot="header" class="clearfix">
-                <span>用户管理</span>
-                <el-button style="float: right; padding: 3px 0" type="text" @click="refreshUserList">
-                    刷新
-                </el-button>
+    <div class="page users-page">
+        <div class="page-header">
+            <div>
+                <h2 class="page-title">用户管理</h2>
+                <p class="page-subtitle">管理在线系统的管理员、警员、审计员；停用用户后将无法继续登录。</p>
             </div>
+            <el-button icon="el-icon-refresh" :loading="loading" @click="fetchUserList">刷新</el-button>
+        </div>
 
+        <el-card>
             <el-table :data="userList" v-loading="loading" style="width: 100%">
-                <el-table-column prop="id" label="ID" width="80"></el-table-column>
-                <el-table-column prop="username" label="用户名" width="150"></el-table-column>
-                <el-table-column prop="email" label="邮箱" width="200"></el-table-column>
-                <el-table-column prop="role" label="当前角色" width="120">
+                <el-table-column prop="identifier" label="登录标识" min-width="180">
                     <template slot-scope="scope">
-                        <el-tag :type="getRoleTagType(scope.row.role)">{{ getRoleText(scope.row.role) }}</el-tag>
+                        {{ scope.row.identifier || scope.row.username }}
                     </template>
                 </el-table-column>
-                <el-table-column label="操作">
+                <el-table-column prop="nickname" label="昵称" min-width="160">
                     <template slot-scope="scope">
-                        <el-select v-model="scope.row.newRole" placeholder="选择角色" size="small" style="width: 120px">
+                        {{ scope.row.nickname || '-' }}
+                    </template>
+                </el-table-column>
+                <el-table-column label="当前角色" width="120">
+                    <template slot-scope="scope">
+                        <el-tag :type="roleTag(scope.row.role)">{{ roleText(scope.row.role) }}</el-tag>
+                    </template>
+                </el-table-column>
+                <el-table-column label="状态" width="120">
+                    <template slot-scope="scope">
+                        <el-tag :type="statusTag(scope.row.status)">{{ statusText(scope.row.status) }}</el-tag>
+                    </template>
+                </el-table-column>
+                <el-table-column label="操作" width="420">
+                    <template slot-scope="scope">
+                        <el-select v-model="scope.row.newRole" placeholder="选择角色" size="small">
                             <el-option label="管理员" value="admin"></el-option>
                             <el-option label="警员" value="officer"></el-option>
                             <el-option label="审计员" value="auditor"></el-option>
                         </el-select>
-                        <el-button type="primary" size="small" :disabled="scope.row.role === scope.row.newRole"
-                            @click="updateUserRole(scope.row)" style="margin-left: 10px">
+                        <el-button
+                            type="primary"
+                            size="small"
+                            :disabled="scope.row.role === scope.row.newRole"
+                            style="margin-left: 10px"
+                            @click="updateUserRole(scope.row)">
                             更新角色
                         </el-button>
-                        <el-button type="warning" size="small" @click="showEditUserDialog(scope.row)" style="margin-left: 5px">
-                            编辑
-                        </el-button>
-                        <el-button type="danger" size="small" @click="deleteUser(scope.row)" style="margin-left: 5px">
-                            删除
+                        <el-button
+                            :type="scope.row.status === 'disabled' ? 'success' : 'warning'"
+                            size="small"
+                            style="margin-left: 10px"
+                            @click="toggleUserStatus(scope.row)">
+                            {{ scope.row.status === 'disabled' ? '启用用户' : '停用用户' }}
                         </el-button>
                     </template>
                 </el-table-column>
             </el-table>
 
-            <div v-if="userList.length === 0 && !loading" class="empty-state">
-                <p>暂无用户数据</p>
-                <el-button type="primary" size="small" @click="refreshUserList">刷新</el-button>
-            </div>
+            <el-empty v-if="userList.length === 0 && !loading" description="暂无用户数据" :image-size="90"></el-empty>
         </el-card>
-
-        <!-- 编辑用户对话框 -->
-        <el-dialog title="编辑用户" :visible.sync="editDialogVisible" width="400px">
-            <el-form :model="editForm" :rules="editRules" ref="editForm" label-width="80px">
-                <el-form-item label="用户名" prop="username">
-                    <el-input v-model="editForm.username"></el-input>
-                </el-form-item>
-                <el-form-item label="新密码" prop="newPassword">
-                    <el-input v-model="editForm.newPassword" type="password" placeholder="留空则不修改密码"></el-input>
-                </el-form-item>
-            </el-form>
-            <div slot="footer" class="dialog-footer">
-                <el-button @click="editDialogVisible = false">取 消</el-button>
-                <el-button type="primary" @click="handleEditUser" :loading="editLoading">确 定</el-button>
-            </div>
-        </el-dialog>
     </div>
 </template>
 
@@ -70,23 +69,7 @@ export default {
   data () {
     return {
       userList: [],
-      loading: false,
-      editDialogVisible: false,
-      editLoading: false,
-      editForm: {
-        id: null,
-        username: '',
-        newPassword: ''
-      },
-      editRules: {
-        username: [
-          { required: true, message: '请输入用户名', trigger: 'blur' },
-          { min: 3, max: 20, message: '用户名长度应为3-20个字符', trigger: 'blur' }
-        ],
-        newPassword: [
-          { min: 6, message: '密码长度至少为6个字符', trigger: 'blur' }
-        ]
-      }
+      loading: false
     }
   },
   created () {
@@ -97,26 +80,15 @@ export default {
       this.loading = true
       try {
         const response = await userApi.getUsers()
-        if (response.data.code === 200) {
-          this.userList = response.data.data.map(user => ({
-            ...user,
-            newRole: user.role
-          }))
-        } else {
+        if (response.data.code !== 200) {
           throw new Error(response.data.message || '获取用户列表失败')
         }
-
-        if (this.userList.length === 0) {
-          this.$message.warning('未找到用户数据')
-        }
+        this.userList = (response.data.data || []).map(user => ({
+          ...user,
+          newRole: user.role
+        }))
       } catch (error) {
-        console.error('获取用户列表失败:', error)
-        let errorMsg = '获取用户列表失败'
-        if (error.response && error.response.data) {
-          errorMsg = error.response.data.message || errorMsg
-        } else if (error.message) {
-          errorMsg = error.message
-        }
+        const errorMsg = error.response?.data?.message || error.message || '获取用户列表失败'
         this.$message.error(errorMsg)
       } finally {
         this.loading = false
@@ -126,147 +98,51 @@ export default {
     async updateUserRole (user) {
       try {
         const response = await userApi.updateUserRole(user.id, user.newRole)
-        if (response.data.code === 200) {
-          this.$message.success(`用户 ${user.username} 角色已更新为 ${this.getRoleText(user.newRole)}`)
-          // 更新当前角色
-          user.role = user.newRole
-        } else {
+        if (response.data.code !== 200) {
           throw new Error(response.data.message || '更新角色失败')
         }
+        user.role = user.newRole
+        this.$message.success(`用户 ${user.nickname || user.username} 角色已更新`)
       } catch (error) {
-        console.error('更新用户角色失败:', error)
-        let errorMsg = '更新用户角色失败'
-        if (error.response && error.response.data) {
-          errorMsg = error.response.data.message || errorMsg
-        }
-        this.$message.error(errorMsg)
-        // 恢复原来的值
         user.newRole = user.role
+        const errorMsg = error.response?.data?.message || error.message || '更新角色失败'
+        this.$message.error(errorMsg)
       }
     },
 
-    showEditUserDialog (user) {
-      this.editForm = {
-        id: user.id,
-        username: user.username,
-        newPassword: ''
-      }
-      this.editDialogVisible = true
-    },
-
-    async handleEditUser () {
-      this.$refs.editForm.validate(async valid => {
-        if (!valid) {
-          return false
-        }
-
-        this.editLoading = true
-
-        try {
-          // 更新用户名
-          const usernameResponse = await userApi.updateUsername(this.editForm.id, this.editForm.username)
-          if (usernameResponse.data.code !== 200) {
-            throw new Error(usernameResponse.data.message || '更新用户名失败')
-          }
-
-          // 如果有新密码则更新密码
-          if (this.editForm.newPassword) {
-            const passwordResponse = await userApi.adminUpdatePassword(this.editForm.id, this.editForm.newPassword)
-            if (passwordResponse.data.code !== 200) {
-              throw new Error(passwordResponse.data.message || '更新密码失败')
-            }
-          }
-
-          this.$message.success('用户信息更新成功')
-          this.editDialogVisible = false
-          this.fetchUserList() // 刷新列表
-        } catch (error) {
-          console.error('更新用户信息失败:', error)
-          let errorMsg = '更新用户信息失败'
-          if (error.response && error.response.data) {
-            errorMsg = error.response.data.message || errorMsg
-          } else if (error.message) {
-            errorMsg = error.message
-          }
-          this.$message.error(errorMsg)
-        } finally {
-          this.editLoading = false
-        }
-      })
-    },
-
-    async deleteUser (user) {
+    async toggleUserStatus (user) {
+      const nextStatus = user.status === 'disabled' ? 'active' : 'disabled'
+      const actionText = nextStatus === 'active' ? '启用' : '停用'
       try {
-        const confirm = await this.$confirm(
-                    `确定要删除用户 "${user.username}" 吗？此操作不可撤销。`,
-                    '确认删除',
-                    {
-                      confirmButtonText: '确定',
-                      cancelButtonText: '取消',
-                      type: 'warning'
-                    }
-        )
-
-        if (confirm) {
-          const response = await userApi.deleteUser(user.id)
-          if (response.data.code === 200) {
-            this.$message.success('用户删除成功')
-            this.fetchUserList() // 刷新列表
-          } else {
-            throw new Error(response.data.message || '删除用户失败')
-          }
+        const response = await userApi.updateUserStatus(user.id, nextStatus)
+        if (response.data.code !== 200) {
+          throw new Error(response.data.message || `${actionText}用户失败`)
         }
+        user.status = nextStatus
+        this.$message.success(`已${actionText}用户 ${user.nickname || user.username}`)
       } catch (error) {
-        if (error !== 'cancel') {
-          console.error('删除用户失败:', error)
-          let errorMsg = '删除用户失败'
-          if (error.response && error.response.data) {
-            errorMsg = error.response.data.message || errorMsg
-          } else if (error.message) {
-            errorMsg = error.message
-          }
-          this.$message.error(errorMsg)
-        }
+        const errorMsg = error.response?.data?.message || error.message || `${actionText}用户失败`
+        this.$message.error(errorMsg)
       }
     },
 
-    refreshUserList () {
-      this.fetchUserList()
+    roleText (role) {
+      return { admin: '管理员', officer: '警员', auditor: '审计员' }[role] || role
     },
 
-    getRoleText (role) {
-      const roleMap = {
-        admin: '管理员',
-        officer: '警员',
-        auditor: '审计员'
-      }
-      return roleMap[role] || role
+    roleTag (role) {
+      if (role === 'admin') return 'danger'
+      if (role === 'auditor') return 'info'
+      return 'success'
     },
 
-    getRoleTagType (role) {
-      const typeMap = {
-        admin: 'danger',
-        officer: 'warning',
-        auditor: 'success'
-      }
-      return typeMap[role] || 'info'
+    statusText (status) {
+      return status === 'disabled' ? '已停用' : '正常'
+    },
+
+    statusTag (status) {
+      return status === 'disabled' ? 'warning' : 'success'
     }
   }
 }
 </script>
-
-<style scoped>
-.users-container {
-    padding: 20px;
-}
-
-.empty-state {
-    text-align: center;
-    padding: 40px 0;
-    color: #606266;
-}
-
-.dialog-footer {
-    text-align: right;
-}
-</style>

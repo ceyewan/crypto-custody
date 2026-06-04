@@ -28,6 +28,9 @@ export default new Vuex.Store({
     setUser (state, user) {
       state.user = user
       localStorage.setItem('user', JSON.stringify(user))
+      if (user && (user.identifier || user.username)) {
+        localStorage.setItem('last_username', user.identifier || user.username)
+      }
     },
     clearToken (state) {
       state.token = ''

@@ -4,8 +4,6 @@ import Login from '../views/Login.vue'
 import Register from '../views/Register.vue'
 import Dashboard from '../views/Dashboard.vue'
 import Users from '../views/Users.vue'
-import KeyGen from '../views/KeyGen.vue'
-import Sign from '../views/Sign.vue'
 import Notifications from '../views/Notifications.vue'
 import Test from '../views/Test.vue'
 import ImportSE from '../views/ImportSE.vue'
@@ -66,18 +64,8 @@ const routes = [
         component: ImportSE,
         meta: { requiresAuth: true, requiresAdmin: true }
     },
-    {
-        path: '/keygen',
-        name: 'KeyGen',
-        component: KeyGen,
-        meta: { requiresAuth: true, requiresAdmin: true }
-    },
-    {
-        path: '/sign',
-        name: 'Sign',
-        component: Sign,
-        meta: { requiresAuth: true, requiresAdmin: true }
-    },
+    { path: '/keygen', redirect: '/offline-tasks' },
+    { path: '/sign', redirect: '/offline-tasks' },
     {
         path: '/offline-tasks',
         name: 'OfflineTasks',

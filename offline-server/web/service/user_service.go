@@ -21,6 +21,9 @@ func LoginUser(username, password string) (*model.User, error) {
 	// 调用存储接口验证用户凭证
 	user, err := userStorage.GetUserByCredentials(username, password)
 	if err != nil {
+		if errors.Is(err, storage.ErrUserDisabled) {
+			return nil, errors.New("账号已停用")
+		}
 		return nil, errors.New("登录标识或密码错误")
 	}
 
@@ -117,6 +120,39 @@ func UpdateUserRole(userName, role string) error {
 	return userStorage.UpdateUserRole(userName, role)
 }
 
+// UpdateUserStatus 更新用户状态
+func UpdateUserStatus(userName, status string) error {
+	user, err := userStorage.GetUserByUsername(userName)
+	if err != nil {
+		return errors.New("用户不存在")
+	}
+
+	targetStatus := model.UserStatus(status)
+	if targetStatus != model.UserStatusActive && targetStatus != model.UserStatusDisabled {
+		return errors.New("无效的用户状态")
+	}
+
+	if user.Role == model.RoleAdmin && targetStatus != model.UserStatusActive {
+		users, err := userStorage.GetAllUsers()
+		if err != nil {
+			return err
+		}
+
+		activeAdminCount := 0
+		for _, u := range users {
+			if u.Role == model.RoleAdmin && u.Username != userName && u.Status == model.UserStatusActive {
+				activeAdminCount++
+			}
+		}
+
+		if activeAdminCount == 0 {
+			return errors.New("系统需要至少一个启用中的管理员账户")
+		}
+	}
+
+	return userStorage.UpdateUserStatus(userName, targetStatus)
+}
+
 // GetAvailableUsers 获取可以参与密钥生成和签名的用户列表（管理员和警员）
 func GetAvailableUsers() ([]model.User, error) {
 	users, err := userStorage.GetAllUsers()
@@ -127,7 +163,7 @@ func GetAvailableUsers() ([]model.User, error) {
 	// 管理员可以发起也可以参与；警员只能参与；审计员不参与 MPC。
 	availableUsers := []model.User{}
 	for _, user := range users {
-		if user.Role == model.RoleAdmin || user.Role == model.RoleOfficer {
+		if user.Status == model.UserStatusActive && (user.Role == model.RoleAdmin || user.Role == model.RoleOfficer) {
 			availableUsers = append(availableUsers, user)
 		}
 	}
@@ -161,7 +197,12 @@ func GetUsersByAddress(address string) ([]model.User, error) {
 
 	// 获取这些用户的详细信息
 	var users []model.User
-	if err := database.Where("username IN ? AND role IN ?", usernames, []model.Role{model.RoleAdmin, model.RoleOfficer}).Find(&users).Error; err != nil {
+	if err := database.Where(
+		"username IN ? AND role IN ? AND status = ?",
+		usernames,
+		[]model.Role{model.RoleAdmin, model.RoleOfficer},
+		model.UserStatusActive,
+	).Find(&users).Error; err != nil {
 		return nil, errors.New("查询用户信息失败: " + err.Error())
 	}
 

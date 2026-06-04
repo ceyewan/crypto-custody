@@ -2,12 +2,12 @@
     <div class="login-container">
         <el-card class="login-card">
             <div slot="header" class="card-header">
-                <h2>在线系统登录</h2>
+                <h2>在线存管提控系统</h2>
             </div>
 
             <el-form :model="loginForm" :rules="rules" ref="loginForm" label-width="0px">
-                <el-form-item prop="username">
-                    <el-input v-model="loginForm.username" prefix-icon="el-icon-user" placeholder="用户名">
+                <el-form-item prop="identifier">
+                    <el-input v-model="loginForm.identifier" prefix-icon="el-icon-user" placeholder="手机号 / 警号 / 身份证号">
                     </el-input>
                 </el-form-item>
 
@@ -41,11 +41,11 @@ export default {
   data () {
     return {
       loginForm: {
-        username: '',
+        identifier: localStorage.getItem('last_username') || '',
         password: ''
       },
       rules: {
-        username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
+        identifier: [{ required: true, message: '请输入登录标识', trigger: 'blur' }],
         password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
       },
       loading: false
@@ -62,31 +62,26 @@ export default {
 
         try {
           const response = await userApi.login({
-            username: this.loginForm.username,
+            identifier: this.loginForm.identifier,
+            username: this.loginForm.identifier,
             password: this.loginForm.password
           })
 
-          // 验证响应数据
           if (!response.data || response.data.code !== 200) {
             throw new Error(response.data?.message || '登录失败')
           }
 
           const userData = response.data.data
 
-          // 保存用户信息和令牌
           this.$store.dispatch('login', {
             token: userData.token,
             user: userData.user
           })
 
-          console.log('User login successful:', userData.user.username, userData.user.role)
-
-          // 跳转到仪表板
           this.$router.push('/dashboard')
           this.$message.success('登录成功')
         } catch (error) {
-          console.error('Login failed:', error)
-          let errorMsg = '登录失败，请检查用户名和密码'
+          let errorMsg = '登录失败，请检查登录标识和密码'
 
           if (error.response && error.response.data) {
             errorMsg = error.response.data.message || errorMsg
@@ -110,11 +105,11 @@ export default {
     justify-content: center;
     align-items: center;
     height: 100vh;
-    background-color: #f5f7fa;
+    background-color: #f0f2f5;
 }
 
 .login-card {
-    width: 400px;
+    width: 420px;
     border-radius: 8px;
 }
 
@@ -124,7 +119,7 @@ export default {
 
 .card-header h2 {
     margin: 0;
-    color: #409EFF;
+    color: #304156;
 }
 
 .register-link {

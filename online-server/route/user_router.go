@@ -38,6 +38,7 @@ func UserRoutes(r *gin.Engine) {
 			admin.GET("/users", handler.GetUsers)                         // 获取所有用户
 			admin.GET("/users/:id", handler.GetUserByID)                  // 获取指定用户信息
 			admin.PUT("/users/:id/role", handler.UpdateUserRole)          // 更新用户角色
+			admin.PUT("/users/:id/status", handler.UpdateUserStatus)      // 更新用户状态
 			admin.PUT("/users/:id/username", handler.UpdateUserID)        // 更新用户名
 			admin.PUT("/users/:id/password", handler.AdminChangePassword) // 管理员修改用户密码
 			admin.DELETE("/users/:id", handler.DeleteUser)                // 删除用户

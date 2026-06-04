@@ -2,8 +2,10 @@ package web
 
 import (
 	"net/http"
+	"offline-server/storage/model"
 	"offline-server/tools"
 	"offline-server/web/handler"
+	"offline-server/web/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -81,6 +83,7 @@ func initUserRouter(r *gin.Engine) {
 	{
 		adminGroup.GET("/users", handler.ListUsers)               // 获取用户列表
 		adminGroup.PUT("/users/:id/role", handler.UpdateUserRole) // 更新用户角色
+		adminGroup.PUT("/users/:id/status", handler.UpdateUserStatus)
 	}
 }
 
@@ -149,6 +152,9 @@ func AuthMiddleware() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "无效的认证令牌"})
 			return
 		}
+		if !ensureActiveUser(c, userName) {
+			return
+		}
 
 		// 设置用户信息到上下文
 		c.Set("userName", userName)
@@ -171,6 +177,9 @@ func KeyAuthMiddleware() gin.HandlerFunc {
 		userName, role, err := tools.ValidateToken(tokenString)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "无效的认证令牌"})
+			return
+		}
+		if !ensureActiveUser(c, userName) {
 			return
 		}
 
@@ -201,6 +210,9 @@ func AuditAuthMiddleware() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "无效的认证令牌"})
 			return
 		}
+		if !ensureActiveUser(c, userName) {
+			return
+		}
 
 		if role != "admin" && role != "auditor" {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "权限不足，需要管理员或审计员角色"})
@@ -229,6 +241,9 @@ func AdminAuthMiddleware() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "无效的认证令牌"})
 			return
 		}
+		if !ensureActiveUser(c, userName) {
+			return
+		}
 
 		// 检查是否为Admin角色
 		if role != "admin" {
@@ -241,6 +256,15 @@ func AdminAuthMiddleware() gin.HandlerFunc {
 		c.Set("role", role)
 		c.Next()
 	}
+}
+
+func ensureActiveUser(c *gin.Context, userName string) bool {
+	user, err := service.GetUserByUserName(userName)
+	if err != nil || user.Status != model.UserStatusActive {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "账号已停用或不存在"})
+		return false
+	}
+	return true
 }
 
 // CorsMiddleware 返回处理跨域资源共享(CORS)的中间件

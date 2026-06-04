@@ -35,7 +35,11 @@ func CreateCustodyKeygenTask(c *gin.Context) {
 	if policy == "" {
 		policy = "2_of_3"
 	}
-	taskNo := service.NewBusinessNo("TASK")
+	taskNo, err := service.NewOfflineTaskNo()
+	if err != nil {
+		utils.ResponseWithError(c, http.StatusInternalServerError, "生成任务编号失败: "+err.Error())
+		return
+	}
 	payload := gin.H{
 		"case_no":   cs.CaseNo,
 		"coin_type": coinType,

@@ -31,6 +31,11 @@ type UpdateRoleRequest struct {
 	Role string `json:"role" binding:"required"`
 }
 
+// 用户状态更新请求结构
+type UpdateStatusRequest struct {
+	Status string `json:"status" binding:"required"`
+}
+
 // Login 处理用户登录请求
 func Login(c *gin.Context) {
 	var req LoginRequest
@@ -47,7 +52,7 @@ func Login(c *gin.Context) {
 	// 调用服务层进行用户登录验证
 	user, err := service.LoginUser(identifier, req.Password)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "登录标识或密码错误"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -180,6 +185,32 @@ func UpdateUserRole(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"code": 200,
 		"msg":  "用户角色更新成功",
+	})
+}
+
+// UpdateUserStatus 更新用户状态
+func UpdateUserStatus(c *gin.Context) {
+	userName := c.Param("id")
+
+	var req UpdateStatusRequest
+	if !bindJSON(c, &req) {
+		return
+	}
+
+	status := strings.TrimSpace(req.Status)
+	if status != string(model.UserStatusActive) && status != string(model.UserStatusDisabled) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的用户状态"})
+		return
+	}
+
+	if err := service.UpdateUserStatus(userName, status); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code": 200,
+		"msg":  "用户状态更新成功",
 	})
 }
 

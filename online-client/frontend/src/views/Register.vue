@@ -6,8 +6,19 @@
             </div>
 
             <el-form :model="registerForm" :rules="rules" ref="registerForm" label-width="0px">
-                <el-form-item prop="username">
-                    <el-input v-model="registerForm.username" prefix-icon="el-icon-user" placeholder="用户名">
+                <el-form-item prop="identifier">
+                    <el-input
+                        v-model="registerForm.identifier"
+                        prefix-icon="el-icon-user"
+                        placeholder="手机号 / 警号 / 身份证号，用于登录">
+                    </el-input>
+                </el-form-item>
+
+                <el-form-item prop="nickname">
+                    <el-input
+                        v-model="registerForm.nickname"
+                        prefix-icon="el-icon-postcard"
+                        placeholder="昵称，可填姓名或常用称呼">
                     </el-input>
                 </el-form-item>
 
@@ -17,13 +28,11 @@
                 </el-form-item>
 
                 <el-form-item prop="confirmPassword">
-                    <el-input v-model="registerForm.confirmPassword" prefix-icon="el-icon-lock" placeholder="确认密码"
+                    <el-input
+                        v-model="registerForm.confirmPassword"
+                        prefix-icon="el-icon-lock"
+                        placeholder="确认密码"
                         show-password>
-                    </el-input>
-                </el-form-item>
-
-                <el-form-item prop="email">
-                    <el-input v-model="registerForm.email" prefix-icon="el-icon-message" placeholder="邮箱">
                     </el-input>
                 </el-form-item>
 
@@ -50,7 +59,6 @@ import { userApi } from '../services/api'
 export default {
   name: 'Register',
   data () {
-    // 密码一致性校验
     const validateConfirmPassword = (rule, value, callback) => {
       if (value !== this.registerForm.password) {
         callback(new Error('两次输入的密码不一致'))
@@ -61,27 +69,26 @@ export default {
 
     return {
       registerForm: {
-        username: '',
+        identifier: '',
+        nickname: '',
         password: '',
-        confirmPassword: '',
-        email: ''
+        confirmPassword: ''
       },
       rules: {
-        username: [
-          { required: true, message: '请输入用户名', trigger: 'blur' },
-          { min: 3, max: 20, message: '用户名长度应为3-20个字符', trigger: 'blur' }
+        identifier: [
+          { required: true, message: '请输入登录标识', trigger: 'blur' },
+          { min: 3, max: 40, message: '登录标识长度应为 3-40 个字符', trigger: 'blur' }
+        ],
+        nickname: [
+          { min: 2, max: 30, message: '昵称长度应为 2-30 个字符', trigger: 'blur' }
         ],
         password: [
           { required: true, message: '请输入密码', trigger: 'blur' },
-          { min: 6, message: '密码长度至少为6个字符', trigger: 'blur' }
+          { min: 6, message: '密码长度至少为 6 个字符', trigger: 'blur' }
         ],
         confirmPassword: [
           { required: true, message: '请确认密码', trigger: 'blur' },
           { validator: validateConfirmPassword, trigger: 'blur' }
-        ],
-        email: [
-          { required: true, message: '请输入邮箱', trigger: 'blur' },
-          { type: 'email', message: '请输入正确的邮箱格式', trigger: 'blur' }
         ]
       },
       loading: false
@@ -98,23 +105,20 @@ export default {
 
         try {
           const response = await userApi.register({
-            username: this.registerForm.username,
+            identifier: this.registerForm.identifier,
+            username: this.registerForm.identifier,
+            nickname: this.registerForm.nickname,
             password: this.registerForm.password,
-            email: this.registerForm.email
+            email: ''
           })
 
-          // 验证响应数据
           if (!response.data || response.data.code !== 200) {
             throw new Error(response.data?.message || '注册失败')
           }
 
-          // 注册成功
           this.$message.success('注册成功，请登录')
-
-          // 跳转到登录页面
           this.$router.push('/login')
         } catch (error) {
-          console.error('Registration failed:', error)
           let errorMsg = '注册失败，请稍后重试'
 
           if (error.response && error.response.data) {
@@ -139,11 +143,11 @@ export default {
     justify-content: center;
     align-items: center;
     height: 100vh;
-    background-color: #f5f7fa;
+    background-color: #f0f2f5;
 }
 
 .register-card {
-    width: 400px;
+    width: 420px;
     border-radius: 8px;
 }
 
@@ -153,7 +157,7 @@ export default {
 
 .card-header h2 {
     margin: 0;
-    color: #409EFF;
+    color: #304156;
 }
 
 .login-link {

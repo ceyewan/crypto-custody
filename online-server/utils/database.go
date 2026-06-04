@@ -230,25 +230,26 @@ func ensureAdminUser() error {
 	if adminPassword == "" {
 		adminPassword = "admin123"
 	}
-	if err := ensureDefaultUser("admin", "admin@example.com", adminPassword, model.RoleAdmin); err != nil {
+	if err := ensureDefaultUser("admin", "系统管理员", "admin@example.com", adminPassword, model.RoleAdmin); err != nil {
 		return err
 	}
 
 	defaultOfficers := []struct {
 		username string
+		nickname string
 		email    string
 	}{
-		{"u1", "u1@example.com"},
-		{"u2", "u2@example.com"},
-		{"u3", "u3@example.com"},
+		{"u1", "测试警员 1", "u1@example.com"},
+		{"u2", "测试警员 2", "u2@example.com"},
+		{"u3", "测试警员 3", "u3@example.com"},
 	}
 	for _, officer := range defaultOfficers {
-		if err := ensureDefaultUser(officer.username, officer.email, "officer123", model.RoleOfficer); err != nil {
+		if err := ensureDefaultUser(officer.username, officer.nickname, officer.email, "officer123", model.RoleOfficer); err != nil {
 			return err
 		}
 	}
 
-	if err := ensureDefaultUser("auditor", "auditor@example.com", "auditor123", model.RoleAuditor); err != nil {
+	if err := ensureDefaultUser("auditor", "审计员", "auditor@example.com", "auditor123", model.RoleAuditor); err != nil {
 		return err
 	}
 
@@ -264,13 +265,25 @@ func migrateLegacyUserRoles() error {
 	return nil
 }
 
-func ensureDefaultUser(username, email, password string, role model.Role) error {
+func ensureDefaultUser(username, nickname, email, password string, role model.Role) error {
 	dbLogger := clog.Module("database")
 
-	var count int64
-	instance.Model(&model.User{}).Where("username = ?", username).Count(&count)
-	if count > 0 {
-		dbLogger.Info("默认用户已存在，无需创建", clog.String("username", username), clog.String("role", string(role)))
+	var user model.User
+	if err := instance.Where("username = ?", username).First(&user).Error; err == nil {
+		updates := map[string]interface{}{
+			"role":   role,
+			"status": model.UserStatusActive,
+		}
+		if user.Nickname == "" && nickname != "" {
+			updates["nickname"] = nickname
+		}
+		if user.Email == "" {
+			updates["email"] = email
+		}
+		if err := instance.Model(&user).Updates(updates).Error; err != nil {
+			return fmt.Errorf("更新默认用户 %s 失败: %w", username, err)
+		}
+		dbLogger.Info("默认用户已存在，已校正基础属性", clog.String("username", username), clog.String("role", string(role)))
 		return nil
 	}
 
@@ -280,15 +293,16 @@ func ensureDefaultUser(username, email, password string, role model.Role) error 
 		return fmt.Errorf("生成默认用户密码哈希失败: %w", err)
 	}
 
-	user := model.User{
+	newUser := model.User{
 		Username: username,
+		Nickname: nickname,
 		Password: string(hashedPassword),
 		Email:    email,
 		Role:     role,
-		Status:   "active",
+		Status:   model.UserStatusActive,
 	}
 
-	if err := instance.Create(&user).Error; err != nil {
+	if err := instance.Create(&newUser).Error; err != nil {
 		dbLogger.Error("创建默认用户失败", clog.String("username", username), clog.Err(err))
 		return fmt.Errorf("创建默认用户 %s 失败: %w", username, err)
 	}
