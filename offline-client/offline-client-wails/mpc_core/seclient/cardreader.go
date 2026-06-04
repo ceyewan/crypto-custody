@@ -52,7 +52,7 @@ func NewCardReader(opts ...CardReaderOption) (*CardReader, error) {
 // Close 关闭连接
 func (r *CardReader) Close() {
 	if r.card != nil {
-		r.card.Disconnect(scard.ResetCard)
+		r.card.Disconnect(scard.LeaveCard)
 		r.card = nil
 	}
 	if r.context != nil {
@@ -117,10 +117,6 @@ func (r *CardReader) Connect(readerName string) error {
 	card, err := r.context.Connect(selectedReader, scard.ShareShared, scard.ProtocolAny)
 	if err != nil {
 		return fmt.Errorf("连接到读卡器失败: %v", err)
-	}
-	if err := card.Reconnect(scard.ShareShared, scard.ProtocolAny, scard.ResetCard); err != nil {
-		card.Disconnect(scard.LeaveCard)
-		return fmt.Errorf("重置读卡器连接失败: %v", err)
 	}
 
 	r.card = card

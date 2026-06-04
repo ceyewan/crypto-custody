@@ -85,6 +85,7 @@ func createAndRunTempExecutable(ctx context.Context, baseName string, args ...st
 	cmd := exec.CommandContext(ctx, tmpFile.Name(), args...)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
+	configureHiddenProcess(cmd)
 
 	// 记录开始执行
 	logCommandStart(tmpFile.Name(), args)
