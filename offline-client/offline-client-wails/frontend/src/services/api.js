@@ -7,14 +7,35 @@ const apiClient = axios.create({
     timeout: 10000
 })
 
+function normalizeToken(token) {
+    if (!token) {
+        return ''
+    }
+
+    const value = String(token).trim()
+    return value.startsWith('Bearer ') ? value.substring(7).trim() : value
+}
+
+function currentToken() {
+    return normalizeToken(store.state.token) || normalizeToken(localStorage.getItem('token'))
+}
+
+function isPublicAuthRequest(config) {
+    const url = config.url || ''
+    return url === '/user/login' || url === '/user/register'
+}
+
 // axios请求拦截器
 apiClient.interceptors.request.use(
     config => {
         config.baseURL = getServerHttpUrl()
-        const token = localStorage.getItem('token')
+        config.headers = config.headers || {}
+        config.__requiresAuth = !isPublicAuthRequest(config)
+
+        const token = config.__requiresAuth ? currentToken() : ''
         if (token) {
-            // 如果token以Bearer开头，则去掉前缀，只发送裸token
-            config.headers['Authorization'] = token.startsWith('Bearer ') ? token.substring(7) : token
+            config.headers['Authorization'] = token
+            config.__authToken = token
         }
         return config
     },
@@ -30,8 +51,11 @@ apiClient.interceptors.response.use(
         if (error.response) {
             // 处理401认证错误
             if (error.response.status === 401) {
-                // 可选：自动登出并跳转到登录页面
-                if (store && store.dispatch) {
+                const requestToken = normalizeToken(error.config && error.config.__authToken)
+                const latestToken = currentToken()
+
+                // 只让当前登录态对应的401触发退出，避免旧请求返回后踢掉刚登录的新会话。
+                if (error.config && error.config.__requiresAuth && latestToken && requestToken === latestToken && store && store.dispatch) {
                     store.dispatch('logout')
                     // 使用延迟以确保状态更新完成
                     setTimeout(() => {

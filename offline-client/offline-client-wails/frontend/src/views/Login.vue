@@ -88,12 +88,8 @@ export default {
                         throw new Error('服务器响应异常：缺少认证令牌')
                     }
 
-                    const token = response.data.token.startsWith('Bearer ')
-                        ? response.data.token
-                        : `Bearer ${response.data.token}`
-
                     this.$store.dispatch('login', {
-                        token,
+                        token: response.data.token,
                         user: response.data.user
                     })
 
