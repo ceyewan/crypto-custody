@@ -233,9 +233,11 @@ func (h *SignHandler) handleSignResponse(msg SignResponseMessage, sender *Client
 		h.markSignFailed(msg.SessionKey)
 		return fmt.Errorf("CPLC 不匹配: expected=%s actual=%s", shard.SeCPLC, msg.CPLC)
 	}
+	_ = h.seStorage.TouchSeLastUsedByCPLC(msg.CPLC)
 
 	session.Responses[idx] = string(model.ParticipantAccepted)
 	_ = h.signStorage.UpdateParticipantStatus(msg.SessionKey, idx, model.ParticipantAccepted)
+	h.audit(sender, "sign_participant_accept", "sign_session", msg.SessionKey, "success", fmt.Sprintf("party_index=%d,address=%s", msg.PartyIndex, session.Address))
 	if !allResponses(session.Responses, model.ParticipantAccepted) {
 		return nil
 	}
@@ -326,6 +328,7 @@ func (h *SignHandler) handleSignResult(msg SignResultMessage, sender *Client) er
 	session.Responses[idx] = string(model.ParticipantCompleted)
 	session.Signature = msg.Signature
 	_ = h.signStorage.UpdateParticipantStatus(msg.SessionKey, idx, model.ParticipantCompleted)
+	h.audit(sender, "sign_participant_complete", "sign_session", msg.SessionKey, "success", fmt.Sprintf("address=%s", session.Address))
 
 	if !allResponses(session.Responses, model.ParticipantCompleted) {
 		return nil

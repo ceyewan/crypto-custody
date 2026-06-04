@@ -103,6 +103,80 @@ func (a *App) SaveJSONFile(defaultFileName string, content string) (string, erro
 	return savePath, nil
 }
 
+// SaveFile prompts the operator for a path and writes text content to disk.
+func (a *App) SaveFile(defaultFileName string, content string) (string, error) {
+	if a.ctx == nil {
+		return "", errors.New("应用尚未初始化")
+	}
+
+	defaultFileName = strings.TrimSpace(defaultFileName)
+	if defaultFileName == "" {
+		defaultFileName = "backup.dat"
+	}
+
+	savePath, err := wailsruntime.SaveFileDialog(a.ctx, wailsruntime.SaveDialogOptions{
+		Title:                "保存文件",
+		DefaultDirectory:     downloadsDir(),
+		DefaultFilename:      defaultFileName,
+		CanCreateDirectories: true,
+		Filters: []wailsruntime.FileFilter{
+			{
+				DisplayName: "所有文件 (*.*)",
+				Pattern:     "*.*",
+			},
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(savePath) == "" {
+		return "", nil
+	}
+
+	if err := os.WriteFile(savePath, []byte(content), 0600); err != nil {
+		return "", err
+	}
+	return savePath, nil
+}
+
+// OpenFile prompts the operator to choose a file and returns its name and text content.
+func (a *App) OpenFile() (map[string]string, error) {
+	if a.ctx == nil {
+		return nil, errors.New("应用尚未初始化")
+	}
+
+	path, err := wailsruntime.OpenFileDialog(a.ctx, wailsruntime.OpenDialogOptions{
+		Title:            "选择冷备份文件",
+		DefaultDirectory: downloadsDir(),
+		Filters: []wailsruntime.FileFilter{
+			{
+				DisplayName: "冷备份文件 (*.enc;*.cold.enc)",
+				Pattern:     "*.enc;*.cold.enc",
+			},
+			{
+				DisplayName: "所有文件 (*.*)",
+				Pattern:     "*.*",
+			},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(path) == "" {
+		return map[string]string{}, nil
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]string{
+		"path":     path,
+		"fileName": filepath.Base(path),
+		"content":  string(data),
+	}, nil
+}
+
 func downloadsDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil || home == "" {

@@ -233,6 +233,10 @@ export const offlineApi = {
         return apiClient.post(`/offline/backups/cold/export`, { password })
     },
 
+    importColdBackup(data) {
+        return apiClient.post(`/offline/backups/cold/import`, data, { timeout: 60000 })
+    },
+
     downloadBackupRecord(id) {
         return apiClient.get(`/offline/backups/${id}/download`, { responseType: 'blob' })
     },

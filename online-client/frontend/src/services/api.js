@@ -323,6 +323,15 @@ export const backupApi = {
   createCold (password) {
     return apiClient.post('/api/backups/cold/export', { password })
   },
+  importCold (file, password) {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('password', password)
+    return apiClient.post('/api/backups/cold/import', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 60000
+    })
+  },
   verify (id) {
     return apiClient.post(`/api/backups/${id}/verify`)
   },

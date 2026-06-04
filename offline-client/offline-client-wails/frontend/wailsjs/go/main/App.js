@@ -22,8 +22,16 @@ export function PerformSignMessage(arg1) {
   return window['go']['main']['App']['PerformSignMessage'](arg1);
 }
 
+export function OpenFile() {
+  return window['go']['main']['App']['OpenFile']();
+}
+
 export function SaveJSONFile(arg1, arg2) {
   return window['go']['main']['App']['SaveJSONFile'](arg1, arg2);
+}
+
+export function SaveFile(arg1, arg2) {
+  return window['go']['main']['App']['SaveFile'](arg1, arg2);
 }
 
 export function SetCardReaderName(arg1) {

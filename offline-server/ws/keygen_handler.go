@@ -199,9 +199,11 @@ func (h *KeyGenHandler) handleKeyGenResponse(msg KeyGenResponseMessage, sender *
 		h.markKeyGenFailed(msg.SessionKey)
 		return fmt.Errorf("安全芯片不匹配或不可用: expected=%s actual=%s status=%s", se.CPLC, msg.CPLC, se.Status)
 	}
+	_ = h.seStorage.TouchSeLastUsedByCPLC(msg.CPLC)
 
 	session.Responses[idx] = string(model.ParticipantAccepted)
 	_ = h.keyGenStorage.UpdateParticipantStatus(msg.SessionKey, idx, model.ParticipantAccepted)
+	h.audit(sender, "keygen_participant_accept", "keygen_session", msg.SessionKey, "success", fmt.Sprintf("party_index=%d", msg.PartyIndex))
 
 	if !allResponses(session.Responses, model.ParticipantAccepted) {
 		return nil
@@ -278,6 +280,7 @@ func (h *KeyGenHandler) handleKeyGenResult(msg KeyGenResultMessage, sender *Clie
 		h.markKeyGenFailed(msg.SessionKey)
 		return fmt.Errorf("结果中的 CPLC 未登记: %w", err)
 	}
+	_ = h.seStorage.TouchSeLastUsedByCPLC(msg.CPLC)
 
 	shard := model.KeyShard{
 		ShardID:       fmt.Sprintf("%s:%d", session.OfflineKeyID, msg.PartyIndex),
@@ -305,6 +308,7 @@ func (h *KeyGenHandler) handleKeyGenResult(msg KeyGenResultMessage, sender *Clie
 	}
 	session.Responses[idx] = string(model.ParticipantCompleted)
 	_ = h.keyGenStorage.UpdateParticipantStatus(msg.SessionKey, idx, model.ParticipantCompleted)
+	h.audit(sender, "keygen_participant_complete", "offline_key", session.OfflineKeyID, "success", fmt.Sprintf("party_index=%d,address=%s", msg.PartyIndex, msg.Address))
 
 	if !allResponses(session.Responses, model.ParticipantCompleted) {
 		return nil

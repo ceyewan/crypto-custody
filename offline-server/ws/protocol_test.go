@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"sync"
 	"testing"
+	"time"
 
 	"offline-server/manager"
 	"offline-server/storage"
@@ -1121,6 +1122,17 @@ func (f *fakeSeStorage) UpdateSeStatus(seID string, status model.SeStatus) error
 		return storage.ErrRecordNotFound
 	}
 	se.Status = status
+	f.add(se)
+	return nil
+}
+
+func (f *fakeSeStorage) TouchSeLastUsedByCPLC(cplc string) error {
+	se, ok := f.byCPLC[cplc]
+	if !ok {
+		return storage.ErrRecordNotFound
+	}
+	now := time.Now()
+	se.LastUsedAt = &now
 	f.add(se)
 	return nil
 }

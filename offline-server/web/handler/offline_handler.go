@@ -136,6 +136,12 @@ type restoreBackupRequest struct {
 	Password string `json:"password"`
 }
 
+type importColdBackupRequest struct {
+	FileName string `json:"file_name"`
+	Content  string `json:"content"`
+	Password string `json:"password"`
+}
+
 type encryptedBackupFile struct {
 	Version    int    `json:"version"`
 	KDF        string `json:"kdf"`
@@ -155,6 +161,8 @@ type participationResponse struct {
 	ErrorMessage   string    `json:"error_message,omitempty"`
 	RedactedDetail string    `json:"redacted_detail,omitempty"`
 }
+
+const destroyBalanceWarning = "私钥销毁前请先到在线系统核对该地址链上余额为 0；若余额未清零，请先完成转出或处置后再销毁。"
 
 // ImportOfflineTask 导入在线系统导出的离线任务包。
 func ImportOfflineTask(c *gin.Context) {
@@ -585,13 +593,15 @@ func DestroyOfflineKey(c *gin.Context) {
 	auditFromContext(c, "offline_key_destroy_request", "offline_key", id, "success", req.Reason)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
+		"warning": destroyBalanceWarning,
 		"message": gin.H{
-			"type":           "destroy_request",
-			"session_key":    req.SessionKey,
-			"offline_key_id": key.OfflineKeyID,
-			"address":        key.Address,
-			"participants":   req.Participants,
-			"reason":         req.Reason,
+			"type":            "destroy_request",
+			"session_key":     req.SessionKey,
+			"offline_key_id":  key.OfflineKeyID,
+			"address":         key.Address,
+			"participants":    req.Participants,
+			"reason":          req.Reason,
+			"balance_warning": destroyBalanceWarning,
 		},
 	})
 }
@@ -763,6 +773,82 @@ func RestoreBackup(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "备份恢复成功", "data": gin.H{"backup": record, "preRestoreSnapshot": preRestore}})
 }
 
+func ImportColdBackup(c *gin.Context) {
+	var req importColdBackupRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的请求参数"})
+		return
+	}
+	if strings.TrimSpace(req.Content) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请选择冷备份文件"})
+		return
+	}
+	if strings.TrimSpace(req.Password) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "导入冷备份需要密码"})
+		return
+	}
+
+	restoreData, err := readEncryptedBackupBytes([]byte(req.Content), req.Password)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "读取冷备份失败: " + err.Error()})
+		return
+	}
+
+	preRestore, err := createPreRestoreSnapshot(usernameFromContext(c))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "创建恢复前快照失败: " + err.Error()})
+		return
+	}
+
+	if err := os.MkdirAll("backups", 0755); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "创建备份目录失败: " + err.Error()})
+		return
+	}
+	no := newBackupNo("IMPORT-COLD")
+	fileName := sanitizeFilePart(firstNonEmpty(req.FileName, no+".cold.enc"))
+	if fileName == "" {
+		fileName = no + ".cold.enc"
+	}
+	if !strings.Contains(fileName, ".") {
+		fileName += ".cold.enc"
+	}
+	filePath := filepath.Join("backups", no+"_"+fileName)
+	if err := os.WriteFile(filePath, []byte(req.Content), 0600); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "保存导入冷备份失败: " + err.Error()})
+		return
+	}
+	hash, err := fileHash(filePath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "计算冷备份哈希失败: " + err.Error()})
+		return
+	}
+
+	if err := replaceDatabaseFile(restoreData); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "恢复数据库失败: " + err.Error()})
+		return
+	}
+
+	now := time.Now().Unix()
+	record := &model.BackupRecord{
+		BackupNo:   no,
+		BackupType: "cold",
+		FileName:   fileName,
+		FilePath:   filePath,
+		FileHash:   hash,
+		Encrypted:  true,
+		CreatedBy:  usernameFromContext(c),
+		RestoredBy: usernameFromContext(c),
+		RestoredAt: &now,
+		Status:     "restored",
+	}
+	if err := storagedb.GetDB().Create(record).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "记录导入冷备份失败: " + err.Error()})
+		return
+	}
+	auditFromContext(c, "offline_backup_cold_import_restore", "backup", record.BackupNo, "success", "")
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "冷备份导入并恢复成功", "data": gin.H{"backup": record, "preRestoreSnapshot": preRestore}})
+}
+
 func backupRecordFromParam(c *gin.Context) (model.BackupRecord, bool) {
 	var record model.BackupRecord
 	if err := storagedb.GetDB().First(&record, c.Param("id")).Error; err != nil {
@@ -929,6 +1015,10 @@ func readEncryptedBackup(path string, password string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	return readEncryptedBackupBytes(data, password)
+}
+
+func readEncryptedBackupBytes(data []byte, password string) ([]byte, error) {
 	var envelope encryptedBackupFile
 	if err := json.Unmarshal(data, &envelope); err != nil {
 		return nil, err

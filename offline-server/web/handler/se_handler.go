@@ -11,16 +11,16 @@ import (
 )
 
 type seResponse struct {
-	ID              uint      `json:"id"`
-	SeID            string    `json:"se_id"`
-	CPLC            string    `json:"cplc"`
-	Status          string    `json:"status"`
-	CustodyLocation string    `json:"custody_location"`
-	Remark          string    `json:"remark"`
-	RegisteredBy    string    `json:"registered_by"`
-	LastUsedAt      any       `json:"last_used_at,omitempty"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	ID              uint       `json:"id"`
+	SeID            string     `json:"se_id"`
+	CPLC            string     `json:"cplc"`
+	Status          string     `json:"status"`
+	CustodyLocation string     `json:"custody_location"`
+	Remark          string     `json:"remark"`
+	RegisteredBy    string     `json:"registered_by"`
+	LastUsedAt      *time.Time `json:"last_used_at,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
 // CreateSeRequest 创建SE的请求结构
@@ -131,7 +131,7 @@ func seDTO(se model.Se) seResponse {
 		CustodyLocation: se.CustodyLocation,
 		Remark:          se.CustodyLocation,
 		RegisteredBy:    se.RegisteredBy,
-		LastUsedAt:      nil,
+		LastUsedAt:      se.LastUsedAt,
 		CreatedAt:       se.CreatedAt,
 		UpdatedAt:       se.UpdatedAt,
 	}

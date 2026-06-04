@@ -297,7 +297,11 @@ export default {
                 return
             }
             try {
-                await this.$confirm('确认发起该地址的私钥销毁流程？参与警员仍需在各自客户端确认。', '私钥销毁确认', { type: 'warning' })
+                await this.$confirm(
+                    `确认发起该地址的私钥销毁流程？\n\n销毁前请先到在线系统核对地址余额是否为 0；如余额未清零，请先完成转出或处置。\n\n地址：${key.address || '-'}`,
+                    '私钥销毁确认',
+                    { type: 'warning', confirmButtonText: '已核对，继续销毁', cancelButtonText: '取消' }
+                )
             } catch {
                 return
             }
@@ -311,7 +315,7 @@ export default {
                     throw new Error('服务连接未建立')
                 }
                 this.$store.commit('setCurrentSession', message.session_key)
-                this.$message.success('私钥销毁请求已发送，请等待私钥分片持有人确认')
+                this.$message.success(response.data.warning || '私钥销毁请求已发送，请等待私钥分片持有人确认')
                 this.$router.push('/notifications')
             } catch (error) {
                 this.$message.error(this.apiError(error, '销毁失败'))

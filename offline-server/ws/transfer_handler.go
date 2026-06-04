@@ -144,6 +144,7 @@ func (h *TransferHandler) handleTransferResponse(msg TransferResponseMessage, se
 	}
 
 	session.Responses[idx] = string(model.ParticipantAccepted)
+	h.audit(sender, "transfer_participant_accept", "key_shard", session.ShardID, "success", fmt.Sprintf("from=%s,to=%s", session.FromUsername, session.ToUsername))
 	if !allResponses(session.Responses, model.ParticipantAccepted) {
 		return nil
 	}

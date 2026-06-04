@@ -13,6 +13,7 @@ func BackupRoutes(r *gin.Engine) {
 	{
 		group.POST("/hot", handler.CreateHotBackup)
 		group.POST("/cold/export", handler.CreateColdBackup)
+		group.POST("/cold/import", handler.ImportColdBackup)
 		group.GET("", handler.ListBackups)
 		group.GET("/", handler.ListBackups)
 		group.GET("/:id/download", handler.DownloadBackup)

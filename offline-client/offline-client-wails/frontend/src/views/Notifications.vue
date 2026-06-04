@@ -46,6 +46,15 @@
                     <el-descriptions-item v-if="item.content.reason" label="原因">{{ item.content.reason }}</el-descriptions-item>
                 </el-descriptions>
 
+                <el-alert
+                    v-if="item.type === 'destroy_invite'"
+                    class="invite-alert"
+                    type="warning"
+                    show-icon
+                    :closable="false"
+                    title="确认销毁前请先到在线系统核对该地址余额为 0。"
+                />
+
                 <div v-if="item.content.display" class="display-block">
                     <div v-for="(value, key) in item.content.display" :key="key" class="display-item">
                         <span>{{ key }}</span>
@@ -121,6 +130,10 @@
 import { mapGetters } from 'vuex'
 import { seApi } from '../services/wails-api'
 import { sendWSMessage, WS_MESSAGE_TYPES, mpcTaskKey } from '../services/ws'
+
+function errorMessage(error) {
+    return error?.message || error?.detail || error?.error || String(error)
+}
 
 export default {
     name: 'Notifications',
@@ -281,7 +294,11 @@ export default {
         async handleDestroyInviteAccept(notification) {
             if (notification.responded) return
             try {
-                await this.$confirm('确认删除当前安全芯片中的私钥记录？', '私钥销毁确认', { type: 'warning' })
+                await this.$confirm(
+                    '确认删除当前安全芯片中的私钥记录？确认前请先到在线系统核对该地址余额为 0；余额未清零时不要继续销毁。',
+                    '私钥销毁确认',
+                    { type: 'warning', confirmButtonText: '已核对，确认销毁', cancelButtonText: '取消' }
+                )
             } catch {
                 return
             }
@@ -321,7 +338,7 @@ export default {
                 this.markTaskResponded('transfer', notification, true)
                 this.$message.success('已同意私钥分片移交')
             } catch (error) {
-                this.$message.error('同意私钥分片移交失败: ' + error.message)
+                this.$message.error('同意私钥分片移交失败: ' + errorMessage(error))
             }
         },
 
@@ -339,7 +356,7 @@ export default {
         },
 
         async rejectAfterError(notification, responseType, kind, error) {
-            const reason = '获取CPLC失败: ' + error.message
+            const reason = '获取CPLC失败: ' + errorMessage(error)
             this.$message.error(reason)
             try {
                 this.sendOrThrow({
@@ -452,6 +469,10 @@ export default {
     background: #f5f7fa;
     border: 1px solid #ebeef5;
     border-radius: 4px;
+}
+
+.invite-alert {
+    margin-top: 12px;
 }
 
 .display-item {

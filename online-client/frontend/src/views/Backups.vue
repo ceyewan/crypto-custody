@@ -3,15 +3,19 @@
     <div class="toolbar">
       <div>
         <h2>备份恢复</h2>
-        <p>管理 SQLite 数据库热备份、加密冷备份和恢复记录。</p>
+        <p>热备份保存在在线服务端本机用于快速恢复；冷备份生成加密导出文件，适合下载后离线保管。</p>
       </div>
       <div class="actions">
         <el-button type="primary" icon="el-icon-document-copy" :loading="hotCreating" @click="createHot">
-          热备份
+          创建热备份
         </el-button>
         <el-button type="success" icon="el-icon-lock" @click="openColdDialog">
-          加密冷备份
+          导出冷备份
         </el-button>
+        <el-button type="warning" icon="el-icon-upload2" @click="openImportColdDialog">
+          导入冷备份
+        </el-button>
+        <input ref="coldFileInput" class="hidden-file" type="file" accept=".enc,.cold.enc" @change="handleColdFileChange">
         <el-button icon="el-icon-refresh" @click="fetchBackups">刷新</el-button>
       </div>
     </div>
@@ -70,7 +74,14 @@
         <el-table-column label="操作" width="280" fixed="right">
           <template slot-scope="scope">
             <el-button size="mini" icon="el-icon-finished" @click="verify(scope.row)">校验</el-button>
-            <el-button size="mini" icon="el-icon-download" @click="download(scope.row)">下载</el-button>
+            <el-button
+              v-if="scope.row.Encrypted"
+              size="mini"
+              icon="el-icon-download"
+              @click="download(scope.row)"
+            >
+              下载
+            </el-button>
             <el-button size="mini" type="warning" icon="el-icon-refresh-left" @click="openRestoreDialog(scope.row)">
               恢复
             </el-button>
@@ -85,7 +96,7 @@
         type="info"
         show-icon
         :closable="false"
-        title="冷备份会导出加密后的数据库文件，恢复时必须输入同一个密码。"
+        title="冷备份会生成加密导出文件，创建后可在列表中下载，恢复时必须输入同一个密码。"
       />
       <el-form label-width="96px">
         <el-form-item label="备份密码" required>
@@ -126,6 +137,31 @@
         <el-button type="warning" :loading="restoring" @click="confirmRestore">确认恢复</el-button>
       </span>
     </el-dialog>
+
+    <el-dialog title="导入冷备份并恢复" :visible.sync="importColdDialog" width="520px">
+      <el-alert
+        class="dialog-alert"
+        type="warning"
+        show-icon
+        :closable="false"
+        title="导入冷备份会先创建恢复前快照，然后用所选冷备份替换当前在线系统数据库。"
+      />
+      <el-form label-width="96px">
+        <el-form-item label="冷备份文件" required>
+          <div class="file-picker">
+            <el-input :value="importColdFile ? importColdFile.name : '未选择文件'" readonly />
+            <el-button icon="el-icon-folder-opened" @click="chooseColdBackupFile">选择</el-button>
+          </div>
+        </el-form-item>
+        <el-form-item label="恢复密码" required>
+          <el-input v-model="importColdPassword" type="password" show-password autocomplete="current-password" />
+        </el-form-item>
+      </el-form>
+      <span slot="footer">
+        <el-button @click="importColdDialog = false">取消</el-button>
+        <el-button type="warning" :loading="importingCold" @click="confirmImportCold">导入并恢复</el-button>
+      </span>
+    </el-dialog>
   </div>
 </template>
 
@@ -140,13 +176,17 @@ export default {
       hotCreating: false,
       coldCreating: false,
       restoring: false,
+      importingCold: false,
       backups: [],
       keyword: '',
       coldDialog: false,
       restoreDialog: false,
+      importColdDialog: false,
       coldPassword: '',
       coldPasswordConfirm: '',
       restorePassword: '',
+      importColdPassword: '',
+      importColdFile: null,
       selectedBackup: null
     }
   },
@@ -188,7 +228,7 @@ export default {
       this.hotCreating = true
       try {
         await backupApi.createHot()
-        this.$message.success('热备份已创建')
+        this.$message.success('热备份已创建并保存在在线服务端本机')
         await this.fetchBackups()
       } catch (error) {
         this.$message.error(this.errorMessage(error, '热备份创建失败'))
@@ -200,6 +240,14 @@ export default {
       this.coldPassword = ''
       this.coldPasswordConfirm = ''
       this.coldDialog = true
+    },
+    openImportColdDialog () {
+      this.importColdPassword = ''
+      this.importColdFile = null
+      if (this.$refs.coldFileInput) {
+        this.$refs.coldFileInput.value = ''
+      }
+      this.importColdDialog = true
     },
     async createCold () {
       if (!this.coldPassword || !this.coldPasswordConfirm) {
@@ -213,7 +261,7 @@ export default {
       this.coldCreating = true
       try {
         await backupApi.createCold(this.coldPassword)
-        this.$message.success('加密冷备份已创建')
+        this.$message.success('加密冷备份已创建，可在列表中下载导出文件')
         this.coldDialog = false
         await this.fetchBackups()
       } catch (error) {
@@ -236,6 +284,10 @@ export default {
       }
     },
     async download (row) {
+      if (!row.Encrypted) {
+        this.$message.info('热备份保存在在线服务端本机，不需要下载')
+        return
+      }
       try {
         const res = await backupApi.download(row.ID)
         const blob = new Blob([res.data])
@@ -248,6 +300,15 @@ export default {
       } catch (error) {
         this.$message.error(this.errorMessage(error, '备份下载失败'))
       }
+    },
+    chooseColdBackupFile () {
+      if (this.$refs.coldFileInput) {
+        this.$refs.coldFileInput.click()
+      }
+    },
+    handleColdFileChange (event) {
+      const file = event.target.files && event.target.files[0]
+      this.importColdFile = file || null
     },
     openRestoreDialog (row) {
       this.selectedBackup = row
@@ -275,6 +336,36 @@ export default {
         this.$message.error(this.errorMessage(error, '备份恢复失败'))
       } finally {
         this.restoring = false
+      }
+    },
+    async confirmImportCold () {
+      if (!this.importColdFile) {
+        this.$message.warning('请选择冷备份文件')
+        return
+      }
+      if (!this.importColdPassword) {
+        this.$message.warning('请输入冷备份恢复密码')
+        return
+      }
+      try {
+        await this.$confirm(
+          `确认导入并恢复冷备份 ${this.importColdFile.name}？恢复后当前数据库会被替换。`,
+          '导入冷备份确认',
+          { type: 'warning', confirmButtonText: '导入并恢复', cancelButtonText: '取消' }
+        )
+      } catch {
+        return
+      }
+      this.importingCold = true
+      try {
+        await backupApi.importCold(this.importColdFile, this.importColdPassword)
+        this.$message.success('冷备份已导入并恢复')
+        this.importColdDialog = false
+        await this.fetchBackups()
+      } catch (error) {
+        this.$message.error(this.errorMessage(error, '导入冷备份失败'))
+      } finally {
+        this.importingCold = false
       }
     },
     statusType (status) {
@@ -378,6 +469,16 @@ export default {
 
 .dialog-alert {
   margin-bottom: 16px;
+}
+
+.hidden-file {
+  display: none;
+}
+
+.file-picker {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
 }
 
 .restore-form {

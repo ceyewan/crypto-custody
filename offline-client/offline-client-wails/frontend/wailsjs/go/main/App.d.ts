@@ -12,6 +12,10 @@ export function PerformKeyGeneration(arg1:models.KeyGenRequest):Promise<any>;
 
 export function PerformSignMessage(arg1:models.SignRequest):Promise<any>;
 
+export function OpenFile():Promise<Record<string, string>>;
+
 export function SaveJSONFile(arg1:string,arg2:string):Promise<string>;
+
+export function SaveFile(arg1:string,arg2:string):Promise<string>;
 
 export function SetCardReaderName(arg1:string):Promise<void>;

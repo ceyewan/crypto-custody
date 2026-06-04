@@ -18,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -120,6 +121,82 @@ func RestoreBackup(c *gin.Context) {
 	}
 	service.AuditAction(c, "backup.restore", "backup", strconv.FormatUint(uint64(record.ID), 10), "", "success", "", gin.H{"backup": record, "preRestoreSnapshot": preRestore})
 	utils.ResponseWithData(c, "备份恢复成功", gin.H{"backup": record, "preRestoreSnapshot": preRestore})
+}
+
+func ImportColdBackup(c *gin.Context) {
+	password := strings.TrimSpace(c.PostForm("password"))
+	if password == "" {
+		utils.ResponseWithError(c, http.StatusBadRequest, "导入冷备份需要密码")
+		return
+	}
+	file, header, err := c.Request.FormFile("file")
+	if err != nil {
+		utils.ResponseWithError(c, http.StatusBadRequest, "请选择冷备份文件")
+		return
+	}
+	defer file.Close()
+
+	content, err := io.ReadAll(file)
+	if err != nil {
+		utils.ResponseWithError(c, http.StatusBadRequest, "读取冷备份文件失败: "+err.Error())
+		return
+	}
+	restoreData, err := readEncryptedBackupBytes(content, password)
+	if err != nil {
+		utils.ResponseWithError(c, http.StatusBadRequest, "读取冷备份失败: "+err.Error())
+		return
+	}
+
+	preRestore, err := createPreRestoreSnapshot(c.GetString("Username"))
+	if err != nil {
+		utils.ResponseWithError(c, http.StatusInternalServerError, "创建恢复前快照失败: "+err.Error())
+		return
+	}
+	if err := os.MkdirAll("backups", 0755); err != nil {
+		utils.ResponseWithError(c, http.StatusInternalServerError, "创建备份目录失败: "+err.Error())
+		return
+	}
+
+	no := service.NewBusinessNo("IMPORT-COLD")
+	fileName := sanitizeBackupFileName(header.Filename)
+	if fileName == "" {
+		fileName = no + ".cold.enc"
+	}
+	filePath := filepath.Join("backups", no+"_"+fileName)
+	if err := os.WriteFile(filePath, content, 0600); err != nil {
+		utils.ResponseWithError(c, http.StatusInternalServerError, "保存导入冷备份失败: "+err.Error())
+		return
+	}
+	hash, err := fileHash(filePath)
+	if err != nil {
+		utils.ResponseWithError(c, http.StatusInternalServerError, "计算冷备份哈希失败: "+err.Error())
+		return
+	}
+
+	if err := replaceDatabaseFile(restoreData); err != nil {
+		utils.ResponseWithError(c, http.StatusInternalServerError, "恢复数据库失败: "+err.Error())
+		return
+	}
+
+	now := time.Now().Unix()
+	record := &model.BackupRecord{
+		BackupNo:   no,
+		BackupType: "cold",
+		FileName:   fileName,
+		FilePath:   filePath,
+		FileHash:   hash,
+		Encrypted:  true,
+		CreatedBy:  c.GetString("Username"),
+		RestoredBy: c.GetString("Username"),
+		RestoredAt: &now,
+		Status:     "restored",
+	}
+	if err := utils.GetDB().Create(record).Error; err != nil {
+		utils.ResponseWithError(c, http.StatusInternalServerError, "记录导入冷备份失败: "+err.Error())
+		return
+	}
+	service.AuditAction(c, "backup.cold.import_restore", "backup", strconv.FormatUint(uint64(record.ID), 10), "", "success", "", gin.H{"backup": record, "preRestoreSnapshot": preRestore})
+	utils.ResponseWithData(c, "冷备份导入并恢复成功", gin.H{"backup": record, "preRestoreSnapshot": preRestore})
 }
 
 func VerifyBackup(c *gin.Context) {
@@ -294,6 +371,10 @@ func readEncryptedBackup(path string, password string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	return readEncryptedBackupBytes(data, password)
+}
+
+func readEncryptedBackupBytes(data []byte, password string) ([]byte, error) {
 	var envelope encryptedBackupFile
 	if err := json.Unmarshal(data, &envelope); err != nil {
 		return nil, err
@@ -328,6 +409,26 @@ func readEncryptedBackup(path string, password string) ([]byte, error) {
 		return nil, errors.New("备份明文哈希校验失败")
 	}
 	return plain, nil
+}
+
+func sanitizeBackupFileName(value string) string {
+	value = filepath.Base(strings.TrimSpace(value))
+	var b strings.Builder
+	for _, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z':
+			b.WriteRune(r)
+		case r >= 'A' && r <= 'Z':
+			b.WriteRune(r)
+		case r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r == '-' || r == '_' || r == '.':
+			b.WriteRune(r)
+		default:
+			b.WriteByte('_')
+		}
+	}
+	return b.String()
 }
 
 func deriveBackupKey(password string, salt []byte) []byte {

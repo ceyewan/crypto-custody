@@ -191,8 +191,10 @@ func (h *DestroyHandler) handleDestroyResponse(msg DestroyResponseMessage, sende
 		h.markDestroyFailed(msg.SessionKey)
 		return fmt.Errorf("CPLC 不匹配: expected=%s actual=%s", shard.SeCPLC, msg.CPLC)
 	}
+	_ = h.seStorage.TouchSeLastUsedByCPLC(msg.CPLC)
 
 	session.Responses[idx] = string(model.ParticipantAccepted)
+	h.audit(sender, "destroy_participant_accept", "offline_key", session.OfflineKeyID, "success", fmt.Sprintf("party_index=%d,address=%s", msg.PartyIndex, session.Address))
 	if !allResponses(session.Responses, model.ParticipantAccepted) {
 		return nil
 	}
@@ -273,6 +275,8 @@ func (h *DestroyHandler) handleDestroyResult(msg DestroyResultMessage, sender *C
 		h.markDestroyFailed(msg.SessionKey)
 		return fmt.Errorf("更新分片销毁状态失败: %w", err)
 	}
+	_ = h.seStorage.TouchSeLastUsedByCPLC(shard.SeCPLC)
+	h.audit(sender, "destroy_participant_complete", "offline_key", session.OfflineKeyID, "success", fmt.Sprintf("party_index=%d,address=%s", msg.PartyIndex, session.Address))
 
 	if !allResponses(session.Responses, model.ParticipantCompleted) {
 		return h.completeDestroyIfNoActiveShards(session, sender)

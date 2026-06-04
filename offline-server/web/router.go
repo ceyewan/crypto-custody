@@ -54,6 +54,7 @@ func initOfflineRouter(r *gin.Engine) {
 		offlineAdminGroup.GET("/backup/download", handler.DownloadBackup)
 		offlineAdminGroup.POST("/backups/hot", handler.CreateHotBackup)
 		offlineAdminGroup.POST("/backups/cold/export", handler.CreateColdBackup)
+		offlineAdminGroup.POST("/backups/cold/import", handler.ImportColdBackup)
 		offlineAdminGroup.GET("/backups", handler.ListBackups)
 		offlineAdminGroup.GET("/backups/:id/download", handler.DownloadBackupRecord)
 		offlineAdminGroup.POST("/backups/:id/restore", handler.RestoreBackup)

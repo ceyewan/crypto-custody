@@ -2,11 +2,13 @@
 import {
     PerformKeyGeneration,
     PerformSignMessage,
+    OpenFile,
     GetCPLCInfo,
     PerformDeleteMessage,
     SetCardReaderName,
     GetCardReaderName,
-    SaveJSONFile
+    SaveJSONFile,
+    SaveFile
 } from '../../wailsjs/go/main/App'
 
 // 安全芯片 API - 直接调用 Wails 内置的 mpc_core 模块
@@ -30,6 +32,14 @@ export const clientConfigApi = {
 export const fileApi = {
     saveJSON(defaultFileName, content) {
         return SaveJSONFile(defaultFileName, content)
+    },
+
+    saveFile(defaultFileName, content) {
+        return SaveFile(defaultFileName, content)
+    },
+
+    openFile() {
+        return OpenFile()
     }
 }
 

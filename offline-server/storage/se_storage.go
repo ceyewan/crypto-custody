@@ -4,6 +4,7 @@ package storage
 import (
 	"log"
 	"sync"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -189,6 +190,34 @@ func (s *SeStorage) UpdateSeStatus(seID string, status model.SeStatus) error {
 		Update("status", status)
 	if result.Error != nil {
 		log.Printf("更新安全芯片状态失败: %v", result.Error)
+		return ErrOperationFailed
+	}
+	if result.RowsAffected == 0 {
+		return ErrRecordNotFound
+	}
+	return nil
+}
+
+// TouchSeLastUsedByCPLC 更新安全芯片最近使用时间。
+func (s *SeStorage) TouchSeLastUsedByCPLC(cplc string) error {
+	if cplc == "" {
+		return ErrInvalidParameter
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	database := db.GetDB()
+	if database == nil {
+		return ErrDatabaseNotInitialized
+	}
+
+	now := time.Now()
+	result := database.Model(&model.Se{}).
+		Where("cplc = ?", cplc).
+		Update("last_used_at", &now)
+	if result.Error != nil {
+		log.Printf("更新安全芯片最近使用时间失败: %v", result.Error)
 		return ErrOperationFailed
 	}
 	if result.RowsAffected == 0 {
