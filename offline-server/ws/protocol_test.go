@@ -457,6 +457,180 @@ func TestDestroyProtocolDeletesAllActiveShardsBeforeMarkingKeyDestroyed(t *testi
 	}
 }
 
+func TestDestroyProtocolCanRetryRemainingShardsAfterPartialFailure(t *testing.T) {
+	writeTestPrivateKey(t)
+
+	shareStore := newFakeShareStorage()
+	seStore := newFakeSeStorage()
+	for i, username := range []string{"u1", "u2", "u3"} {
+		shardIndex := i + 1
+		cplc := "CPLC0" + string(rune('1'+i))
+		recordID := hex.EncodeToString([]byte{
+			byte(shardIndex), byte(shardIndex), byte(shardIndex), byte(shardIndex),
+			byte(shardIndex), byte(shardIndex), byte(shardIndex), byte(shardIndex),
+			byte(shardIndex), byte(shardIndex), byte(shardIndex), byte(shardIndex),
+			byte(shardIndex), byte(shardIndex), byte(shardIndex), byte(shardIndex),
+			byte(shardIndex), byte(shardIndex), byte(shardIndex), byte(shardIndex),
+			byte(shardIndex), byte(shardIndex), byte(shardIndex), byte(shardIndex),
+			byte(shardIndex), byte(shardIndex), byte(shardIndex), byte(shardIndex),
+			byte(shardIndex), byte(shardIndex), byte(shardIndex), byte(shardIndex),
+		})
+		seStore.add(model.Se{SeID: "SE0" + string(rune('1'+i)), CPLC: cplc, Status: model.SeStatusActive})
+		shareStore.shards[shardKey(username, testAddress)] = model.KeyShard{
+			ShardID:       "shard-" + username,
+			OfflineKeyID:  "offline-key-1",
+			Username:      username,
+			Address:       testAddress,
+			ShardIndex:    shardIndex,
+			RecordID:      recordID,
+			SeCPLC:        cplc,
+			EncryptedBlob: "encrypted-share-" + username,
+			BlobType:      model.BlobTypeMPCShare,
+			KeyVersion:    1,
+			Status:        model.KeyShardStatusActive,
+		}
+	}
+
+	offlineKeyStore := newFakeOfflineKeyStorage()
+	offlineKeyStore.byAddress[testAddress] = model.OfflineKey{
+		OfflineKeyID: "offline-key-1",
+		Address:      testAddress,
+		Status:       model.OfflineKeyStatusActive,
+	}
+
+	sessionManager := mem_storage.NewSessionManager()
+	handler := NewDestroyHandler(shareStore, seStore, offlineKeyStore, fakeAuditStorage{}, fakeApprovalStorage{}, sessionManager)
+
+	hub := newTestHub()
+	admin := addTestClient(hub, "admin", RoleAdmin)
+	clients := map[string]*Client{}
+	for _, username := range []string{"u1", "u2", "u3"} {
+		clients[username] = addTestClient(hub, username, RoleOfficer)
+	}
+
+	if err := handler.handleDestroyRequest(DestroyRequestMessage{
+		SessionKey:   "destroy-partial",
+		OfflineKeyID: "offline-key-1",
+	}, admin); err != nil {
+		t.Fatalf("initial destroy request failed: %v", err)
+	}
+	key, err := offlineKeyStore.GetOfflineKeyByID("offline-key-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if key.Status != model.OfflineKeyStatusDestroying {
+		t.Fatalf("offline key should be destroying after request, got %s", key.Status)
+	}
+
+	for i, username := range []string{"u1", "u2", "u3"} {
+		invite := readMessage[DestroyInviteMessage](t, clients[username])
+		if invite.Type != MsgDestroyInvite || invite.PartyIndex != i+1 {
+			t.Fatalf("bad destroy invite for %s: %+v", username, invite)
+		}
+	}
+	for i, username := range []string{"u1", "u2", "u3"} {
+		if err := handler.handleDestroyResponse(DestroyResponseMessage{
+			SessionKey: "destroy-partial",
+			PartyIndex: i + 1,
+			CPLC:       "CPLC0" + string(rune('1'+i)),
+			Accept:     true,
+		}, clients[username]); err != nil {
+			t.Fatalf("destroy response %s failed: %v", username, err)
+		}
+	}
+	for i, username := range []string{"u1", "u2", "u3"} {
+		params := readMessage[DestroyParamsMessage](t, clients[username])
+		if params.Type != MsgDestroyParams || params.PartyIndex != i+1 {
+			t.Fatalf("bad destroy params for %s: %+v", username, params)
+		}
+	}
+	for i, username := range []string{"u1", "u2"} {
+		if err := handler.handleDestroyResult(DestroyResultMessage{
+			SessionKey: "destroy-partial",
+			PartyIndex: i + 1,
+			Success:    true,
+		}, clients[username]); err != nil {
+			t.Fatalf("destroy success %s failed: %v", username, err)
+		}
+	}
+	if err := handler.handleDestroyResult(DestroyResultMessage{
+		SessionKey: "destroy-partial",
+		PartyIndex: 3,
+		Success:    false,
+		Message:    "card unavailable",
+	}, clients["u3"]); err != nil {
+		t.Fatalf("destroy failure failed: %v", err)
+	}
+	failure := readMessage[ErrorMessage](t, admin)
+	if failure.Type != MsgError || failure.Message == "" {
+		t.Fatalf("bad failure message: %+v", failure)
+	}
+	key, err = offlineKeyStore.GetOfflineKeyByID("offline-key-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if key.Status != model.OfflineKeyStatusDestroyFailed {
+		t.Fatalf("offline key should be destroy_failed after partial failure, got %s", key.Status)
+	}
+	for _, username := range []string{"u1", "u2"} {
+		shard, err := shareStore.GetKeyShardByID("shard-" + username)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if shard.Status != model.KeyShardStatusDestroyed {
+			t.Fatalf("%s shard should be destroyed, got %s", username, shard.Status)
+		}
+	}
+	if _, err := shareStore.GetKeyShardForParticipant("u3", testAddress); err != nil {
+		t.Fatalf("u3 shard should remain active for retry: %v", err)
+	}
+
+	if err := handler.handleDestroyRequest(DestroyRequestMessage{
+		SessionKey:   "destroy-retry",
+		OfflineKeyID: "offline-key-1",
+	}, admin); err != nil {
+		t.Fatalf("retry destroy request failed: %v", err)
+	}
+	retry := sessionManager.GetDestroySession("destroy-retry")
+	if retry == nil || !reflect.DeepEqual([]string(retry.Participants), []string{"u3"}) {
+		t.Fatalf("retry should only include remaining active shard holder: %+v", retry)
+	}
+	invite := readMessage[DestroyInviteMessage](t, clients["u3"])
+	if invite.Type != MsgDestroyInvite || invite.PartyIndex != 3 {
+		t.Fatalf("bad retry invite: %+v", invite)
+	}
+	if err := handler.handleDestroyResponse(DestroyResponseMessage{
+		SessionKey: "destroy-retry",
+		PartyIndex: 3,
+		CPLC:       "CPLC03",
+		Accept:     true,
+	}, clients["u3"]); err != nil {
+		t.Fatalf("retry response failed: %v", err)
+	}
+	params := readMessage[DestroyParamsMessage](t, clients["u3"])
+	if params.Type != MsgDestroyParams || params.PartyIndex != 3 {
+		t.Fatalf("bad retry params: %+v", params)
+	}
+	if err := handler.handleDestroyResult(DestroyResultMessage{
+		SessionKey: "destroy-retry",
+		PartyIndex: 3,
+		Success:    true,
+	}, clients["u3"]); err != nil {
+		t.Fatalf("retry result failed: %v", err)
+	}
+	key, err = offlineKeyStore.GetOfflineKeyByID("offline-key-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if key.Status != model.OfflineKeyStatusDestroyed {
+		t.Fatalf("offline key should be destroyed after retry, got %s", key.Status)
+	}
+	complete := readMessage[DestroyCompleteMessage](t, admin)
+	if complete.Type != MsgDestroyComplete || !complete.Success || complete.Destroyed != 1 {
+		t.Fatalf("bad retry complete message: %+v", complete)
+	}
+}
+
 func TestTransferProtocolRequiresBothSidesBeforeMovingShard(t *testing.T) {
 	shareStore := newFakeShareStorage()
 	shareStore.shards[shardKey("u1", testAddress)] = model.KeyShard{

@@ -19,6 +19,8 @@
                     <el-select v-model="filters.status" clearable placeholder="状态">
                         <el-option label="active" value="active"></el-option>
                         <el-option label="transferred" value="transferred"></el-option>
+                        <el-option label="destroying" value="destroying"></el-option>
+                        <el-option label="destroy_failed" value="destroy_failed"></el-option>
                         <el-option label="destroyed" value="destroyed"></el-option>
                     </el-select>
                 </el-form-item>
@@ -52,7 +54,7 @@
                                     v-if="isAdmin"
                                     type="danger"
                                     size="mini"
-                                    :disabled="scope.row.status !== 'active'"
+                                    :disabled="!canDestroyKey(scope.row)"
                                     @click="destroyKey(scope.row)">
                                     销毁
                                 </el-button>
@@ -260,6 +262,10 @@ export default {
         },
 
         async transferSelectedShard() {
+            if (!this.isAdmin) {
+                this.$message.error('只有管理员可以发起私钥分片移交')
+                return
+            }
             if (!this.transferShard || !this.transferForm.toUsername) {
                 this.$message.warning('请选择接收警员')
                 return
@@ -286,6 +292,10 @@ export default {
         },
 
         async destroyKey(key) {
+            if (!this.isAdmin) {
+                this.$message.error('只有管理员可以发起私钥销毁')
+                return
+            }
             try {
                 await this.$confirm('确认发起该地址的私钥销毁流程？参与警员仍需在各自客户端确认。', '私钥销毁确认', { type: 'warning' })
             } catch {
@@ -323,7 +333,12 @@ export default {
         statusTag(status) {
             if (status === 'active') return 'success'
             if (status === 'destroyed') return 'danger'
+            if (status === 'destroy_failed') return 'danger'
             return 'warning'
+        },
+
+        canDestroyKey(key) {
+            return key && (key.status === 'active' || key.status === 'destroy_failed')
         },
 
         apiError(error, fallback) {

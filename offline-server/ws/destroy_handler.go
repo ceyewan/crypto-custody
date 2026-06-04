@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"sync"
 	"time"
 
 	"offline-server/storage"
@@ -19,6 +20,7 @@ type DestroyHandler struct {
 	auditStorage      storage.IAuditStorage
 	approvalStore     storage.IApprovalStorage
 	sessionManager    *mem_storage.SessionManager
+	destroyMu         sync.Mutex
 }
 
 // NewDestroyHandler 创建密钥销毁消息处理器。
@@ -71,11 +73,14 @@ func (h *DestroyHandler) handleDestroyRequest(msg DestroyRequestMessage, sender 
 		return h.failSender(sender, "密钥销毁参数无效", "session_key 以及 offline_key_id/address 不能为空")
 	}
 
+	h.destroyMu.Lock()
+	defer h.destroyMu.Unlock()
+
 	key, err := h.loadDestroyKey(msg)
 	if err != nil {
 		return h.failSender(sender, "离线密钥不存在", err.Error())
 	}
-	if key.Status != model.OfflineKeyStatusActive {
+	if !isDestroyRequestStatus(key.Status) {
 		return h.failSender(sender, "离线密钥不可销毁", string(key.Status))
 	}
 
@@ -83,9 +88,18 @@ func (h *DestroyHandler) handleDestroyRequest(msg DestroyRequestMessage, sender 
 	if err != nil {
 		return h.failSender(sender, "查询密钥分片失败", err.Error())
 	}
+	if len(activeShards) == 0 {
+		if err := h.offlineKeyStorage.UpdateOfflineKeyStatus(key.OfflineKeyID, model.OfflineKeyStatusDestroyed); err != nil {
+			return h.failSender(sender, "更新离线密钥销毁状态失败", err.Error())
+		}
+		return h.failSender(sender, "没有剩余可销毁分片", "离线密钥已标记为 destroyed")
+	}
 	shards, err := selectDestroyShards(activeShards, msg.Participants)
 	if err != nil {
 		return h.failSender(sender, "密钥销毁参与者无效", err.Error())
+	}
+	if err := h.offlineKeyStorage.UpdateOfflineKeyStatus(key.OfflineKeyID, model.OfflineKeyStatusDestroying); err != nil {
+		return h.failSender(sender, "更新离线密钥销毁状态失败", err.Error())
 	}
 
 	participants := make(model.StringSlice, 0, len(shards))
@@ -105,6 +119,7 @@ func (h *DestroyHandler) handleDestroyRequest(msg DestroyRequestMessage, sender 
 		Reason:       msg.Reason,
 	})
 	if err != nil {
+		_ = h.offlineKeyStorage.UpdateOfflineKeyStatus(key.OfflineKeyID, model.OfflineKeyStatusDestroyFailed)
 		return h.failSender(sender, "创建密钥销毁会话失败", err.Error())
 	}
 	h.audit(sender, "destroy_session_create", "offline_key", key.OfflineKeyID, "success", "")
@@ -150,6 +165,9 @@ func (h *DestroyHandler) handleDestroyResponse(msg DestroyResponseMessage, sende
 	session := h.sessionManager.GetDestroySession(msg.SessionKey)
 	if session == nil {
 		return fmt.Errorf("找不到密钥销毁会话: %s", msg.SessionKey)
+	}
+	if session.Status == model.StatusCompleted {
+		return nil
 	}
 	idx := indexOfParticipant(session.Participants, sender.GetUserName())
 	if idx < 0 {
@@ -214,6 +232,9 @@ func (h *DestroyHandler) handleDestroyResult(msg DestroyResultMessage, sender *C
 	if session == nil {
 		return fmt.Errorf("找不到密钥销毁会话: %s", msg.SessionKey)
 	}
+	if session.Status == model.StatusCompleted {
+		return nil
+	}
 	idx := indexOfParticipant(session.Participants, sender.GetUserName())
 	if idx < 0 {
 		return fmt.Errorf("参与者不属于销毁会话: %s", sender.GetUserName())
@@ -223,6 +244,9 @@ func (h *DestroyHandler) handleDestroyResult(msg DestroyResultMessage, sender *C
 		return fmt.Errorf("party_index 不匹配: expected=%d actual=%d", shard.ShardIndex, msg.PartyIndex)
 	}
 	if !msg.Success {
+		if session.Responses[idx] == string(model.ParticipantCompleted) {
+			return nil
+		}
 		session.Responses[idx] = string(model.ParticipantFailed)
 		h.markDestroyFailed(msg.SessionKey)
 		h.recordApproval(session, sender.GetUserName(), model.ApprovalRejected)
@@ -230,6 +254,9 @@ func (h *DestroyHandler) handleDestroyResult(msg DestroyResultMessage, sender *C
 		return nil
 	}
 
+	if session.Responses[idx] == string(model.ParticipantCompleted) {
+		return h.completeDestroyIfNoActiveShards(session, sender)
+	}
 	session.Responses[idx] = string(model.ParticipantCompleted)
 	if err := h.shareStorage.UpdateKeyShardStatus(shard.ShardID, model.KeyShardStatusDestroyed); err != nil {
 		h.markDestroyFailed(msg.SessionKey)
@@ -237,11 +264,28 @@ func (h *DestroyHandler) handleDestroyResult(msg DestroyResultMessage, sender *C
 	}
 
 	if !allResponses(session.Responses, model.ParticipantCompleted) {
+		return h.completeDestroyIfNoActiveShards(session, sender)
+	}
+
+	return h.completeDestroyIfNoActiveShards(session, sender)
+}
+
+func (h *DestroyHandler) completeDestroyIfNoActiveShards(session *mem_storage.DestroySession, sender *Client) error {
+	activeShards, err := h.shareStorage.ListActiveKeyShardsByAddress(session.Address)
+	if err != nil {
+		h.markDestroyFailed(session.SessionKey)
+		return fmt.Errorf("查询剩余可用分片失败: %w", err)
+	}
+	if len(activeShards) > 0 {
+		if allResponses(session.Responses, model.ParticipantCompleted) {
+			h.markDestroyFailed(session.SessionKey)
+			h.notifySessionFailure(session, sender, "密钥销毁未完成", fmt.Sprintf("remaining_active_shards=%d", len(activeShards)))
+		}
 		return nil
 	}
 
 	if err := h.offlineKeyStorage.UpdateOfflineKeyStatus(session.OfflineKeyID, model.OfflineKeyStatusDestroyed); err != nil {
-		h.markDestroyFailed(msg.SessionKey)
+		h.markDestroyFailed(session.SessionKey)
 		return fmt.Errorf("更新离线密钥销毁状态失败: %w", err)
 	}
 	session.Status = model.StatusCompleted
@@ -309,6 +353,10 @@ func selectDestroyShards(activeShards []model.KeyShard, participants []string) (
 	return shards, nil
 }
 
+func isDestroyRequestStatus(status model.OfflineKeyStatus) bool {
+	return status == model.OfflineKeyStatusActive || status == model.OfflineKeyStatusDestroyFailed
+}
+
 func (h *DestroyHandler) notifySessionFailure(session *mem_storage.DestroySession, sender *Client, message string, details string) {
 	session.Status = model.StatusFailed
 	failureMsg := ErrorMessage{BaseMessage: BaseMessage{Type: MsgError}, Message: message, Details: details}
@@ -325,6 +373,9 @@ func (h *DestroyHandler) failSender(sender *Client, message, details string) err
 func (h *DestroyHandler) markDestroyFailed(sessionKey string) {
 	if session := h.sessionManager.GetDestroySession(sessionKey); session != nil {
 		session.Status = model.StatusFailed
+		if session.OfflineKeyID != "" {
+			_ = h.offlineKeyStorage.UpdateOfflineKeyStatus(session.OfflineKeyID, model.OfflineKeyStatusDestroyFailed)
+		}
 	}
 }
 

@@ -6,9 +6,11 @@ import "gorm.io/gorm"
 type OfflineKeyStatus string
 
 const (
-	OfflineKeyStatusActive      OfflineKeyStatus = "active"
-	OfflineKeyStatusTransferred OfflineKeyStatus = "transferred"
-	OfflineKeyStatusDestroyed   OfflineKeyStatus = "destroyed"
+	OfflineKeyStatusActive        OfflineKeyStatus = "active"
+	OfflineKeyStatusTransferred   OfflineKeyStatus = "transferred"
+	OfflineKeyStatusDestroying    OfflineKeyStatus = "destroying"
+	OfflineKeyStatusDestroyFailed OfflineKeyStatus = "destroy_failed"
+	OfflineKeyStatusDestroyed     OfflineKeyStatus = "destroyed"
 )
 
 // Algorithm 表示离线密钥算法。

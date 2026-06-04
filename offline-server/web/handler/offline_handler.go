@@ -564,7 +564,7 @@ func DestroyOfflineKey(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "离线密钥不存在"})
 		return
 	}
-	if key.Status != model.OfflineKeyStatusActive {
+	if !isDestroyableOfflineKeyStatus(key.Status) {
 		c.JSON(http.StatusConflict, gin.H{"error": "离线密钥当前状态不可销毁"})
 		return
 	}
@@ -594,6 +594,10 @@ func DestroyOfflineKey(c *gin.Context) {
 			"reason":         req.Reason,
 		},
 	})
+}
+
+func isDestroyableOfflineKeyStatus(status model.OfflineKeyStatus) bool {
+	return status == model.OfflineKeyStatusActive || status == model.OfflineKeyStatusDestroyFailed
 }
 
 // ListAuditLogs 查询脱敏审计日志。

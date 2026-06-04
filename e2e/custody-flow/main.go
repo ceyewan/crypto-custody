@@ -113,6 +113,14 @@ type signOutcome struct {
 	Signature    string `json:"signature"`
 }
 
+type keyShardRecord struct {
+	ShardID    string `json:"shard_id"`
+	Username   string `json:"username"`
+	ShardIndex int    `json:"shard_index"`
+	RecordID   string `json:"record_id"`
+	Status     string `json:"status"`
+}
+
 type standardResponse struct {
 	Code    int             `json:"code"`
 	Message string          `json:"message"`
@@ -216,8 +224,15 @@ func run(opts options) error {
 	if err != nil {
 		return err
 	}
+	targetDestroyed := false
 	if opts.cleanupSE {
-		defer cleanupWalletShares(f.clients[participants[0]].security, source, target)
+		defer func() {
+			wallets := []wallet{source}
+			if !targetDestroyed {
+				wallets = append(wallets, target)
+			}
+			cleanupWalletShares(f.clients[participants[0]].security, wallets...)
+		}()
 	}
 
 	if !opts.skipFund {
@@ -272,6 +287,15 @@ func run(opts options) error {
 	if err != nil {
 		return err
 	}
+	transferReport, err := f.runShardTransfer("32_shard_transfer_offline.json", source, f.participants[0], f.opts.offlineAdmin)
+	if err != nil {
+		return err
+	}
+	destroyReport, err := f.runKeyDestroy("33_key_destroy_offline.json", target)
+	if err != nil {
+		return err
+	}
+	targetDestroyed = true
 
 	summary := map[string]any{
 		"source_wallet":    source,
@@ -281,6 +305,8 @@ func run(opts options) error {
 		"source_balance":   sourceBalance,
 		"target_balance":   targetBalance,
 		"chain_balances":   chainBalances,
+		"shard_transfer":   transferReport,
+		"key_destroy":      destroyReport,
 		"output_directory": outDir,
 		"completed_at":     time.Now().Format(time.RFC3339),
 	}
@@ -907,6 +933,283 @@ func (f *flow) runSign(fileName, taskNo string) (string, error) {
 	}
 	fmt.Printf("[OK] sign completed: %s\n", shortHex(complete.Signature))
 	return complete.Signature, nil
+}
+
+func (f *flow) runShardTransfer(fileName string, item wallet, fromUsername, toUsername string) (map[string]any, error) {
+	before, err := f.listOfflineShards(item.Address, fromUsername, "active")
+	if err != nil {
+		return nil, err
+	}
+	if len(before) != 1 {
+		return nil, fmt.Errorf("expected one active shard for %s at %s, got %d", fromUsername, item.Address, len(before))
+	}
+	shard := before[0]
+	raw, err := f.offlineAdmin.postRaw("/offline/shards/"+url.PathEscape(shard.ShardID)+"/transfer", map[string]any{
+		"to_username": toUsername,
+		"reason":      "E2E shard transfer",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("build shard transfer request: %w", err)
+	}
+	var response struct {
+		Message map[string]any `json:"message"`
+	}
+	if err := json.Unmarshal(raw, &response); err != nil {
+		return nil, err
+	}
+	if err := f.coordinator.send(response.Message); err != nil {
+		return nil, err
+	}
+
+	fromInvite, err := readWS[serverws.TransferInviteMessage](f.clients[fromUsername], 15*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	if fromInvite.Type != serverws.MsgTransferInvite || fromInvite.ShardID != shard.ShardID || fromInvite.ToUsername != toUsername {
+		return nil, fmt.Errorf("bad transfer invite for %s: %+v", fromUsername, fromInvite)
+	}
+	toInvite, err := readWS[serverws.TransferInviteMessage](f.coordinator, 15*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	if toInvite.Type != serverws.MsgTransferInvite || toInvite.ShardID != shard.ShardID || toInvite.FromUsername != fromUsername {
+		return nil, fmt.Errorf("bad transfer invite for %s: %+v", toUsername, toInvite)
+	}
+
+	if err := f.clients[fromUsername].send(serverws.TransferResponseMessage{
+		BaseMessage: serverws.BaseMessage{Type: serverws.MsgTransferResponse},
+		SessionKey:  fromInvite.SessionKey,
+		ShardID:     shard.ShardID,
+		Accept:      true,
+	}); err != nil {
+		return nil, err
+	}
+	if err := f.coordinator.send(serverws.TransferResponseMessage{
+		BaseMessage: serverws.BaseMessage{Type: serverws.MsgTransferResponse},
+		SessionKey:  toInvite.SessionKey,
+		ShardID:     shard.ShardID,
+		Accept:      true,
+	}); err != nil {
+		return nil, err
+	}
+
+	fromComplete, err := readWS[serverws.TransferCompleteMessage](f.clients[fromUsername], 15*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	adminComplete1, err := readWS[serverws.TransferCompleteMessage](f.coordinator, 15*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	adminComplete2, err := readWS[serverws.TransferCompleteMessage](f.coordinator, 15*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	adminCompletes := []serverws.TransferCompleteMessage{adminComplete1, adminComplete2}
+	for _, complete := range append([]serverws.TransferCompleteMessage{fromComplete}, adminCompletes...) {
+		if complete.Type != serverws.MsgTransferComplete || !complete.Success || complete.ShardID != shard.ShardID {
+			return nil, fmt.Errorf("bad transfer complete: %+v", complete)
+		}
+	}
+
+	oldHolderShards, err := f.listOfflineShards(item.Address, fromUsername, "active")
+	if err != nil {
+		return nil, err
+	}
+	newHolderShards, err := f.listOfflineShards(item.Address, toUsername, "active")
+	if err != nil {
+		return nil, err
+	}
+	if len(oldHolderShards) != 0 {
+		return nil, fmt.Errorf("expected no active shard for old holder %s, got %d", fromUsername, len(oldHolderShards))
+	}
+	if len(newHolderShards) != 1 || newHolderShards[0].ShardID != shard.ShardID {
+		return nil, fmt.Errorf("expected shard %s to belong to %s, got %+v", shard.ShardID, toUsername, newHolderShards)
+	}
+
+	report := map[string]any{
+		"address":         item.Address,
+		"offline_key_id":  item.OfflineKey,
+		"shard_id":        shard.ShardID,
+		"shard_index":     shard.ShardIndex,
+		"from_username":   fromUsername,
+		"to_username":     toUsername,
+		"from_complete":   fromComplete,
+		"admin_complete":  adminCompletes,
+		"new_holder_view": newHolderShards,
+	}
+	if err := writeJSON(filepath.Join(f.outDir, fileName), report); err != nil {
+		return nil, err
+	}
+	fmt.Printf("[OK] shard transferred: %s %s -> %s\n", shard.ShardID, fromUsername, toUsername)
+	return report, nil
+}
+
+func (f *flow) runKeyDestroy(fileName string, item wallet) (map[string]any, error) {
+	raw, err := f.offlineAdmin.postRaw("/offline/keys/"+url.PathEscape(item.OfflineKey)+"/destroy", map[string]any{
+		"reason": "E2E key destroy",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("build key destroy request: %w", err)
+	}
+	var response struct {
+		Message map[string]any `json:"message"`
+	}
+	if err := json.Unmarshal(raw, &response); err != nil {
+		return nil, err
+	}
+	if err := f.coordinator.send(response.Message); err != nil {
+		return nil, err
+	}
+
+	invites := map[string]serverws.DestroyInviteMessage{}
+	for _, username := range f.participants {
+		invite, err := readWS[serverws.DestroyInviteMessage](f.clients[username], 15*time.Second)
+		if err != nil {
+			return nil, err
+		}
+		if invite.Type != serverws.MsgDestroyInvite || !strings.EqualFold(invite.Address, item.Address) {
+			return nil, fmt.Errorf("bad destroy invite for %s: %+v", username, invite)
+		}
+		invites[username] = invite
+	}
+	for _, username := range f.participants {
+		invite := invites[username]
+		if err := f.clients[username].send(serverws.DestroyResponseMessage{
+			BaseMessage: serverws.BaseMessage{Type: serverws.MsgDestroyResponse},
+			SessionKey:  invite.SessionKey,
+			PartyIndex:  invite.PartyIndex,
+			CPLC:        f.clients[username].cplc,
+			Accept:      true,
+		}); err != nil {
+			return nil, err
+		}
+	}
+
+	params := map[string]serverws.DestroyParamsMessage{}
+	for _, username := range f.participants {
+		msg, err := readWS[serverws.DestroyParamsMessage](f.clients[username], 15*time.Second)
+		if err != nil {
+			return nil, err
+		}
+		if msg.Type != serverws.MsgDestroyParams || !strings.EqualFold(msg.Address, item.Address) || msg.RecordID == "" || msg.Signature == "" {
+			return nil, fmt.Errorf("bad destroy params for %s: %+v", username, msg)
+		}
+		params[username] = msg
+	}
+
+	deleted := []map[string]any{}
+	for _, username := range f.participants {
+		msg := params[username]
+		signature, err := base64.StdEncoding.DecodeString(msg.Signature)
+		if err != nil {
+			return nil, fmt.Errorf("decode destroy signature for %s: %w", username, err)
+		}
+		if err := f.clients[username].security.DeleteData(msg.RecordID, msg.Address, signature); err != nil {
+			return nil, fmt.Errorf("delete SE record for %s: %w", username, err)
+		}
+		if _, err := f.clients[username].security.ReadData(msg.RecordID, msg.Address, signature); err == nil {
+			return nil, fmt.Errorf("SE record for %s remained readable after delete", username)
+		}
+		if err := f.clients[username].send(serverws.DestroyResultMessage{
+			BaseMessage: serverws.BaseMessage{Type: serverws.MsgDestroyResult},
+			SessionKey:  msg.SessionKey,
+			PartyIndex:  msg.PartyIndex,
+			Success:     true,
+			Message:     "deleted and read-back rejected",
+		}); err != nil {
+			return nil, err
+		}
+		deleted = append(deleted, map[string]any{
+			"username":    username,
+			"party_index": msg.PartyIndex,
+			"record_id":   msg.RecordID,
+		})
+		time.Sleep(250 * time.Millisecond)
+	}
+
+	complete, err := readWS[serverws.DestroyCompleteMessage](f.coordinator, 30*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	if complete.Type != serverws.MsgDestroyComplete || !complete.Success || complete.Destroyed != len(f.participants) {
+		return nil, fmt.Errorf("bad destroy complete: %+v", complete)
+	}
+	keySnapshot, err := f.offlineKeySnapshot(item.OfflineKey)
+	if err != nil {
+		return nil, err
+	}
+	if status, _ := keySnapshot["status"].(string); status != "destroyed" {
+		return nil, fmt.Errorf("offline key status after destroy = %s", status)
+	}
+	activeShards, err := f.listOfflineShards(item.Address, "", "active")
+	if err != nil {
+		return nil, err
+	}
+	if len(activeShards) != 0 {
+		return nil, fmt.Errorf("expected no active shards after destroy, got %d", len(activeShards))
+	}
+
+	report := map[string]any{
+		"address":        item.Address,
+		"offline_key_id": item.OfflineKey,
+		"deleted":        deleted,
+		"complete":       complete,
+		"key_snapshot":   keySnapshot,
+	}
+	if err := writeJSON(filepath.Join(f.outDir, fileName), report); err != nil {
+		return nil, err
+	}
+	fmt.Printf("[OK] key destroyed: %s\n", item.OfflineKey)
+	return report, nil
+}
+
+func (f *flow) listOfflineShards(address, username, status string) ([]keyShardRecord, error) {
+	query := url.Values{}
+	if address != "" {
+		query.Set("address", address)
+	}
+	if username != "" {
+		query.Set("username", username)
+	}
+	if status != "" {
+		query.Set("status", status)
+	}
+	path := "/offline/shards"
+	if encoded := query.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+	raw, err := f.offlineAdmin.getRaw(path)
+	if err != nil {
+		return nil, fmt.Errorf("list offline shards: %w", err)
+	}
+	var response struct {
+		Shards []keyShardRecord `json:"shards"`
+	}
+	if err := json.Unmarshal(raw, &response); err != nil {
+		return nil, err
+	}
+	sort.Slice(response.Shards, func(i, j int) bool {
+		return response.Shards[i].ShardIndex < response.Shards[j].ShardIndex
+	})
+	return response.Shards, nil
+}
+
+func (f *flow) offlineKeySnapshot(offlineKeyID string) (map[string]any, error) {
+	raw, err := f.offlineAdmin.getRaw("/offline/keys/" + url.PathEscape(offlineKeyID))
+	if err != nil {
+		return nil, fmt.Errorf("get offline key %s: %w", offlineKeyID, err)
+	}
+	var response struct {
+		Key map[string]any `json:"key"`
+	}
+	if err := json.Unmarshal(raw, &response); err != nil {
+		return nil, err
+	}
+	if len(response.Key) == 0 {
+		return nil, fmt.Errorf("offline key %s response did not include key", offlineKeyID)
+	}
+	return response.Key, nil
 }
 
 func (f *flow) verifySignature(fileName string, result map[string]any) error {
