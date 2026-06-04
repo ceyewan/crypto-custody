@@ -70,6 +70,12 @@ type IShareStorage interface {
 	// UpdateKeyShardStatus 更新分片状态
 	UpdateKeyShardStatus(shardID string, status model.KeyShardStatus) error
 
+	// UpdateKeyShardsStatusByOfflineKey 批量更新指定离线密钥下特定状态的分片
+	UpdateKeyShardsStatusByOfflineKey(offlineKeyID string, from, to model.KeyShardStatus) error
+
+	// CreateOfflineKeyAndActivatePendingShards 创建离线密钥元数据并原子激活待提交分片
+	CreateOfflineKeyAndActivatePendingShards(key model.OfflineKey, expectedShardCount int) (*model.OfflineKey, error)
+
 	// TransferKeyShard 调整单个分片持有人，不改变 SE CPLC、record_id 或密文
 	TransferKeyShard(shardID, newUsername string) (*model.KeyShard, error)
 }

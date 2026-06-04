@@ -124,14 +124,19 @@ func TestKeyGenProtocolUsesServerOwnedManagerAndRecordIDs(t *testing.T) {
 			t.Fatalf("bad shard[%d]: %+v", i, shard)
 		}
 	}
-	if offlineKeyStore.created == nil {
+	if shareStore.activatedKey == nil {
 		t.Fatal("offline key metadata was not created")
 	}
-	if offlineKeyStore.created.RequiredSigners != 2 || offlineKeyStore.created.TotalParties != 3 {
-		t.Fatalf("bad offline key metadata: %+v", offlineKeyStore.created)
+	if shareStore.activatedKey.RequiredSigners != 2 || shareStore.activatedKey.TotalParties != 3 {
+		t.Fatalf("bad offline key metadata: %+v", shareStore.activatedKey)
 	}
-	if offlineKeyStore.created.CoinType != "ETH" {
-		t.Fatalf("offline key coin_type = %q", offlineKeyStore.created.CoinType)
+	if shareStore.activatedKey.CoinType != "ETH" {
+		t.Fatalf("offline key coin_type = %q", shareStore.activatedKey.CoinType)
+	}
+	for _, shard := range shareStore.shards {
+		if shard.Status != model.KeyShardStatusActive {
+			t.Fatalf("keygen shard should be active after final commit: %+v", shard)
+		}
 	}
 	if !reflect.DeepEqual(runtime.stops, []string{"kg-session"}) {
 		t.Fatalf("manager stops = %v", runtime.stops)
@@ -140,6 +145,95 @@ func TestKeyGenProtocolUsesServerOwnedManagerAndRecordIDs(t *testing.T) {
 	complete := readMessage[KeyGenCompleteMessage](t, coordinator)
 	if complete.Type != MsgKeyGenComplete || !complete.Success || complete.Address != testAddress {
 		t.Fatalf("bad completion message: %+v", complete)
+	}
+}
+
+func TestKeyGenFailureMarksPendingShardsFailed(t *testing.T) {
+	participants := []string{"u1", "u2", "u3"}
+	seStore := newFakeSeStorage()
+	for i := range participants {
+		seStore.add(model.Se{
+			SeID:   "SE0" + string(rune('1'+i)),
+			CPLC:   "CPLC0" + string(rune('1'+i)),
+			Status: model.SeStatusActive,
+		})
+	}
+
+	shareStore := newFakeShareStorage()
+	offlineKeyStore := newFakeOfflineKeyStorage()
+	keyGenStore := newFakeKeyGenStorage()
+	runtime := newFakeManagerRuntime()
+	sessionManager := mem_storage.NewSessionManager()
+	handler := NewKeyGenHandler(shareStore, seStore, offlineKeyStore, keyGenStore, fakeAuditStorage{}, sessionManager, runtime)
+
+	hub := newTestHub()
+	coordinator := addTestClient(hub, "coordinator", RoleAdmin)
+	clients := map[string]*Client{}
+	for _, participant := range participants {
+		clients[participant] = addTestClient(hub, participant, RoleOfficer)
+	}
+
+	if err := handler.handleKeyGenRequest(KeyGenRequestMessage{
+		SessionKey:      "kg-failed",
+		OfflineKeyID:    "offline-key-failed",
+		CoinType:        "ETH",
+		RequiredSigners: 2,
+		TotalParties:    3,
+		Participants:    participants,
+	}, coordinator); err != nil {
+		t.Fatalf("handleKeyGenRequest failed: %v", err)
+	}
+	for _, participant := range participants {
+		_ = readMessage[KeyGenInviteMessage](t, clients[participant])
+	}
+	for i, participant := range participants {
+		if err := handler.handleKeyGenResponse(KeyGenResponseMessage{
+			SessionKey: "kg-failed",
+			PartyIndex: i + 1,
+			CPLC:       "CPLC0" + string(rune('1'+i)),
+			Accept:     true,
+		}, clients[participant]); err != nil {
+			t.Fatalf("handleKeyGenResponse(%s) failed: %v", participant, err)
+		}
+	}
+	for _, participant := range participants {
+		_ = readMessage[KeyGenParamsMessage](t, clients[participant])
+	}
+
+	for i, participant := range []string{"u1", "u2"} {
+		if err := handler.handleKeyGenResult(KeyGenResultMessage{
+			SessionKey:     "kg-failed",
+			PartyIndex:     i + 1,
+			Address:        testAddress,
+			PublicKey:      "public-key",
+			CPLC:           "CPLC0" + string(rune('1'+i)),
+			RecordID:       deriveRecordID("offline-key-failed", i+1, 1),
+			EncryptedShard: "encrypted-share-" + participant,
+			Success:        true,
+			Message:        "ok",
+		}, clients[participant]); err != nil {
+			t.Fatalf("handleKeyGenResult(%s) failed: %v", participant, err)
+		}
+	}
+	if err := handler.handleKeyGenResult(KeyGenResultMessage{
+		SessionKey: "kg-failed",
+		PartyIndex: 3,
+		Success:    false,
+		Message:    "se store failed",
+	}, clients["u3"]); err != nil {
+		t.Fatalf("failed keygen result should be accepted: %v", err)
+	}
+
+	if shareStore.activatedKey != nil {
+		t.Fatalf("offline key should not be created on failed keygen: %+v", shareStore.activatedKey)
+	}
+	for _, shard := range shareStore.shards {
+		if shard.Status != model.KeyShardStatusFailed {
+			t.Fatalf("pending shard should be marked failed: %+v", shard)
+		}
+	}
+	if _, err := shareStore.GetKeyShardForParticipant("u1", testAddress); err == nil {
+		t.Fatal("failed keygen shard must not be available for signing")
 	}
 }
 
@@ -803,13 +897,19 @@ func (f *fakeManagerRuntime) StopAll() error {
 }
 
 type fakeShareStorage struct {
-	mu      sync.RWMutex
-	shards  map[string]model.KeyShard
-	created []model.KeyShard
+	mu           sync.RWMutex
+	shards       map[string]model.KeyShard
+	created      []model.KeyShard
+	activatedKey *model.OfflineKey
+	offlineKeys  *fakeOfflineKeyStorage
 }
 
 func newFakeShareStorage() *fakeShareStorage {
 	return &fakeShareStorage{shards: make(map[string]model.KeyShard)}
+}
+
+func (f *fakeShareStorage) attachOfflineKeyStorage(offlineKeys *fakeOfflineKeyStorage) {
+	f.offlineKeys = offlineKeys
 }
 
 func (f *fakeShareStorage) CreateKeyShard(shard model.KeyShard) (*model.KeyShard, error) {
@@ -898,6 +998,45 @@ func (f *fakeShareStorage) UpdateKeyShardStatus(shardID string, status model.Key
 		}
 	}
 	return storage.ErrRecordNotFound
+}
+
+func (f *fakeShareStorage) UpdateKeyShardsStatusByOfflineKey(offlineKeyID string, from, to model.KeyShardStatus) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for key, shard := range f.shards {
+		if shard.OfflineKeyID == offlineKeyID && shard.Status == from {
+			shard.Status = to
+			f.shards[key] = shard
+		}
+	}
+	return nil
+}
+
+func (f *fakeShareStorage) CreateOfflineKeyAndActivatePendingShards(key model.OfflineKey, expectedShardCount int) (*model.OfflineKey, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	count := 0
+	for _, shard := range f.shards {
+		if shard.OfflineKeyID == key.OfflineKeyID && shard.Address == key.Address && shard.Status == model.KeyShardStatusPending {
+			count++
+		}
+	}
+	if count != expectedShardCount {
+		return nil, storage.ErrOperationFailed
+	}
+	for mapKey, shard := range f.shards {
+		if shard.OfflineKeyID == key.OfflineKeyID && shard.Address == key.Address && shard.Status == model.KeyShardStatusPending {
+			shard.Status = model.KeyShardStatusActive
+			f.shards[mapKey] = shard
+		}
+	}
+	f.activatedKey = &key
+	if f.offlineKeys != nil {
+		if _, err := f.offlineKeys.CreateOfflineKey(key); err != nil {
+			return nil, err
+		}
+	}
+	return &key, nil
 }
 
 func (f *fakeShareStorage) TransferKeyShard(shardID, newUsername string) (*model.KeyShard, error) {

@@ -84,7 +84,7 @@ func (h *DestroyHandler) handleDestroyRequest(msg DestroyRequestMessage, sender 
 		return h.failSender(sender, "离线密钥不可销毁", string(key.Status))
 	}
 
-	activeShards, err := h.shareStorage.ListActiveKeyShardsByAddress(key.Address)
+	activeShards, err := h.listDestroyableShards(key.Address)
 	if err != nil {
 		return h.failSender(sender, "查询密钥分片失败", err.Error())
 	}
@@ -198,8 +198,16 @@ func (h *DestroyHandler) handleDestroyResponse(msg DestroyResponseMessage, sende
 	}
 
 	for _, shard := range session.Shards {
+		if err := h.shareStorage.UpdateKeyShardStatus(shard.ShardID, model.KeyShardStatusDestroying); err != nil {
+			h.markDestroyFailed(msg.SessionKey)
+			return fmt.Errorf("标记分片销毁中失败: %w", err)
+		}
+	}
+
+	for _, shard := range session.Shards {
 		signature, err := SignData(shard.RecordID, session.Address)
 		if err != nil {
+			h.restoreDestroyingShards(session)
 			h.markDestroyFailed(msg.SessionKey)
 			return fmt.Errorf("生成 SE 删除授权签名失败: %w", err)
 		}
@@ -214,10 +222,12 @@ func (h *DestroyHandler) handleDestroyResponse(msg DestroyResponseMessage, sende
 		}
 		client, exists := sender.Hub().GetClient(shard.Username)
 		if !exists {
+			h.restoreDestroyingShards(session)
 			h.markDestroyFailed(msg.SessionKey)
 			return fmt.Errorf("参与者不在线，无法发送销毁参数: %s", shard.Username)
 		}
 		if err := client.SendMessage(paramsMsg); err != nil {
+			h.restoreDestroyingShards(session)
 			h.markDestroyFailed(msg.SessionKey)
 			return fmt.Errorf("发送销毁参数失败: %w", err)
 		}
@@ -248,6 +258,7 @@ func (h *DestroyHandler) handleDestroyResult(msg DestroyResultMessage, sender *C
 			return nil
 		}
 		session.Responses[idx] = string(model.ParticipantFailed)
+		_ = h.shareStorage.UpdateKeyShardStatus(shard.ShardID, model.KeyShardStatusActive)
 		h.markDestroyFailed(msg.SessionKey)
 		h.recordApproval(session, sender.GetUserName(), model.ApprovalRejected)
 		h.notifySessionFailure(session, sender, fmt.Sprintf("参与方 %s 销毁失败", sender.GetUserName()), msg.Message)
@@ -271,15 +282,21 @@ func (h *DestroyHandler) handleDestroyResult(msg DestroyResultMessage, sender *C
 }
 
 func (h *DestroyHandler) completeDestroyIfNoActiveShards(session *mem_storage.DestroySession, sender *Client) error {
-	activeShards, err := h.shareStorage.ListActiveKeyShardsByAddress(session.Address)
+	shards, err := h.shareStorage.ListKeyShardsByAddress(session.Address)
 	if err != nil {
 		h.markDestroyFailed(session.SessionKey)
-		return fmt.Errorf("查询剩余可用分片失败: %w", err)
+		return fmt.Errorf("查询剩余分片失败: %w", err)
 	}
-	if len(activeShards) > 0 {
+	remaining := 0
+	for _, shard := range shards {
+		if shard.Status == model.KeyShardStatusActive || shard.Status == model.KeyShardStatusDestroying {
+			remaining++
+		}
+	}
+	if remaining > 0 {
 		if allResponses(session.Responses, model.ParticipantCompleted) {
 			h.markDestroyFailed(session.SessionKey)
-			h.notifySessionFailure(session, sender, "密钥销毁未完成", fmt.Sprintf("remaining_active_shards=%d", len(activeShards)))
+			h.notifySessionFailure(session, sender, "密钥销毁未完成", fmt.Sprintf("remaining_live_shards=%d", remaining))
 		}
 		return nil
 	}
@@ -319,6 +336,29 @@ func (h *DestroyHandler) loadDestroyKey(msg DestroyRequestMessage) (*model.Offli
 		return key, nil
 	}
 	return h.offlineKeyStorage.GetOfflineKeyByAddress(msg.Address)
+}
+
+func (h *DestroyHandler) listDestroyableShards(address string) ([]model.KeyShard, error) {
+	shards, err := h.shareStorage.ListKeyShardsByAddress(address)
+	if err != nil {
+		return nil, err
+	}
+	var out []model.KeyShard
+	for _, shard := range shards {
+		if shard.Status == model.KeyShardStatusActive || shard.Status == model.KeyShardStatusDestroying {
+			out = append(out, shard)
+		}
+	}
+	return out, nil
+}
+
+func (h *DestroyHandler) restoreDestroyingShards(session *mem_storage.DestroySession) {
+	if session == nil {
+		return
+	}
+	for _, shard := range session.Shards {
+		_ = h.shareStorage.UpdateKeyShardStatus(shard.ShardID, model.KeyShardStatusActive)
+	}
 }
 
 func selectDestroyShards(activeShards []model.KeyShard, participants []string) ([]model.KeyShard, error) {

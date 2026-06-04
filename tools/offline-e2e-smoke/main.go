@@ -253,10 +253,12 @@ func startServer(opts smokeOptions, cplc string) (*serverws.Server, string, *mem
 		GracefulTimeout: 5 * time.Second,
 		Environment:     os.Environ(),
 	})
+	offlineKeyStore := newMemoryOfflineKeyStorage()
+	shareStore.attachOfflineKeyStorage(offlineKeyStore)
 	handler := serverws.NewMessageHandlerWithDependencies(
 		shareStore,
 		seStore,
-		newMemoryOfflineKeyStorage(),
+		offlineKeyStore,
 		newMemoryKeyGenStorage(),
 		newMemorySignStorage(),
 		memoryAuditStorage{},

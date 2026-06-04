@@ -43,7 +43,7 @@ func (s *ShareStorage) CreateKeyShard(shard model.KeyShard) (*model.KeyShard, er
 		shard.KeyVersion = 1
 	}
 	if shard.Status == "" {
-		shard.Status = model.KeyShardStatusActive
+		shard.Status = model.KeyShardStatusPending
 	}
 
 	s.mu.Lock()
@@ -236,6 +236,77 @@ func (s *ShareStorage) UpdateKeyShardStatus(shardID string, status model.KeyShar
 		return ErrRecordNotFound
 	}
 	return nil
+}
+
+// UpdateKeyShardsStatusByOfflineKey 批量更新指定离线密钥下特定状态的分片。
+func (s *ShareStorage) UpdateKeyShardsStatusByOfflineKey(offlineKeyID string, from, to model.KeyShardStatus) error {
+	if offlineKeyID == "" || from == "" || to == "" {
+		return ErrInvalidParameter
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	database := db.GetDB()
+	if database == nil {
+		return ErrDatabaseNotInitialized
+	}
+
+	result := database.Model(&model.KeyShard{}).
+		Where("offline_key_id = ? AND status = ?", offlineKeyID, from).
+		Update("status", to)
+	if result.Error != nil {
+		log.Printf("批量更新分片状态失败: %v", result.Error)
+		return ErrOperationFailed
+	}
+	return nil
+}
+
+// CreateOfflineKeyAndActivatePendingShards 创建离线密钥元数据并原子激活待提交分片。
+func (s *ShareStorage) CreateOfflineKeyAndActivatePendingShards(key model.OfflineKey, expectedShardCount int) (*model.OfflineKey, error) {
+	if key.OfflineKeyID == "" || key.Address == "" || key.CoinType == "" || key.Algorithm == "" || expectedShardCount <= 0 {
+		return nil, ErrInvalidParameter
+	}
+	if key.Status == "" {
+		key.Status = model.OfflineKeyStatusActive
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	database := db.GetDB()
+	if database == nil {
+		return nil, ErrDatabaseNotInitialized
+	}
+
+	if err := database.Transaction(func(tx *gorm.DB) error {
+		var pendingCount int64
+		if err := tx.Model(&model.KeyShard{}).
+			Where("offline_key_id = ? AND address = ? AND status = ?", key.OfflineKeyID, key.Address, model.KeyShardStatusPending).
+			Count(&pendingCount).Error; err != nil {
+			return err
+		}
+		if int(pendingCount) != expectedShardCount {
+			return ErrInvalidParameter
+		}
+		if err := tx.Create(&key).Error; err != nil {
+			return err
+		}
+		result := tx.Model(&model.KeyShard{}).
+			Where("offline_key_id = ? AND address = ? AND status = ?", key.OfflineKeyID, key.Address, model.KeyShardStatusPending).
+			Update("status", model.KeyShardStatusActive)
+		if result.Error != nil {
+			return result.Error
+		}
+		if int(result.RowsAffected) != expectedShardCount {
+			return ErrInvalidParameter
+		}
+		return nil
+	}); err != nil {
+		log.Printf("创建离线密钥并激活分片失败: %v", err)
+		return nil, ErrOperationFailed
+	}
+	return &key, nil
 }
 
 // TransferKeyShard 调整单个分片持有人，不改变安全芯片、record_id 或密文。

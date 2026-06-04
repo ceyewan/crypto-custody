@@ -9,12 +9,17 @@ import (
 )
 
 type memoryShareStorage struct {
-	mu     sync.RWMutex
-	shards map[string]model.KeyShard
+	mu          sync.RWMutex
+	shards      map[string]model.KeyShard
+	offlineKeys *memoryOfflineKeyStorage
 }
 
 func newMemoryShareStorage() *memoryShareStorage {
 	return &memoryShareStorage{shards: make(map[string]model.KeyShard)}
+}
+
+func (s *memoryShareStorage) attachOfflineKeyStorage(offlineKeys *memoryOfflineKeyStorage) {
+	s.offlineKeys = offlineKeys
 }
 
 func (s *memoryShareStorage) CreateKeyShard(shard model.KeyShard) (*model.KeyShard, error) {
@@ -106,6 +111,44 @@ func (s *memoryShareStorage) UpdateKeyShardStatus(shardID string, status model.K
 		}
 	}
 	return storage.ErrRecordNotFound
+}
+
+func (s *memoryShareStorage) UpdateKeyShardsStatusByOfflineKey(offlineKeyID string, from, to model.KeyShardStatus) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for key, shard := range s.shards {
+		if shard.OfflineKeyID == offlineKeyID && shard.Status == from {
+			shard.Status = to
+			s.shards[key] = shard
+		}
+	}
+	return nil
+}
+
+func (s *memoryShareStorage) CreateOfflineKeyAndActivatePendingShards(key model.OfflineKey, expectedShardCount int) (*model.OfflineKey, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	count := 0
+	for _, shard := range s.shards {
+		if shard.OfflineKeyID == key.OfflineKeyID && shard.Address == key.Address && shard.Status == model.KeyShardStatusPending {
+			count++
+		}
+	}
+	if count != expectedShardCount {
+		return nil, storage.ErrOperationFailed
+	}
+	for mapKey, shard := range s.shards {
+		if shard.OfflineKeyID == key.OfflineKeyID && shard.Address == key.Address && shard.Status == model.KeyShardStatusPending {
+			shard.Status = model.KeyShardStatusActive
+			s.shards[mapKey] = shard
+		}
+	}
+	if s.offlineKeys != nil {
+		if _, err := s.offlineKeys.CreateOfflineKey(key); err != nil {
+			return nil, err
+		}
+	}
+	return &key, nil
 }
 
 func (s *memoryShareStorage) TransferKeyShard(shardID, newUsername string) (*model.KeyShard, error) {
@@ -210,6 +253,18 @@ func (s *memorySeStorage) UpdateSeStatus(seID string, status model.SeStatus) err
 	}
 	se.Status = status
 	s.add(se)
+	return nil
+}
+
+func (s *memorySeStorage) DeleteSe(seID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	se, ok := s.byID[seID]
+	if !ok {
+		return storage.ErrRecordNotFound
+	}
+	delete(s.byID, seID)
+	delete(s.byCPLC, se.CPLC)
 	return nil
 }
 

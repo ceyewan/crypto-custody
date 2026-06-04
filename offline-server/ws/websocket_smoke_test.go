@@ -73,6 +73,7 @@ func startSmokeWebSocketServer(t *testing.T) (*Server, string, *fakeManagerRunti
 		})
 	}
 	offlineKeyStore := newFakeOfflineKeyStorage()
+	shareStore.attachOfflineKeyStorage(offlineKeyStore)
 	keyGenStore := newFakeKeyGenStorage()
 	signStore := newFakeSignStorage()
 	sessionManager := mem_storage.NewSessionManager()

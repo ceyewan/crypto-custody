@@ -6,9 +6,12 @@ import "gorm.io/gorm"
 type KeyShardStatus string
 
 const (
+	KeyShardStatusPending     KeyShardStatus = "pending"
 	KeyShardStatusActive      KeyShardStatus = "active"
 	KeyShardStatusTransferred KeyShardStatus = "transferred"
+	KeyShardStatusDestroying  KeyShardStatus = "destroying"
 	KeyShardStatusDestroyed   KeyShardStatus = "destroyed"
+	KeyShardStatusFailed      KeyShardStatus = "failed"
 )
 
 // BlobType 表示加密材料类型。

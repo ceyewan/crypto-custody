@@ -290,10 +290,11 @@ func (h *KeyGenHandler) handleKeyGenResult(msg KeyGenResultMessage, sender *Clie
 		EncryptedBlob: msg.EncryptedShard,
 		BlobType:      model.BlobTypeMPCShare,
 		KeyVersion:    1,
-		Status:        model.KeyShardStatusActive,
+		Status:        model.KeyShardStatusPending,
 	}
 	if _, err := h.shareStorage.CreateKeyShard(shard); err != nil {
 		h.markKeyGenFailed(msg.SessionKey)
+		h.markPendingShardsFailed(session.OfflineKeyID)
 		return fmt.Errorf("保存密钥分片失败: %w", err)
 	}
 
@@ -309,7 +310,7 @@ func (h *KeyGenHandler) handleKeyGenResult(msg KeyGenResultMessage, sender *Clie
 		return nil
 	}
 
-	if _, err := h.offlineKeyStorage.CreateOfflineKey(model.OfflineKey{
+	if _, err := h.shareStorage.CreateOfflineKeyAndActivatePendingShards(model.OfflineKey{
 		OfflineKeyID:    session.OfflineKeyID,
 		TaskNo:          session.TaskNo,
 		CaseNo:          session.CaseNo,
@@ -321,8 +322,9 @@ func (h *KeyGenHandler) handleKeyGenResult(msg KeyGenResultMessage, sender *Clie
 		PublicKey:       session.PublicKey,
 		LogicalOwner:    session.Initiator,
 		Status:          model.OfflineKeyStatusActive,
-	}); err != nil {
+	}, session.TotalParties); err != nil {
 		h.markKeyGenFailed(msg.SessionKey)
+		h.markPendingShardsFailed(session.OfflineKeyID)
 		return fmt.Errorf("保存离线密钥元数据失败: %w", err)
 	}
 
@@ -364,11 +366,19 @@ func (h *KeyGenHandler) failSender(sender *Client, message, details string) erro
 func (h *KeyGenHandler) markKeyGenFailed(sessionKey string) {
 	if session := h.sessionManager.GetKeyGenSession(sessionKey); session != nil {
 		session.Status = model.StatusFailed
+		h.markPendingShardsFailed(session.OfflineKeyID)
 	}
 	_ = h.keyGenStorage.UpdateStatus(sessionKey, model.StatusFailed)
 	if h.managerRuntime != nil {
 		_ = h.managerRuntime.StopSession(sessionKey)
 	}
+}
+
+func (h *KeyGenHandler) markPendingShardsFailed(offlineKeyID string) {
+	if h.shareStorage == nil || offlineKeyID == "" {
+		return
+	}
+	_ = h.shareStorage.UpdateKeyShardsStatusByOfflineKey(offlineKeyID, model.KeyShardStatusPending, model.KeyShardStatusFailed)
 }
 
 func (h *KeyGenHandler) audit(sender *Client, action, resourceType, resourceID, result, errMsg string) {

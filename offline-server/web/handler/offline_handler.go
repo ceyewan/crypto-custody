@@ -568,9 +568,9 @@ func DestroyOfflineKey(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{"error": "离线密钥当前状态不可销毁"})
 		return
 	}
-	activeShards, err := offlineShareStore.ListActiveKeyShardsByAddress(key.Address)
+	activeShards, err := listDestroyableOfflineShards(key.Address)
 	if err != nil || len(activeShards) == 0 {
-		c.JSON(http.StatusConflict, gin.H{"error": "没有可销毁的active分片"})
+		c.JSON(http.StatusConflict, gin.H{"error": "没有可销毁的分片"})
 		return
 	}
 	if req.SessionKey == "" {
@@ -598,6 +598,20 @@ func DestroyOfflineKey(c *gin.Context) {
 
 func isDestroyableOfflineKeyStatus(status model.OfflineKeyStatus) bool {
 	return status == model.OfflineKeyStatusActive || status == model.OfflineKeyStatusDestroyFailed
+}
+
+func listDestroyableOfflineShards(address string) ([]model.KeyShard, error) {
+	shards, err := offlineShareStore.ListKeyShardsByAddress(address)
+	if err != nil {
+		return nil, err
+	}
+	var out []model.KeyShard
+	for _, shard := range shards {
+		if shard.Status == model.KeyShardStatusActive || shard.Status == model.KeyShardStatusDestroying {
+			out = append(out, shard)
+		}
+	}
+	return out, nil
 }
 
 // ListAuditLogs 查询脱敏审计日志。
