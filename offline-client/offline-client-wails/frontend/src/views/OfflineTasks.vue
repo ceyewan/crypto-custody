@@ -12,7 +12,7 @@
             <el-steps :active="stepActive" finish-status="success" simple class="task-steps">
                 <el-step title="导入任务包"></el-step>
                 <el-step title="选择参与方"></el-step>
-                <el-step title="发起 MPC"></el-step>
+                <el-step title="发起协同处理"></el-step>
                 <el-step title="导出结果包"></el-step>
             </el-steps>
 
@@ -21,7 +21,7 @@
                     <div class="section-grid">
                         <div>
                             <h3>选择任务包</h3>
-                            <p class="muted">支持 offline_task_&lt;任务编号&gt;.json，导入时会校验包方向、任务类型和 payload_hash。</p>
+                            <p class="muted">支持在线系统导出的任务包，导入时会校验包方向、任务类型和内容摘要。</p>
                             <input ref="taskFile" type="file" accept="application/json,.json" @change="handleFileChange">
                             <div class="file-name" v-if="fileName">{{ fileName }}</div>
                             <div class="actions">
@@ -44,79 +44,13 @@
                                 <el-descriptions-item v-if="isKeygenTask" label="门限策略">
                                     {{ requiredSigners || '-' }} / {{ totalParties || '-' }}
                                 </el-descriptions-item>
-                                <el-descriptions-item label="payload_hash">{{ currentPayloadHash || '-' }}</el-descriptions-item>
+                                <el-descriptions-item label="内容摘要">{{ currentPayloadHash || '-' }}</el-descriptions-item>
                                 <el-descriptions-item v-if="importedTask" label="导入状态">
                                     <el-tag type="success">{{ importedTask.status || 'imported' }}</el-tag>
                                 </el-descriptions-item>
                             </el-descriptions>
                         </div>
                     </div>
-                </el-tab-pane>
-
-                <el-tab-pane v-if="isAdmin" label="手工创建" name="manual">
-                    <el-alert
-                        type="info"
-                        :closable="false"
-                        title="手工创建只填写核心字段，系统会生成同样格式的 offline_task JSON，再进入导入和发起流程。">
-                    </el-alert>
-
-                    <el-form :model="manualForm" label-width="120px" class="manual-form">
-                        <el-form-item label="任务类型">
-                            <el-radio-group v-model="manualForm.taskType" @change="refreshManualTaskNo">
-                                    <el-radio-button label="custody_keygen">生成托管地址和私钥</el-radio-button>
-                                <el-radio-button label="sign">交易签名</el-radio-button>
-                            </el-radio-group>
-                        </el-form-item>
-                        <el-form-item label="任务编号">
-                            <el-input v-model="manualForm.taskNo" placeholder="留空自动生成，例如 TASK-20260604-001">
-                                <el-button slot="append" @click="refreshManualTaskNo">自动生成</el-button>
-                            </el-input>
-                        </el-form-item>
-                        <el-form-item label="案件编号">
-                            <el-input v-model="manualForm.caseNo" placeholder="可选，例如 CASE-2026-001"></el-input>
-                        </el-form-item>
-                        <el-form-item label="币种">
-                            <el-input v-model="manualForm.coinType" placeholder="ETH"></el-input>
-                        </el-form-item>
-                        <el-form-item label="Chain ID">
-                            <el-input v-model="manualForm.chainId" placeholder="1"></el-input>
-                        </el-form-item>
-
-                        <template v-if="manualForm.taskType === 'custody_keygen'">
-                            <el-form-item label="门限">
-                                <el-input-number v-model="manualForm.requiredSigners" :min="1"></el-input-number>
-                                <span class="inline-separator">/</span>
-                                <el-input-number v-model="manualForm.totalParties" :min="1"></el-input-number>
-                            </el-form-item>
-                            <el-form-item label="业务说明">
-                                <el-input v-model="manualForm.businessReason" placeholder="创建案件托管钱包"></el-input>
-                            </el-form-item>
-                        </template>
-
-                        <template v-else>
-                            <el-form-item label="交易编号">
-                                <el-input v-model="manualForm.transactionNo" placeholder="可选，例如 TX-2026-0001"></el-input>
-                            </el-form-item>
-                            <el-form-item label="签名地址">
-                                <el-input v-model="manualForm.fromAddress" placeholder="0x..."></el-input>
-                            </el-form-item>
-                            <el-form-item label="消息哈希">
-                                <el-input v-model="manualForm.messageHash" placeholder="0x..."></el-input>
-                            </el-form-item>
-                            <el-form-item label="展示金额">
-                                <el-input v-model="manualForm.displayAmount" placeholder="可选，例如 0.01 ETH"></el-input>
-                            </el-form-item>
-                            <el-form-item label="接收方说明">
-                                <el-input v-model="manualForm.recipientLabel" placeholder="可选"></el-input>
-                            </el-form-item>
-                        </template>
-
-                        <el-form-item>
-                            <el-button type="primary" icon="el-icon-document-add" :loading="manualCreating" @click="createManualTask">
-                                生成并导入任务包
-                            </el-button>
-                        </el-form-item>
-                    </el-form>
                 </el-tab-pane>
 
                 <el-tab-pane label="任务记录" name="records">
@@ -127,11 +61,11 @@
                                 {{ taskTypeLabel(scope.row.task_type) }}
                             </template>
                         </el-table-column>
-                        <el-table-column prop="payload_hash" label="payload_hash" min-width="220"></el-table-column>
-                        <el-table-column prop="result_hash" label="result_hash" min-width="220"></el-table-column>
+                        <el-table-column prop="payload_hash" label="任务内容摘要" min-width="220"></el-table-column>
+                        <el-table-column prop="result_hash" label="结果内容摘要" min-width="220"></el-table-column>
                         <el-table-column prop="status" label="状态" width="120">
                             <template slot-scope="scope">
-                                <el-tag :type="taskStatusTag(scope.row.status)">{{ scope.row.status }}</el-tag>
+                                <el-tag :type="taskStatusTag(scope.row.status)">{{ taskStatusText(scope.row.status) }}</el-tag>
                             </template>
                         </el-table-column>
                         <el-table-column prop="updated_at" label="更新时间" width="170">
@@ -214,7 +148,7 @@
                                 v-if="startMessage"
                                 type="success"
                                 :closable="false"
-                                title="邀请已通过 WebSocket 发送，等待参与方确认并执行 MPC。">
+                                title="邀请已发送，等待参与方确认并完成协同处理。">
                             </el-alert>
                             <el-input
                                 v-if="startMessage"
@@ -250,8 +184,8 @@
                             <el-empty v-if="!resultPackage" description="尚未下载结果包" :image-size="72"></el-empty>
                             <el-descriptions v-else :column="1" border size="small">
                                 <el-descriptions-item label="任务编号">{{ resultPackage.task_no }}</el-descriptions-item>
-                                <el-descriptions-item label="结果类型">{{ resultPackage.task_type }}</el-descriptions-item>
-                                <el-descriptions-item label="payload_hash">{{ resultPackage.payload_hash }}</el-descriptions-item>
+                                <el-descriptions-item label="结果类型">{{ taskTypeLabel(resultPackage.task_type) }}</el-descriptions-item>
+                                <el-descriptions-item label="内容摘要">{{ resultPackage.payload_hash }}</el-descriptions-item>
                                 <el-descriptions-item v-if="resultPayload.custody_address" label="托管地址">
                                     {{ resultPayload.custody_address }}
                                 </el-descriptions-item>
@@ -296,23 +230,7 @@ export default {
             resultTaskNo: '',
             resultPackage: null,
             tasks: [],
-            loadingTasks: false,
-            manualCreating: false,
-            manualForm: {
-                taskType: 'custody_keygen',
-                taskNo: '',
-                caseNo: '',
-                coinType: 'ETH',
-                chainId: '1',
-                requiredSigners: 2,
-                totalParties: 3,
-                businessReason: '创建案件托管钱包',
-                transactionNo: '',
-                fromAddress: '',
-                messageHash: '',
-                displayAmount: '',
-                recipientLabel: ''
-            }
+            loadingTasks: false
         }
     },
     computed: {
@@ -398,7 +316,6 @@ export default {
             if (this.$refs.taskFile) {
                 this.$refs.taskFile.value = ''
             }
-            this.refreshManualTaskNo()
             this.activeTab = 'import'
         },
 
@@ -438,103 +355,6 @@ export default {
             if (!pkg.task_no) throw new Error('缺少 task_no')
             if (!pkg.payload || typeof pkg.payload !== 'object') throw new Error('缺少 payload')
             if (!pkg.payload_hash) throw new Error('缺少 payload_hash')
-        },
-
-        async createManualTask() {
-            this.manualCreating = true
-            try {
-                const pkg = await this.buildManualTaskPackage()
-                this.validateTaskPackage(pkg)
-                this.taskPackage = pkg
-                this.fileName = `offline_task_${this.sanitizeFilePart(pkg.task_no)}.json`
-                this.importedTask = null
-                this.resultPackage = null
-                this.startMessage = null
-                this.selectedParticipants = []
-                this.offlineKeyID = pkg.task_type === 'custody_keygen' ? `OFFKEY-${pkg.task_no}` : ''
-                this.resultTaskNo = pkg.task_no
-                await this.importTask()
-            } catch (error) {
-                this.$message.error(error.message || '手工创建任务失败')
-            } finally {
-                this.manualCreating = false
-            }
-        },
-
-        async buildManualTaskPackage() {
-            if (!this.manualForm.taskNo) {
-                this.refreshManualTaskNo()
-            }
-            const payload = this.manualForm.taskType === 'custody_keygen'
-                ? this.buildManualKeygenPayload()
-                : this.buildManualSignPayload()
-            const payloadHash = await this.hashPayloadForPackage(payload)
-            return {
-                schema_version: '1.0',
-                package_type: 'offline_task',
-                task_type: this.manualForm.taskType,
-                task_no: this.manualForm.taskNo,
-                source_system: 'online',
-                target_system: 'offline',
-                created_by: this.$store.getters.currentUser?.username || 'offline-manual',
-                created_at: new Date().toISOString(),
-                payload,
-                payload_hash: payloadHash,
-                package_signature: {
-                    algorithm: '',
-                    key_id: '',
-                    signature: ''
-                }
-            }
-        },
-
-        buildManualKeygenPayload() {
-            const required = Number(this.manualForm.requiredSigners)
-            const total = Number(this.manualForm.totalParties)
-            if (!required || !total || required > total) {
-                throw new Error('门限参数无效')
-            }
-            return {
-                case_no: this.manualForm.caseNo || '',
-                coin_type: this.manualForm.coinType || 'ETH',
-                chain_id: this.manualForm.chainId || '1',
-                threshold_policy: {
-                    required_signers: required,
-                    total_parties: total
-                },
-                business_reason: this.manualForm.businessReason || '创建案件托管钱包'
-            }
-        },
-
-        buildManualSignPayload() {
-            if (!this.manualForm.fromAddress) {
-                throw new Error('签名地址不能为空')
-            }
-            if (!this.manualForm.messageHash) {
-                throw new Error('消息哈希不能为空')
-            }
-            return {
-                case_no: this.manualForm.caseNo || '',
-                transaction_no: this.manualForm.transactionNo || this.manualForm.taskNo,
-                coin_type: this.manualForm.coinType || 'ETH',
-                chain_id: this.manualForm.chainId || '1',
-                from_address: this.manualForm.fromAddress,
-                message_hash: this.manualForm.messageHash,
-                reason: '手工创建签名任务',
-                display: {
-                    amount: this.manualForm.displayAmount || '',
-                    recipient_label: this.manualForm.recipientLabel || ''
-                }
-            }
-        },
-
-        async hashPayloadForPackage(payload) {
-            const encoded = new TextEncoder().encode(JSON.stringify(payload))
-            const digest = await crypto.subtle.digest('SHA-256', encoded)
-            const hex = Array.from(new Uint8Array(digest))
-                .map(byte => byte.toString(16).padStart(2, '0'))
-                .join('')
-            return `sha256:${hex}`
         },
 
         async importTask() {
@@ -666,7 +486,7 @@ export default {
                     : await this.$offlineApi.buildKeygenRequest(this.currentTaskNo, payload)
                 this.startMessage = response.data.message
                 if (!sendWSMessage(this.startMessage)) {
-                    throw new Error('WebSocket 未连接')
+                    throw new Error('服务连接未建立')
                 }
                 this.$store.commit('setCurrentSession', this.startMessage.session_key)
                 this.$message.success('邀请已发送')
@@ -707,17 +527,11 @@ export default {
             return value.replace(/[^a-zA-Z0-9_-]/g, '_') || 'task'
         },
 
-        refreshManualTaskNo() {
-            const now = new Date()
-            const pad = value => String(value).padStart(2, '0')
-            const datePart = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`
-            const seqPart = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
-            this.manualForm.taskNo = `TASK-${datePart}-${seqPart}`
-        },
-
         taskTypeLabel(type) {
             if (type === 'custody_keygen') return '生成托管地址和私钥'
             if (type === 'sign') return '交易签名'
+            if (type === 'custody_keygen_result') return '托管地址生成结果'
+            if (type === 'sign_result') return '交易签名结果'
             return type
         },
 
@@ -726,6 +540,16 @@ export default {
             if (status === 'failed') return 'danger'
             if (status === 'processing') return 'warning'
             return 'info'
+        },
+
+        taskStatusText(status) {
+            const map = {
+                imported: '已导入',
+                processing: '处理中',
+                completed: '已完成',
+                failed: '失败'
+            }
+            return map[status] || status || '-'
         },
 
         formatTime(value) {
@@ -782,16 +606,6 @@ h3 {
 
 .message-preview {
     margin-top: 14px;
-}
-
-.manual-form {
-    max-width: 760px;
-    margin-top: 18px;
-}
-
-.inline-separator {
-    margin: 0 10px;
-    color: #606266;
 }
 
 @media (max-width: 900px) {

@@ -26,7 +26,7 @@
             <el-col :span="6">
                 <el-card class="metric-card">
                     <div class="metric-value">{{ wsConnected ? '正常' : '断开' }}</div>
-                    <div class="metric-label">WebSocket</div>
+                    <div class="metric-label">连接状态</div>
                 </el-card>
             </el-col>
             <el-col :span="6">

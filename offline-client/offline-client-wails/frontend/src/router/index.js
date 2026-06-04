@@ -5,7 +5,6 @@ import Register from '../views/Register.vue'
 import Dashboard from '../views/Dashboard.vue'
 import Users from '../views/Users.vue'
 import Notifications from '../views/Notifications.vue'
-import Test from '../views/Test.vue'
 import ImportSE from '../views/ImportSE.vue'
 import OfflineTasks from '../views/OfflineTasks.vue'
 import KeyManagement from '../views/KeyManagement.vue'
@@ -106,12 +105,6 @@ const routes = [
         path: '/backup',
         name: 'BackupRestore',
         component: BackupRestore,
-        meta: { requiresAuth: true, requiresAdmin: true }
-    },
-    {
-        path: '/test',
-        name: 'Test',
-        component: Test,
         meta: { requiresAuth: true, requiresAdmin: true }
     },
     {

@@ -215,7 +215,7 @@ export default new Vuex.Store({
                         state.wsClient.close(1000, "主动关闭以重新连接")
                     }
                 } catch (error) {
-                    console.error('关闭WebSocket连接出错:', error)
+                    console.error('关闭服务连接出错:', error)
                 }
             }
 
@@ -225,14 +225,11 @@ export default new Vuex.Store({
             }
 
             try {
-                console.log('正在创建新的WebSocket连接...')
                 const wsURL = state.clientSettings.serverWsUrl || getServerWsUrl()
-                console.log(`[WS Debug] 使用 WebSocket 地址: ${wsURL}`);
                 const ws = new WebSocket(wsURL)
 
                 const connectionTimeout = setTimeout(() => {
                     if (ws.readyState !== WebSocket.OPEN) {
-                        console.error('WebSocket连接超时')
                         ws.close(3000, "连接超时")
                         commit('setWsConnecting', false)
                         commit('setWsLastError', "连接超时")
@@ -240,8 +237,6 @@ export default new Vuex.Store({
                         if (state.token && state.user) {
                             const attempts = state.wsReconnectAttempts;
                             const delay = Math.min(1000 * Math.pow(1.5, attempts), 30000);
-
-                            console.log(`连接超时，将在 ${delay / 1000} 秒后重新连接...`);
 
                             const reconnectTimer = setTimeout(() => {
                                 commit('incrementWsReconnectAttempts');

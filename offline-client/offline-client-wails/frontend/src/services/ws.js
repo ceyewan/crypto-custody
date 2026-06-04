@@ -98,7 +98,7 @@ function beginTask(kind, message) {
         signing_index: message.signing_index,
         status: 'running',
         phase: `${kind}_params`,
-        message: 'MPC任务执行中'
+        message: '协同任务执行中'
     })
     return { key, started: true }
 }
@@ -120,9 +120,9 @@ function sendTaskResult(key, resultMessage, successMessage, failureMessage) {
         phase: resultMessage.type,
         success: !!resultMessage.success,
         result_message: resultMessage,
-        message: failureMessage || '结果已生成，但 WebSocket 未连接，等待重连后回传'
+        message: failureMessage || '结果已生成，但服务连接未建立，等待重连后回传'
     })
-    Message.warning(failureMessage || '结果已生成，但 WebSocket 未连接，等待重连后回传')
+    Message.warning(failureMessage || '结果已生成，但服务连接未建立，等待重连后回传')
     return false
 }
 

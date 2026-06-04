@@ -278,7 +278,7 @@ export default {
                 })
                 const message = response.data.message
                 if (!sendWSMessage(message)) {
-                    throw new Error('WebSocket 未连接')
+                    throw new Error('服务连接未建立')
                 }
                 this.$store.commit('setCurrentSession', message.session_key)
                 this.$message.success('私钥分片移交邀请已发送，等待移出和接收双方确认')
@@ -308,7 +308,7 @@ export default {
                 })
                 const message = response.data.message
                 if (!sendWSMessage(message)) {
-                    throw new Error('WebSocket 未连接')
+                    throw new Error('服务连接未建立')
                 }
                 this.$store.commit('setCurrentSession', message.session_key)
                 this.$message.success('私钥销毁请求已发送，请等待私钥分片持有人确认')

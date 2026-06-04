@@ -65,7 +65,6 @@
           <el-select v-model="form.txType" style="width:100%">
             <el-option label="归集" value="collect" />
             <el-option label="提取" value="withdraw" />
-            <el-option label="测试" value="test" />
           </el-select>
         </el-form-item>
         <el-form-item label="发送方">
@@ -116,7 +115,7 @@
         v-model="transactionImportText"
         type="textarea"
         :rows="12"
-        placeholder='例如: {"transactions":[{"caseNo":"CASE-DEMO-001","txType":"test","fromAddress":"0x...","toAddress":"0x...","value":"0.01 ETH","coinType":"ETH","reason":"本地 JSON 导入样例"}]}'
+        placeholder='例如: {"transactions":[{"caseNo":"CASE-2026-001","txType":"withdraw","fromAddress":"0x...","toAddress":"0x...","value":"0.01 ETH","coinType":"ETH","reason":"案件资产提取"}]}'
         @blur="updateTransactionImportPreview"
       />
       <div class="import-summary">{{ transactionImportSummary }}</div>
@@ -469,7 +468,7 @@ export default {
       return map[v] || v
     },
     txTypeText (v) {
-      return { collect: '归集', withdraw: '提取', test: '测试' }[v] || v
+      return { collect: '归集', withdraw: '提取', test: '其他' }[v] || v
     },
     parseImportTransactions (text) {
       const raw = String(text || '').trim()
@@ -495,7 +494,7 @@ export default {
       return {
         caseNo: item.caseNo || item.CaseNo || '',
         txNo: item.txNo || item.TxNo || '',
-        txType: item.txType || item.TxType || 'test',
+        txType: item.txType || item.TxType || 'withdraw',
         fromAccountId: item.fromAccountId || item.FromAccountID || 0,
         fromAddress,
         toAddress,

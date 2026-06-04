@@ -6,7 +6,7 @@
             <el-header class="app-header">
                 <div class="brand">
                     <span class="brand-title">离线虚拟货币存管提控系统</span>
-                    <span class="brand-subtitle">MPC / SE 工作台</span>
+                    <span class="brand-subtitle">离线协同工作台</span>
                 </div>
                 <div class="header-actions">
                     <ws-status-indicator class="header-ws"></ws-status-indicator>

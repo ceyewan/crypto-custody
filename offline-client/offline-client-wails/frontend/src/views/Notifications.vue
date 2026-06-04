@@ -388,7 +388,7 @@ export default {
 
         sendOrThrow(message) {
             if (!sendWSMessage(message)) {
-                throw new Error('WebSocket 未连接，无法回传响应')
+                throw new Error('服务连接未建立，无法回传响应')
             }
         },
 

@@ -19,7 +19,7 @@
 
                 <el-descriptions :column="1" border size="small" class="derived">
                     <el-descriptions-item label="HTTP 地址">{{ form.serverHttpUrl }}</el-descriptions-item>
-                    <el-descriptions-item label="WebSocket 地址">{{ form.serverWsUrl }}</el-descriptions-item>
+                    <el-descriptions-item label="实时连接地址">{{ form.serverWsUrl }}</el-descriptions-item>
                 </el-descriptions>
 
                 <el-collapse class="advanced">
@@ -28,7 +28,7 @@
                             <el-form-item label="HTTP 地址">
                                 <el-input v-model="form.serverHttpUrl" @blur="syncWsUrl"></el-input>
                             </el-form-item>
-                            <el-form-item label="WebSocket 地址">
+                            <el-form-item label="实时连接地址">
                                 <el-input v-model="form.serverWsUrl"></el-input>
                             </el-form-item>
                             <el-form-item label="读卡器名称">
@@ -40,7 +40,7 @@
 
                 <el-form-item class="actions">
                     <el-button type="primary" :loading="saving" @click="save">保存</el-button>
-                    <el-button :loading="testing" @click="testConnection">测试连接</el-button>
+                    <el-button :loading="testing" @click="testConnection">检查连接</el-button>
                     <el-button @click="$router.push('/login')">返回登录</el-button>
                 </el-form-item>
             </el-form>
@@ -122,7 +122,7 @@ export default {
                     validateStatus: status => status < 500
                 })
                 await this.testWebSocket()
-                this.$message.success('HTTP 和 WebSocket 均可达')
+                this.$message.success('服务连接可达')
             } catch (error) {
                 this.$message.error('连接失败: ' + (error.message || '请检查 IP 和端口'))
             } finally {
@@ -137,7 +137,7 @@ export default {
                     if (!settled) {
                         settled = true
                         ws.close()
-                        reject(new Error('WebSocket 连接超时'))
+                        reject(new Error('实时连接超时'))
                     }
                 }, 3000)
                 ws.onopen = () => {
@@ -152,7 +152,7 @@ export default {
                     if (!settled) {
                         settled = true
                         clearTimeout(timer)
-                        reject(new Error('WebSocket 不可达'))
+                        reject(new Error('实时连接不可达'))
                     }
                 }
             })

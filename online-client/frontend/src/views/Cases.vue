@@ -90,7 +90,7 @@
         v-model="caseImportText"
         type="textarea"
         :rows="12"
-        placeholder='例如: {"cases":[{"caseNo":"CASE-DEMO-001","name":"测试案件一","status":"active","description":"本地 JSON 导入样例"}]}'
+        placeholder='例如: {"cases":[{"caseNo":"CASE-2026-001","name":"涉案资产处置案件","status":"active","description":"案件基础信息"}]}'
         @blur="updateCaseImportPreview"
       />
       <div class="import-summary">{{ caseImportSummary }}</div>

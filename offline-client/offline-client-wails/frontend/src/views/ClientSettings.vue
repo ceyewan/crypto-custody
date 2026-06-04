@@ -17,7 +17,7 @@
 
                 <el-descriptions :column="1" border size="small" class="derived">
                     <el-descriptions-item label="HTTP 地址">{{ form.serverHttpUrl }}</el-descriptions-item>
-                    <el-descriptions-item label="WebSocket 地址">{{ form.serverWsUrl }}</el-descriptions-item>
+                    <el-descriptions-item label="实时连接地址">{{ form.serverWsUrl }}</el-descriptions-item>
                 </el-descriptions>
 
                 <el-form-item label="读卡器名称">
@@ -30,7 +30,7 @@
                             <el-input v-model="form.serverHttpUrl" @blur="syncWsUrl"></el-input>
                         </el-form-item>
 
-                        <el-form-item label="WebSocket 地址">
+                        <el-form-item label="实时连接地址">
                             <el-input v-model="form.serverWsUrl"></el-input>
                         </el-form-item>
                     </el-collapse-item>
@@ -47,7 +47,7 @@
                 <el-form-item>
                     <el-button type="primary" :loading="saving" @click="save">保存</el-button>
                     <el-button :loading="testingSe" @click="testSe">检测 SE</el-button>
-                    <el-button @click="reconnectWs">重连 WebSocket</el-button>
+                    <el-button @click="reconnectWs">重连服务连接</el-button>
                 </el-form-item>
             </el-form>
         </el-card>
