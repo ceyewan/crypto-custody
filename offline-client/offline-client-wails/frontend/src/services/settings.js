@@ -1,6 +1,7 @@
 const HTTP_URL_KEY = 'offline_client_server_http_url'
 const WS_URL_KEY = 'offline_client_server_ws_url'
 const CARD_READER_KEY = 'offline_client_card_reader_name'
+const DEFAULT_CARD_READER_NAME = 'GOODIX GSE SmartCard Reader'
 
 function trimTrailingSlash(value) {
     return value.replace(/\/+$/, '')
@@ -76,7 +77,10 @@ export function normalizeWsUrl(value, httpUrl) {
 export function loadClientSettings() {
     const serverHttpUrl = normalizeHttpUrl(localStorage.getItem(HTTP_URL_KEY) || getDefaultServerHttpUrl())
     const serverWsUrl = normalizeWsUrl(localStorage.getItem(WS_URL_KEY) || getDefaultServerWsUrl(serverHttpUrl), serverHttpUrl)
-    const cardReaderName = (localStorage.getItem(CARD_READER_KEY) || '').trim()
+    const savedCardReaderName = (localStorage.getItem(CARD_READER_KEY) || '').trim()
+    const cardReaderName = savedCardReaderName === 'GOODIX GSE SmartCard Reader 01'
+        ? DEFAULT_CARD_READER_NAME
+        : (savedCardReaderName || DEFAULT_CARD_READER_NAME)
     return {
         serverHttpUrl,
         serverWsUrl,

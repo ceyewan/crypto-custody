@@ -82,11 +82,13 @@ JAVA_HOME=/opt/homebrew/opt/openjdk@11 ant clean all
 
 部署 Applet 示例：
 
+现场固定使用 `GOODIX GSE SmartCard Reader`。如果同时看到 `GOODIX GSE SmartCard Reader 01`，不要把 CAP 下载到 `01`，否则后续桌面端固定 reader 时会访问到未安装 Applet 的 SE。
+
 ```bash
 tools/.venv311/bin/pygse ls-dev
-tools/.venv311/bin/pygse info --dev "GOODIX GSE SmartCard Reader 01"
+tools/.venv311/bin/pygse info --dev "GOODIX GSE SmartCard Reader"
 tools/.venv311/bin/pygse install \
-  --dev "GOODIX GSE SmartCard Reader 01" \
+  --dev "GOODIX GSE SmartCard Reader" \
   --app-aid=. \
   build/cap/securitychip.cap \
   --log-level info
@@ -315,7 +317,7 @@ go run ./mpc_core/cmd/se-smoke
 常用参数：
 
 ```bash
-go run ./mpc_core/cmd/se-smoke -reader "GOODIX GSE SmartCard Reader 01"
+go run ./mpc_core/cmd/se-smoke -reader "GOODIX GSE SmartCard Reader"
 go run ./mpc_core/cmd/se-smoke -private-key ../secured/genkey/ec_private_key.pem
 go run ./mpc_core/cmd/se-smoke -skip-direct
 go run ./mpc_core/cmd/se-smoke -skip-service

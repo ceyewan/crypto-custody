@@ -33,7 +33,7 @@ func LoadConfig() (*Config, error) {
 
 	// 设置默认值
 	viper.SetDefault("debug", false)
-	viper.SetDefault("card_reader_name", "")
+	viper.SetDefault("card_reader_name", "GOODIX GSE SmartCard Reader")
 	viper.SetDefault("applet_aid", "A000000062CF0101") // 默认值
 	viper.SetDefault("port", "8080")
 	viper.SetDefault("temp_dir", "./temp")

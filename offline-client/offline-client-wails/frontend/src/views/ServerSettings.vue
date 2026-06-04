@@ -32,7 +32,7 @@
                                 <el-input v-model="form.serverWsUrl"></el-input>
                             </el-form-item>
                             <el-form-item label="读卡器名称">
-                                <el-input v-model="form.cardReaderName" placeholder="留空自动选择"></el-input>
+                                <el-input v-model="form.cardReaderName" placeholder="GOODIX GSE SmartCard Reader"></el-input>
                             </el-form-item>
                         </el-form>
                     </el-collapse-item>

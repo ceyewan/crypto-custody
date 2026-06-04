@@ -45,8 +45,10 @@ offline-client/secured/tools/.venv311/bin/pygse ls-dev
 
 查看目标 SE 信息：
 
+固定目标设备名为 `GOODIX GSE SmartCard Reader`。不要使用 `GOODIX GSE SmartCard Reader 01`。
+
 ```bash
-offline-client/secured/tools/.venv311/bin/pygse info --dev "GOODIX GSE SmartCard Reader 01"
+offline-client/secured/tools/.venv311/bin/pygse info --dev "GOODIX GSE SmartCard Reader"
 ```
 
 安装 Applet：
@@ -54,7 +56,7 @@ offline-client/secured/tools/.venv311/bin/pygse info --dev "GOODIX GSE SmartCard
 ```bash
 cd offline-client/secured
 tools/.venv311/bin/pygse install \
-  --dev "GOODIX GSE SmartCard Reader 01" \
+  --dev "GOODIX GSE SmartCard Reader" \
   --app-aid=. \
   build/cap/securitychip.cap \
   --log-level info

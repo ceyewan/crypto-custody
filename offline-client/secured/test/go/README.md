@@ -12,7 +12,7 @@ go run ./mpc_core/cmd/se-smoke
 Useful flags:
 
 ```bash
-go run ./mpc_core/cmd/se-smoke -reader "GOODIX GSE SmartCard Reader 01"
+go run ./mpc_core/cmd/se-smoke -reader "GOODIX GSE SmartCard Reader"
 go run ./mpc_core/cmd/se-smoke -private-key ../secured/genkey/ec_private_key.pem
 go run ./mpc_core/cmd/se-smoke -skip-direct
 go run ./mpc_core/cmd/se-smoke -skip-service

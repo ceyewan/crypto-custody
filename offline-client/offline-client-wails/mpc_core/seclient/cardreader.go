@@ -82,9 +82,17 @@ func (r *CardReader) Connect(readerName string) error {
 	var selectedReader string
 	if readerName != "" {
 		for _, reader := range readers {
-			if strings.Contains(reader, readerName) {
+			if reader == readerName {
 				selectedReader = reader
 				break
+			}
+		}
+		if selectedReader == "" {
+			for _, reader := range readers {
+				if strings.Contains(reader, readerName) {
+					selectedReader = reader
+					break
+				}
 			}
 		}
 		if selectedReader == "" {

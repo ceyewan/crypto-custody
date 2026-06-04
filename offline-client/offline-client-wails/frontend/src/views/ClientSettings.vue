@@ -21,7 +21,7 @@
                 </el-descriptions>
 
                 <el-form-item label="读卡器名称">
-                    <el-input v-model="form.cardReaderName" placeholder="留空则自动选择可用读卡器"></el-input>
+                    <el-input v-model="form.cardReaderName" placeholder="GOODIX GSE SmartCard Reader"></el-input>
                 </el-form-item>
 
                 <el-collapse class="advanced">

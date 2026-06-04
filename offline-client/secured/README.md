@@ -94,11 +94,13 @@ JAVA_HOME=/opt/homebrew/opt/openjdk@11 ant clean all
 
 #### 步骤 3: 部署到安全芯片
 
+**现场固定读卡器**: 下载 CAP 时必须使用 `GOODIX GSE SmartCard Reader`。如果 `pygse ls-dev` 同时列出 `GOODIX GSE SmartCard Reader` 和 `GOODIX GSE SmartCard Reader 01`，不要使用带 `01` 的设备名，否则 CAP 会安装到另一颗 SE 上。
+
 ```bash
 cd offline-client/secured
 tools/.venv311/bin/pygse ls-dev
 tools/.venv311/bin/pygse install \
-  --dev "GOODIX GSE SmartCard Reader 01" \
+  --dev "GOODIX GSE SmartCard Reader" \
   --app-aid=. \
   build/cap/securitychip.cap \
   --log-level info
@@ -118,7 +120,7 @@ go run ./mpc_core/cmd/se-smoke
 指定读卡器或私钥路径：
 
 ```bash
-go run ./mpc_core/cmd/se-smoke -reader "GOODIX GSE SmartCard Reader 01"
+go run ./mpc_core/cmd/se-smoke -reader "GOODIX GSE SmartCard Reader"
 go run ./mpc_core/cmd/se-smoke -private-key ../secured/genkey/ec_private_key.pem
 ```
 
