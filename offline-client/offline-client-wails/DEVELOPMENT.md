@@ -116,4 +116,4 @@ go install github.com/wailsapp/wails/v2/cmd/wails@v2.10.2
 wails build -clean
 ```
 
-跨平台打包使用根目录 `.github/workflows/offline-client-desktop.yml`，该 workflow 只支持手动触发，不会在 push 时自动运行。产物会内置当前平台的 Wails UI、SE client 和嵌入式 `gg20_keygen` / `gg20_signing`。
+跨平台打包使用根目录 `.github/workflows/offline-client-desktop.yml`，该 workflow 只支持手动触发，不会在 push 时自动运行。产物会内置当前平台的 Wails UI、SE client 和嵌入式 `gg20_keygen` / `gg20_signing`。Windows 目标会通过 NSIS 生成 amd64 安装包，并嵌入 WebView2 安装器。
