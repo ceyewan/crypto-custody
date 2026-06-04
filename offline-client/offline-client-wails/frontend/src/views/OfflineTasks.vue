@@ -689,14 +689,13 @@ export default {
                 const response = await this.$offlineApi.downloadResult(taskNo)
                 this.resultPackage = response.data
                 const content = JSON.stringify(response.data, null, 2)
-                const blob = new Blob([content], { type: 'application/json;charset=utf-8' })
-                const url = URL.createObjectURL(blob)
-                const link = document.createElement('a')
-                link.href = url
-                link.download = `offline_result_${this.sanitizeFilePart(taskNo)}.json`
-                link.click()
-                URL.revokeObjectURL(url)
-                this.$message.success('JSON 结果包已下载')
+                const fileName = `offline_result_${this.sanitizeFilePart(taskNo)}.json`
+                const savedPath = await this.$fileApi.saveJSON(fileName, content)
+                if (savedPath) {
+                    this.$message.success(`JSON 结果包已保存：${savedPath}`)
+                } else {
+                    this.$message.info('已取消保存')
+                }
             } catch (error) {
                 this.$message.error(this.apiError(error, '下载失败'))
             } finally {

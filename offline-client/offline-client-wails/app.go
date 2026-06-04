@@ -2,9 +2,15 @@ package main
 
 import (
 	"context"
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"offline-client-wails/mpc_core/clog"
 	"offline-client-wails/mpc_core/models"
+
+	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // App struct
@@ -56,4 +62,51 @@ func (a *App) SetCardReaderName(name string) error {
 // GetCardReaderName 获取当前桌面端使用的读卡器名称。
 func (a *App) GetCardReaderName() string {
 	return a.wailsServices.GetCardReaderName()
+}
+
+// SaveJSONFile prompts the operator for a path and writes a JSON result package to disk.
+func (a *App) SaveJSONFile(defaultFileName string, content string) (string, error) {
+	if a.ctx == nil {
+		return "", errors.New("应用尚未初始化")
+	}
+
+	defaultFileName = strings.TrimSpace(defaultFileName)
+	if defaultFileName == "" {
+		defaultFileName = "offline_result.json"
+	}
+	if !strings.HasSuffix(strings.ToLower(defaultFileName), ".json") {
+		defaultFileName += ".json"
+	}
+
+	savePath, err := wailsruntime.SaveFileDialog(a.ctx, wailsruntime.SaveDialogOptions{
+		Title:                "保存 JSON 结果包",
+		DefaultDirectory:     downloadsDir(),
+		DefaultFilename:      defaultFileName,
+		CanCreateDirectories: true,
+		Filters: []wailsruntime.FileFilter{
+			{
+				DisplayName: "JSON 文件 (*.json)",
+				Pattern:     "*.json",
+			},
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(savePath) == "" {
+		return "", nil
+	}
+
+	if err := os.WriteFile(savePath, []byte(content), 0644); err != nil {
+		return "", err
+	}
+	return savePath, nil
+}
+
+func downloadsDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return ""
+	}
+	return filepath.Join(home, "Downloads")
 }

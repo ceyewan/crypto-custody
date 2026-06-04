@@ -5,7 +5,8 @@ import {
     GetCPLCInfo,
     PerformDeleteMessage,
     SetCardReaderName,
-    GetCardReaderName
+    GetCardReaderName,
+    SaveJSONFile
 } from '../../wailsjs/go/main/App'
 
 // 安全芯片 API - 直接调用 Wails 内置的 mpc_core 模块
@@ -23,6 +24,12 @@ export const clientConfigApi = {
 
     getCardReaderName() {
         return GetCardReaderName()
+    }
+}
+
+export const fileApi = {
+    saveJSON(defaultFileName, content) {
+        return SaveJSONFile(defaultFileName, content)
     }
 }
 
@@ -58,5 +65,6 @@ export const mpcApi = {
 export default {
     seApi,
     mpcApi,
-    clientConfigApi
+    clientConfigApi,
+    fileApi
 }

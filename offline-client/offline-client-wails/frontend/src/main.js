@@ -31,6 +31,7 @@ Vue.prototype.$offlineApi = offlineApi
 // 挂载本地 MPC API 服务（替代原来的外部 web-se 调用）
 Vue.prototype.$localMpcApi = wailsMpcAPI.mpcApi
 Vue.prototype.$localSeApi = wailsMpcAPI.seApi
+Vue.prototype.$fileApi = wailsMpcAPI.fileApi
 
 // 添加响应拦截器处理401错误（仅对云端服务器通信）
 axios.interceptors.response.use(
