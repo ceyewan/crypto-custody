@@ -52,6 +52,12 @@ func initOfflineRouter(r *gin.Engine) {
 		offlineAdminGroup.POST("/shards/:shard_id/transfer", handler.TransferKeyShard)
 		offlineAdminGroup.POST("/keys/:offline_key_id/destroy", handler.DestroyOfflineKey)
 		offlineAdminGroup.GET("/backup/download", handler.DownloadBackup)
+		offlineAdminGroup.POST("/backups/hot", handler.CreateHotBackup)
+		offlineAdminGroup.POST("/backups/cold/export", handler.CreateColdBackup)
+		offlineAdminGroup.GET("/backups", handler.ListBackups)
+		offlineAdminGroup.GET("/backups/:id/download", handler.DownloadBackupRecord)
+		offlineAdminGroup.POST("/backups/:id/restore", handler.RestoreBackup)
+		offlineAdminGroup.POST("/backups/:id/verify", handler.VerifyBackup)
 	}
 
 	offlineAuditGroup := r.Group("/offline")

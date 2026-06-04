@@ -1,38 +1,36 @@
 <template>
     <div class="page key-management-page">
-        <div class="page-header">
-            <div>
-                <h2 class="page-title">地址与私钥</h2>
-                <p class="page-subtitle">明文私钥不会出现在系统中；这里展示地址、私钥分片持有人和安全芯片记录。</p>
-            </div>
-            <el-button icon="el-icon-refresh" :loading="loading" @click="loadAll">刷新</el-button>
-        </div>
-
         <el-card>
-            <el-form :inline="true" :model="filters" class="filters">
-                <el-form-item label="地址">
-                    <el-input v-model="filters.address" clearable placeholder="可粘贴地址筛选"></el-input>
+            <div slot="header" class="header">
+                <span>地址管理</span>
+                <el-button size="small" icon="el-icon-refresh" :loading="loading" @click="loadAll">刷新</el-button>
+            </div>
+
+            <el-form :inline="true" :model="filters" class="query">
+                <el-form-item>
+                    <el-input v-model="filters.address" clearable placeholder="地址"></el-input>
                 </el-form-item>
-                <el-form-item label="持有人">
+                <el-form-item v-if="activeTab === 'shards'">
                     <el-select v-model="filters.username" clearable filterable placeholder="全部">
                         <el-option v-for="user in participantUsers" :key="user.username" :label="participantLabel(user)" :value="user.username"></el-option>
                     </el-select>
                 </el-form-item>
-                <el-form-item label="状态">
-                    <el-select v-model="filters.status" clearable placeholder="全部">
+                <el-form-item>
+                    <el-select v-model="filters.status" clearable placeholder="状态">
                         <el-option label="active" value="active"></el-option>
                         <el-option label="transferred" value="transferred"></el-option>
                         <el-option label="destroyed" value="destroyed"></el-option>
                     </el-select>
                 </el-form-item>
                 <el-form-item>
-                    <el-button type="primary" @click="loadShards">查询私钥分片</el-button>
+                    <el-button type="primary" @click="searchRecords">查询</el-button>
+                    <el-button @click="resetFilters">重置</el-button>
                 </el-form-item>
             </el-form>
 
-            <el-tabs v-model="activeTab">
-                <el-tab-pane label="地址/密钥列表" name="keys">
-                    <el-table :data="keys" v-loading="loadingKeys" style="width: 100%">
+            <el-tabs v-model="activeTab" @tab-click="searchRecords">
+                <el-tab-pane label="地址列表" name="keys">
+                    <el-table :data="filteredKeys" v-loading="loadingKeys" style="width: 100%">
                         <el-table-column prop="address" label="地址" min-width="220"></el-table-column>
                         <el-table-column prop="case_no" label="案件编号" width="150"></el-table-column>
                         <el-table-column prop="task_no" label="任务编号" width="170"></el-table-column>
@@ -63,7 +61,7 @@
                     </el-table>
                 </el-tab-pane>
 
-                <el-tab-pane label="私钥分片列表" name="shards">
+                <el-tab-pane label="私钥分片" name="shards">
                     <el-table :data="shards" v-loading="loadingShards" style="width: 100%">
                         <el-table-column prop="address" label="地址" min-width="220"></el-table-column>
                         <el-table-column prop="case_no" label="案件编号" width="150"></el-table-column>
@@ -146,6 +144,11 @@ export default {
                 username: '',
                 status: ''
             },
+            appliedFilters: {
+                address: '',
+                username: '',
+                status: ''
+            },
             keys: [],
             shards: [],
             participantUsers: [],
@@ -163,7 +166,15 @@ export default {
         }
     },
     computed: {
-        ...mapGetters(['isAdmin'])
+        ...mapGetters(['isAdmin']),
+        filteredKeys() {
+            return this.keys.filter(item => {
+                const address = String(item.address || '').toLowerCase()
+                if (this.appliedFilters.address && !address.includes(this.appliedFilters.address.toLowerCase())) return false
+                if (this.appliedFilters.status && item.status !== this.appliedFilters.status) return false
+                return true
+            })
+        }
     },
     created() {
         this.loadAll()
@@ -193,7 +204,7 @@ export default {
         async loadShards() {
             this.loadingShards = true
             try {
-                const params = Object.fromEntries(Object.entries(this.filters).filter(([, value]) => value))
+                const params = Object.fromEntries(Object.entries(this.appliedFilters).filter(([, value]) => value))
                 const response = await this.$offlineApi.listShards(params)
                 this.shards = response.data.shards || []
             } catch (error) {
@@ -213,8 +224,28 @@ export default {
             }
         },
 
+        searchRecords() {
+            this.appliedFilters = { ...this.filters }
+            if (this.activeTab === 'shards') {
+                this.loadShards()
+            }
+        },
+
+        resetFilters() {
+            this.filters = {
+                address: '',
+                username: '',
+                status: ''
+            }
+            this.appliedFilters = { ...this.filters }
+            if (this.activeTab === 'shards') {
+                this.loadShards()
+            }
+        },
+
         showKey(key) {
             this.filters.address = key.address
+            this.appliedFilters = { ...this.filters }
             this.activeTab = 'shards'
             this.loadShards()
         },
@@ -303,7 +334,13 @@ export default {
 </script>
 
 <style scoped>
-.filters {
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.query {
     margin-bottom: 10px;
 }
 

@@ -34,6 +34,17 @@ func (s *memoryShareStorage) GetKeyShardForParticipant(username, address string)
 	return &shard, nil
 }
 
+func (s *memoryShareStorage) GetKeyShardByID(shardID string) (*model.KeyShard, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, shard := range s.shards {
+		if shard.ShardID == shardID {
+			return &shard, nil
+		}
+	}
+	return nil, storage.ErrRecordNotFound
+}
+
 func (s *memoryShareStorage) ListActiveKeyShardsByAddress(address string) ([]model.KeyShard, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -60,6 +71,30 @@ func (s *memoryShareStorage) ListKeyShardsByAddress(address string) ([]model.Key
 	return shards, nil
 }
 
+func (s *memoryShareStorage) ListKeyShardsByUsername(username string) ([]model.KeyShard, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var shards []model.KeyShard
+	for _, shard := range s.shards {
+		if shard.Username == username {
+			shards = append(shards, shard)
+		}
+	}
+	sort.Slice(shards, func(i, j int) bool { return shards[i].ShardIndex < shards[j].ShardIndex })
+	return shards, nil
+}
+
+func (s *memoryShareStorage) ListKeyShards() ([]model.KeyShard, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var shards []model.KeyShard
+	for _, shard := range s.shards {
+		shards = append(shards, shard)
+	}
+	sort.Slice(shards, func(i, j int) bool { return shards[i].ShardID < shards[j].ShardID })
+	return shards, nil
+}
+
 func (s *memoryShareStorage) UpdateKeyShardStatus(shardID string, status model.KeyShardStatus) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -71,6 +106,20 @@ func (s *memoryShareStorage) UpdateKeyShardStatus(shardID string, status model.K
 		}
 	}
 	return storage.ErrRecordNotFound
+}
+
+func (s *memoryShareStorage) TransferKeyShard(shardID, newUsername string) (*model.KeyShard, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for key, shard := range s.shards {
+		if shard.ShardID == shardID {
+			delete(s.shards, key)
+			shard.Username = newUsername
+			s.shards[shardKey(newUsername, shard.Address)] = shard
+			return &shard, nil
+		}
+	}
+	return nil, storage.ErrRecordNotFound
 }
 
 type memorySeStorage struct {
@@ -199,6 +248,17 @@ func (s *memoryOfflineKeyStorage) GetOfflineKeyByAddress(address string) (*model
 		return nil, storage.ErrRecordNotFound
 	}
 	return &key, nil
+}
+
+func (s *memoryOfflineKeyStorage) ListOfflineKeys() ([]model.OfflineKey, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	keys := make([]model.OfflineKey, 0, len(s.byAddress))
+	for _, key := range s.byAddress {
+		keys = append(keys, key)
+	}
+	sort.Slice(keys, func(i, j int) bool { return keys[i].OfflineKeyID < keys[j].OfflineKeyID })
+	return keys, nil
 }
 
 func (s *memoryOfflineKeyStorage) GetOfflineKeyByTaskNo(taskNo string) (*model.OfflineKey, error) {
@@ -427,6 +487,24 @@ func (memoryAuditStorage) CreateAuditLog(log model.AuditLog) error {
 
 func (memoryAuditStorage) ListAuditLogs(limit int) ([]model.AuditLog, error) {
 	return nil, nil
+}
+
+func (memoryAuditStorage) SearchAuditLogs(filter storage.AuditLogFilter) ([]model.AuditLog, int64, error) {
+	return nil, 0, nil
+}
+
+type memoryApprovalStorage struct{}
+
+func (memoryApprovalStorage) CreateApproval(approval model.Approval) (*model.Approval, error) {
+	return &approval, nil
+}
+
+func (memoryApprovalStorage) ListApprovals(limit int) ([]model.Approval, error) {
+	return nil, nil
+}
+
+func (memoryApprovalStorage) ListApprovalsPage(page, pageSize int) ([]model.Approval, int64, error) {
+	return nil, 0, nil
 }
 
 func shardKey(username, address string) string {

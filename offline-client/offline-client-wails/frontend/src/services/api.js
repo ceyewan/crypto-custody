@@ -207,11 +207,36 @@ export const offlineApi = {
         return apiClient.get(`/offline/audit`, { params: query })
     },
 
-    listApprovals(limit = 100) {
-        return apiClient.get(`/offline/approvals`, { params: { limit } })
+    listApprovals(params = {}) {
+        const query = typeof params === 'number' ? { limit: params } : params
+        return apiClient.get(`/offline/approvals`, { params: query })
     },
 
     downloadBackup() {
         return apiClient.get(`/offline/backup/download`, { responseType: 'blob' })
+    },
+
+    listBackups() {
+        return apiClient.get(`/offline/backups`)
+    },
+
+    createHotBackup() {
+        return apiClient.post(`/offline/backups/hot`)
+    },
+
+    createColdBackup(password) {
+        return apiClient.post(`/offline/backups/cold/export`, { password })
+    },
+
+    downloadBackupRecord(id) {
+        return apiClient.get(`/offline/backups/${id}/download`, { responseType: 'blob' })
+    },
+
+    restoreBackup(id, password = '') {
+        return apiClient.post(`/offline/backups/${id}/restore`, { password })
+    },
+
+    verifyBackup(id) {
+        return apiClient.post(`/offline/backups/${id}/verify`)
     }
 }

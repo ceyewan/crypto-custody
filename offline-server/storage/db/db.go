@@ -118,6 +118,7 @@ func autoMigrateModels() error {
 		&model.SignSession{},
 		&model.Approval{},
 		&model.AuditLog{},
+		&model.BackupRecord{},
 		&model.User{},
 		&model.Case{},
 		&model.Se{},
@@ -137,6 +138,18 @@ func AutoMigrate(models ...interface{}) error {
 		return fmt.Errorf("数据库未初始化")
 	}
 	return instance.AutoMigrate(models...)
+}
+
+// Close 关闭当前数据库连接，恢复数据库文件前调用。
+func Close() {
+	if instance == nil {
+		return
+	}
+	sqlDB, err := instance.DB()
+	if err == nil {
+		_ = sqlDB.Close()
+	}
+	instance = nil
 }
 
 // GetDB 获取数据库连接实例

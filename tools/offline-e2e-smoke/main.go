@@ -158,7 +158,7 @@ func run(opts smokeOptions) error {
 	defer server.Stop()
 	fmt.Printf("[OK] offline WebSocket server started, url=%s\n", wsURL)
 
-	coordinator, err := dialClient(wsURL, "coordinator", serverws.RoleCoordinator, nil)
+	coordinator, err := dialClient(wsURL, "admin", serverws.RoleAdmin, nil)
 	if err != nil {
 		return err
 	}
@@ -260,6 +260,7 @@ func startServer(opts smokeOptions, cplc string) (*serverws.Server, string, *mem
 		newMemoryKeyGenStorage(),
 		newMemorySignStorage(),
 		memoryAuditStorage{},
+		memoryApprovalStorage{},
 		memstorage.NewSessionManager(),
 		runtime,
 	)
@@ -287,7 +288,7 @@ func newDesktopParticipant(opts smokeOptions, wsURL, username, cplc string) (*de
 		return nil, err
 	}
 	mpcService := services.NewMPCService(cfg, securityService)
-	client, err := dialClient(wsURL, username, serverws.RoleParticipant, func(c *desktopClient) {
+	client, err := dialClient(wsURL, username, serverws.RoleOfficer, func(c *desktopClient) {
 		c.security = securityService
 		c.mpc = mpcService
 		c.cplc = cplc

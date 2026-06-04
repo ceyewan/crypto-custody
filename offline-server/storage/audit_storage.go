@@ -66,17 +66,15 @@ func (s *AuditStorage) ListAuditLogs(limit int) ([]model.AuditLog, error) {
 	return entries, nil
 }
 
-func (s *AuditStorage) SearchAuditLogs(filter AuditLogFilter) ([]model.AuditLog, error) {
-	if filter.Limit <= 0 || filter.Limit > 1000 {
-		filter.Limit = 100
-	}
+func (s *AuditStorage) SearchAuditLogs(filter AuditLogFilter) ([]model.AuditLog, int64, error) {
+	page, pageSize := normalizePage(filter.Page, filter.PageSize, filter.Limit)
 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	database := db.GetDB()
 	if database == nil {
-		return nil, ErrDatabaseNotInitialized
+		return nil, 0, ErrDatabaseNotInitialized
 	}
 
 	query := database.Model(&model.AuditLog{})
@@ -111,10 +109,32 @@ func (s *AuditStorage) SearchAuditLogs(filter AuditLogFilter) ([]model.AuditLog,
 		query = query.Where("result = ?", filter.Result)
 	}
 
-	var entries []model.AuditLog
-	if err := query.Order("created_at DESC").Limit(filter.Limit).Find(&entries).Error; err != nil {
-		log.Printf("筛选审计日志失败: %v", err)
-		return nil, ErrOperationFailed
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		log.Printf("统计审计日志失败: %v", err)
+		return nil, 0, ErrOperationFailed
 	}
-	return entries, nil
+
+	var entries []model.AuditLog
+	if err := query.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&entries).Error; err != nil {
+		log.Printf("筛选审计日志失败: %v", err)
+		return nil, 0, ErrOperationFailed
+	}
+	return entries, total, nil
+}
+
+func normalizePage(page, pageSize, limit int) (int, int) {
+	if page <= 0 {
+		page = 1
+	}
+	if pageSize <= 0 {
+		pageSize = limit
+	}
+	if pageSize <= 0 {
+		pageSize = 100
+	}
+	if pageSize > 1000 {
+		pageSize = 1000
+	}
+	return page, pageSize
 }

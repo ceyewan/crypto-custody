@@ -1040,8 +1040,8 @@ func (fakeAuditStorage) ListAuditLogs(limit int) ([]model.AuditLog, error) {
 	return nil, nil
 }
 
-func (fakeAuditStorage) SearchAuditLogs(filter storage.AuditLogFilter) ([]model.AuditLog, error) {
-	return nil, nil
+func (fakeAuditStorage) SearchAuditLogs(filter storage.AuditLogFilter) ([]model.AuditLog, int64, error) {
+	return nil, 0, nil
 }
 
 type fakeApprovalStorage struct{}
@@ -1052,4 +1052,8 @@ func (fakeApprovalStorage) CreateApproval(approval model.Approval) (*model.Appro
 
 func (fakeApprovalStorage) ListApprovals(limit int) ([]model.Approval, error) {
 	return nil, nil
+}
+
+func (fakeApprovalStorage) ListApprovalsPage(page, pageSize int) ([]model.Approval, int64, error) {
+	return nil, 0, nil
 }

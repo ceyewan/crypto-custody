@@ -1,71 +1,70 @@
 <template>
     <div class="page se-page">
-        <div class="page-header">
-            <div>
-                <h2 class="page-title">安全芯片管理</h2>
-                <p class="page-subtitle">安全芯片统一登记，不归属个人；私钥分片归属由持有人和安全芯片记录表达。</p>
-            </div>
-            <div>
-                <el-button icon="el-icon-refresh" :loading="loadingList" @click="loadSecurityElements">刷新列表</el-button>
-                <el-button type="primary" icon="el-icon-cpu" :loading="reading" @click="readCurrentSe">读取当前 SE</el-button>
-            </div>
-        </div>
-
         <el-card>
-            <el-form :inline="true" :model="filters" class="filters">
-                <el-form-item label="SEID">
-                    <el-input v-model="filters.seid" clearable placeholder="按 SEID 筛选"></el-input>
-                </el-form-item>
-                <el-form-item label="CPLC">
-                    <el-input v-model="filters.cplc" clearable placeholder="按 CPLC 筛选"></el-input>
-                </el-form-item>
-                <el-form-item label="状态">
-                    <el-select v-model="filters.status" clearable placeholder="全部">
-                        <el-option label="active" value="active"></el-option>
-                        <el-option label="disabled" value="disabled"></el-option>
-                        <el-option label="lost" value="lost"></el-option>
-                        <el-option label="destroyed" value="destroyed"></el-option>
+            <div slot="header" class="header">
+                <span>SE 管理</span>
+                <div>
+                    <el-button size="small" type="primary" icon="el-icon-cpu" @click="openImportDialog">导入 SE</el-button>
+                    <el-button size="small" icon="el-icon-refresh" :loading="loadingList" @click="loadSecurityElements">刷新</el-button>
+                </div>
+            </div>
+
+            <el-form :inline="true" :model="query" class="query">
+                <el-form-item><el-input v-model="query.seid" clearable placeholder="SEID" /></el-form-item>
+                <el-form-item><el-input v-model="query.cplc" clearable placeholder="CPLC" /></el-form-item>
+                <el-form-item>
+                    <el-select v-model="query.status" clearable placeholder="状态">
+                        <el-option label="active" value="active" />
+                        <el-option label="disabled" value="disabled" />
+                        <el-option label="lost" value="lost" />
+                        <el-option label="destroyed" value="destroyed" />
                     </el-select>
                 </el-form-item>
-            </el-form>
-
-            <el-form :model="form" label-width="120px" class="import-form">
-                <el-form-item label="安全芯片 ID">
-                    <el-input v-model="form.seid" placeholder="系统自动建议，可按贴纸编号调整"></el-input>
-                </el-form-item>
-                <el-form-item label="CPLC">
-                    <el-input v-model="form.cplc" type="textarea" :rows="3" readonly placeholder="点击读取当前 SE"></el-input>
-                </el-form-item>
-                <el-form-item label="保管位置">
-                    <el-input v-model="form.custodyLocation" placeholder="例如 保险柜 A-01，可留空"></el-input>
-                </el-form-item>
                 <el-form-item>
-                    <el-button type="primary" :loading="importing" @click="importCurrentSe">导入当前 SE</el-button>
+                    <el-button type="primary" @click="applyQuery">查询</el-button>
+                    <el-button @click="resetQuery">重置</el-button>
                 </el-form-item>
             </el-form>
 
-            <el-table :data="filteredSeList" v-loading="loadingList" style="width: 100%">
-                <el-table-column prop="se_id" label="SEID" width="170"></el-table-column>
-                <el-table-column prop="cplc" label="CPLC" min-width="260"></el-table-column>
-                <el-table-column prop="status" label="状态" width="100">
+            <el-table :data="filteredSeList" v-loading="loadingList" empty-text="暂无 SE 记录">
+                <el-table-column prop="se_id" label="SEID" width="170" show-overflow-tooltip />
+                <el-table-column prop="cplc" label="CPLC" min-width="260" show-overflow-tooltip />
+                <el-table-column label="状态" width="100">
                     <template slot-scope="scope">
-                        <el-tag :type="scope.row.status === 'active' ? 'success' : 'warning'">{{ scope.row.status }}</el-tag>
+                        <el-tag :type="scope.row.status === 'active' ? 'success' : 'warning'" size="small">{{ scope.row.status }}</el-tag>
                     </template>
                 </el-table-column>
-                <el-table-column prop="registered_by" label="登记人" width="130"></el-table-column>
-                <el-table-column prop="remark" label="备注/位置" min-width="160"></el-table-column>
-                <el-table-column prop="created_at" label="登记时间" width="170">
-                    <template slot-scope="scope">
-                        {{ formatTime(scope.row.created_at) }}
-                    </template>
+                <el-table-column prop="registered_by" label="登记人" width="130" />
+                <el-table-column prop="remark" label="备注/位置" min-width="160" show-overflow-tooltip />
+                <el-table-column label="登记时间" width="170">
+                    <template slot-scope="scope">{{ formatTime(scope.row.created_at) }}</template>
                 </el-table-column>
-                <el-table-column prop="last_used_at" label="最近使用时间" width="170">
-                    <template slot-scope="scope">
-                        {{ formatTime(scope.row.last_used_at) }}
-                    </template>
+                <el-table-column label="最近使用时间" width="170">
+                    <template slot-scope="scope">{{ formatTime(scope.row.last_used_at) }}</template>
                 </el-table-column>
             </el-table>
         </el-card>
+
+        <el-dialog title="导入 SE" :visible.sync="importDialogVisible" width="620px">
+            <el-form :model="form" label-width="110px">
+                <el-form-item label="安全芯片 ID">
+                    <el-input v-model="form.seid" placeholder="系统自动建议，可按贴纸编号调整" />
+                </el-form-item>
+                <el-form-item label="CPLC">
+                    <el-input v-model="form.cplc" type="textarea" :rows="3" readonly placeholder="点击读取当前 SE" />
+                </el-form-item>
+                <el-form-item label="保管位置">
+                    <el-input v-model="form.custodyLocation" placeholder="例如 保险柜 A-01，可留空" />
+                </el-form-item>
+                <el-form-item>
+                    <el-button icon="el-icon-cpu" :loading="reading" @click="readCurrentSe">读取当前 SE</el-button>
+                </el-form-item>
+            </el-form>
+            <span slot="footer">
+                <el-button @click="importDialogVisible = false">取消</el-button>
+                <el-button type="primary" :loading="importing" @click="importCurrentSe">导入当前 SE</el-button>
+            </span>
+        </el-dialog>
     </div>
 </template>
 
@@ -77,46 +76,72 @@ export default {
     name: 'ImportSE',
     data() {
         return {
-            form: {
-                seid: '',
-                cplc: '',
-                custodyLocation: ''
-            },
-            filters: {
-                seid: '',
-                cplc: '',
-                status: ''
-            },
+            form: this.defaultForm(),
+            query: this.defaultQuery(),
+            appliedQuery: this.defaultQuery(),
             seList: [],
+            importDialogVisible: false,
             reading: false,
             importing: false,
             loadingList: false
         }
     },
-    created() {
-        this.loadSecurityElements()
-    },
     computed: {
         filteredSeList() {
             return this.seList.filter(item => {
-                if (this.filters.seid && !String(item.se_id || '').includes(this.filters.seid)) return false
-                if (this.filters.cplc && !String(item.cplc || '').includes(this.filters.cplc)) return false
-                if (this.filters.status && item.status !== this.filters.status) return false
+                const seid = String(item.se_id || '').toLowerCase()
+                const cplc = String(item.cplc || '').toLowerCase()
+                if (this.appliedQuery.seid && !seid.includes(this.appliedQuery.seid.toLowerCase())) return false
+                if (this.appliedQuery.cplc && !cplc.includes(this.appliedQuery.cplc.toLowerCase())) return false
+                if (this.appliedQuery.status && item.status !== this.appliedQuery.status) return false
                 return true
             })
         }
     },
+    created() {
+        this.loadSecurityElements()
+    },
     methods: {
+        defaultForm() {
+            return {
+                seid: '',
+                cplc: '',
+                custodyLocation: ''
+            }
+        },
+
+        defaultQuery() {
+            return {
+                seid: '',
+                cplc: '',
+                status: ''
+            }
+        },
+
         async loadSecurityElements() {
             this.loadingList = true
             try {
                 const response = await serverSeApi.listSecurityElements()
                 this.seList = response.data.data || []
             } catch (error) {
-                this.$message.error(error.response?.data?.error || '查询安全芯片失败')
+                this.$message.error(error.response?.data?.error || '查询 SE 失败')
             } finally {
                 this.loadingList = false
             }
+        },
+
+        applyQuery() {
+            this.appliedQuery = { ...this.query }
+        },
+
+        resetQuery() {
+            this.query = this.defaultQuery()
+            this.appliedQuery = this.defaultQuery()
+        },
+
+        openImportDialog() {
+            this.form = this.defaultForm()
+            this.importDialogVisible = true
         },
 
         async readCurrentSe() {
@@ -144,11 +169,11 @@ export default {
             this.importing = true
             try {
                 await serverSeApi.createSecurityElement(this.form.seid.trim(), this.form.cplc, this.form.custodyLocation)
-                this.$message.success('安全芯片已导入')
-                this.form = { seid: '', cplc: '', custodyLocation: '' }
+                this.$message.success('SE 已导入')
+                this.importDialogVisible = false
                 await this.loadSecurityElements()
             } catch (error) {
-                this.$message.error(error.response?.data?.error || '导入安全芯片失败')
+                this.$message.error(error.response?.data?.error || '导入 SE 失败')
             } finally {
                 this.importing = false
             }
@@ -171,12 +196,13 @@ export default {
 </script>
 
 <style scoped>
-.import-form {
-    max-width: 720px;
-    margin-bottom: 18px;
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
 }
 
-.filters {
+.query {
     margin-bottom: 12px;
 }
 </style>

@@ -26,7 +26,7 @@
                         active-text-color="#409EFF">
                         <el-menu-item index="/dashboard">
                             <i class="el-icon-s-home"></i>
-                            <span>{{ isOfficer ? '我的工作台' : '工作台' }}</span>
+                            <span>仪表盘</span>
                         </el-menu-item>
 
                         <template v-if="isAdmin">
@@ -36,11 +36,11 @@
                             </el-menu-item>
                             <el-menu-item index="/keys">
                                 <i class="el-icon-wallet"></i>
-                                <span>地址与私钥</span>
+                                <span>地址管理</span>
                             </el-menu-item>
                             <el-menu-item index="/security-elements">
                                 <i class="el-icon-cpu"></i>
-                                <span>安全芯片管理</span>
+                                <span>SE 管理</span>
                             </el-menu-item>
                             <el-menu-item index="/users">
                                 <i class="el-icon-user"></i>
@@ -71,11 +71,11 @@
                         <template v-if="isAuditor && !isAdmin">
                             <el-menu-item index="/offline-tasks">
                                 <i class="el-icon-document"></i>
-                                <span>任务记录</span>
+                                <span>离线任务</span>
                             </el-menu-item>
                             <el-menu-item index="/keys">
                                 <i class="el-icon-wallet"></i>
-                                <span>地址与私钥摘要</span>
+                                <span>地址管理</span>
                             </el-menu-item>
                         </template>
 

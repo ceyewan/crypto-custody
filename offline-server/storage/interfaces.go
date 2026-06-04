@@ -10,6 +10,8 @@ import (
 // AuditLogFilter 定义审计日志的服务端筛选条件。
 type AuditLogFilter struct {
 	Limit    int
+	Page     int
+	PageSize int
 	TimeFrom time.Time
 	TimeTo   time.Time
 	Username string
@@ -213,11 +215,12 @@ type IOfflineTaskStorage interface {
 type IAuditStorage interface {
 	CreateAuditLog(log model.AuditLog) error
 	ListAuditLogs(limit int) ([]model.AuditLog, error)
-	SearchAuditLogs(filter AuditLogFilter) ([]model.AuditLog, error)
+	SearchAuditLogs(filter AuditLogFilter) ([]model.AuditLog, int64, error)
 }
 
 // IApprovalStorage 定义敏感操作审批记录存储接口
 type IApprovalStorage interface {
 	CreateApproval(approval model.Approval) (*model.Approval, error)
 	ListApprovals(limit int) ([]model.Approval, error)
+	ListApprovalsPage(page, pageSize int) ([]model.Approval, int64, error)
 }

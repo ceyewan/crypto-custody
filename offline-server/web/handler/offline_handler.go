@@ -2,7 +2,11 @@ package handler
 
 import (
 	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -15,6 +19,7 @@ import (
 	"time"
 
 	"offline-server/storage"
+	storagedb "offline-server/storage/db"
 	"offline-server/storage/model"
 
 	"github.com/gin-gonic/gin"
@@ -28,6 +33,8 @@ var (
 	offlineAuditStore  = storage.GetAuditStorage()
 	offlineApproval    = storage.GetApprovalStorage()
 )
+
+const offlineDBPath = "data/crypto-custody.db"
 
 type offlinePackage struct {
 	SchemaVersion    string          `json:"schema_version"`
@@ -119,6 +126,23 @@ type approvalResponse struct {
 	ApprovedBy  string               `json:"approved_by"`
 	Role        string               `json:"role"`
 	Status      model.ApprovalStatus `json:"status"`
+}
+
+type coldBackupRequest struct {
+	Password string `json:"password"`
+}
+
+type restoreBackupRequest struct {
+	Password string `json:"password"`
+}
+
+type encryptedBackupFile struct {
+	Version    int    `json:"version"`
+	KDF        string `json:"kdf"`
+	Salt       string `json:"salt"`
+	Nonce      string `json:"nonce"`
+	Ciphertext string `json:"ciphertext"`
+	PlainHash  string `json:"plainHash"`
 }
 
 type participationResponse struct {
@@ -575,34 +599,379 @@ func DestroyOfflineKey(c *gin.Context) {
 // ListAuditLogs 查询脱敏审计日志。
 func ListAuditLogs(c *gin.Context) {
 	filter := auditFilterFromQuery(c)
-	logs, err := offlineAuditStore.SearchAuditLogs(filter)
+	page, pageSize := filter.Page, filter.PageSize
+	logs, total, err := offlineAuditStore.SearchAuditLogs(filter)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询审计日志失败"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "logs": auditLogDTOs(logs)})
+	items := auditLogDTOs(logs)
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"logs":    items,
+		"data": gin.H{
+			"items":    items,
+			"total":    total,
+			"page":     page,
+			"pageSize": pageSize,
+		},
+	})
 }
 
 // ListApprovals 查询敏感操作审批记录。
 func ListApprovals(c *gin.Context) {
-	approvals, err := offlineApproval.ListApprovals(intFromQuery(c, "limit", 100))
+	page := intFromQuery(c, "page", 1)
+	pageSize := firstIntFromQuery(c, []string{"pageSize", "page_size", "limit"}, 20)
+	approvals, total, err := offlineApproval.ListApprovalsPage(page, pageSize)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询审批记录失败"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "approvals": approvalDTOs(approvals)})
+	items := approvalDTOs(approvals)
+	c.JSON(http.StatusOK, gin.H{
+		"success":   true,
+		"approvals": items,
+		"data": gin.H{
+			"items":    items,
+			"total":    total,
+			"page":     page,
+			"pageSize": pageSize,
+		},
+	})
 }
 
 // DownloadBackup 下载当前 SQLite 数据库快照。
 func DownloadBackup(c *gin.Context) {
-	path := filepath.Join("data", "crypto-custody.db")
-	if _, err := os.Stat(path); err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "备份源数据库不存在"})
+	record, err := createOfflineHotBackupRecord(c)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "热备份创建失败: " + err.Error()})
 		return
 	}
-	fileName := fmt.Sprintf("offline-backup-%s.db", time.Now().UTC().Format("20060102-150405"))
-	auditFromContext(c, "offline_backup_download", "backup", fileName, "success", "")
-	c.FileAttachment(path, fileName)
+	auditFromContext(c, "offline_backup_download", "backup", record.BackupNo, "success", "")
+	c.FileAttachment(record.FilePath, record.FileName)
+}
+
+func CreateHotBackup(c *gin.Context) {
+	record, err := createOfflineHotBackupRecord(c)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "热备份创建失败: " + err.Error()})
+		return
+	}
+	auditFromContext(c, "offline_backup_hot_create", "backup", record.BackupNo, "success", "")
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "热备份创建成功", "data": record})
+}
+
+func CreateColdBackup(c *gin.Context) {
+	var req coldBackupRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的请求参数"})
+		return
+	}
+	record, err := createOfflineColdBackupRecord(c, req.Password)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "冷备份创建失败: " + err.Error()})
+		return
+	}
+	auditFromContext(c, "offline_backup_cold_create", "backup", record.BackupNo, "success", "")
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "冷备份创建成功", "data": record})
+}
+
+func ListBackups(c *gin.Context) {
+	var backups []model.BackupRecord
+	database := storagedb.GetDB()
+	if err := database.Order("created_at DESC").Find(&backups).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询备份记录失败: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "查询备份记录成功", "data": backups})
+}
+
+func DownloadBackupRecord(c *gin.Context) {
+	record, ok := backupRecordFromParam(c)
+	if !ok {
+		return
+	}
+	auditFromContext(c, "offline_backup_record_download", "backup", record.BackupNo, "success", "")
+	c.FileAttachment(record.FilePath, record.FileName)
+}
+
+func VerifyBackup(c *gin.Context) {
+	record, ok := backupRecordFromParam(c)
+	if !ok {
+		return
+	}
+	hash, err := fileHash(record.FilePath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "备份校验失败: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "备份校验完成", "data": gin.H{"valid": hash == record.FileHash, "fileHash": hash}})
+}
+
+func RestoreBackup(c *gin.Context) {
+	record, ok := backupRecordFromParam(c)
+	if !ok {
+		return
+	}
+	var req restoreBackupRequest
+	_ = c.ShouldBindJSON(&req)
+	if record.Encrypted && strings.TrimSpace(req.Password) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "冷备份恢复需要密码"})
+		return
+	}
+	preRestore, err := createPreRestoreSnapshot(usernameFromContext(c))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "创建恢复前快照失败: " + err.Error()})
+		return
+	}
+	restoreData, err := readBackupPayload(record, req.Password)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "读取备份失败: " + err.Error()})
+		return
+	}
+	if err := replaceDatabaseFile(restoreData); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "恢复数据库失败: " + err.Error()})
+		return
+	}
+	now := time.Now().Unix()
+	record.RestoredBy = usernameFromContext(c)
+	record.RestoredAt = &now
+	record.Status = "restored"
+	if err := storagedb.GetDB().Save(&record).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "更新恢复记录失败: " + err.Error()})
+		return
+	}
+	auditFromContext(c, "offline_backup_restore", "backup", record.BackupNo, "success", "")
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "备份恢复成功", "data": gin.H{"backup": record, "preRestoreSnapshot": preRestore}})
+}
+
+func backupRecordFromParam(c *gin.Context) (model.BackupRecord, bool) {
+	var record model.BackupRecord
+	if err := storagedb.GetDB().First(&record, c.Param("id")).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "备份不存在"})
+		return record, false
+	}
+	return record, true
+}
+
+func createOfflineHotBackupRecord(c *gin.Context) (*model.BackupRecord, error) {
+	if _, err := os.Stat(offlineDBPath); err != nil {
+		return nil, errors.New("备份源数据库不存在")
+	}
+	if err := os.MkdirAll("backups", 0755); err != nil {
+		return nil, err
+	}
+	no := newBackupNo("BACKUP")
+	name := no + ".db"
+	dst := filepath.Join("backups", name)
+	if err := copyFile(offlineDBPath, dst); err != nil {
+		return nil, err
+	}
+	hash, err := fileHash(dst)
+	if err != nil {
+		return nil, err
+	}
+	record := &model.BackupRecord{
+		BackupNo: no, BackupType: "hot", FileName: name, FilePath: dst,
+		FileHash: hash, Encrypted: false, CreatedBy: usernameFromContext(c), Status: "created",
+	}
+	if err := storagedb.GetDB().Create(record).Error; err != nil {
+		return nil, err
+	}
+	return record, nil
+}
+
+func createOfflineColdBackupRecord(c *gin.Context, password string) (*model.BackupRecord, error) {
+	if strings.TrimSpace(password) == "" {
+		return nil, errors.New("冷备份密码不能为空")
+	}
+	plain, err := os.ReadFile(offlineDBPath)
+	if err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll("backups", 0755); err != nil {
+		return nil, err
+	}
+	no := newBackupNo("BACKUP")
+	name := no + ".cold.enc"
+	dst := filepath.Join("backups", name)
+	if err := writeEncryptedBackup(dst, plain, password); err != nil {
+		return nil, err
+	}
+	hash, err := fileHash(dst)
+	if err != nil {
+		return nil, err
+	}
+	record := &model.BackupRecord{
+		BackupNo: no, BackupType: "cold", FileName: name, FilePath: dst,
+		FileHash: hash, Encrypted: true, CreatedBy: usernameFromContext(c), Status: "created",
+	}
+	if err := storagedb.GetDB().Create(record).Error; err != nil {
+		return nil, err
+	}
+	return record, nil
+}
+
+func createPreRestoreSnapshot(username string) (*model.BackupRecord, error) {
+	if err := os.MkdirAll("backups", 0755); err != nil {
+		return nil, err
+	}
+	no := newBackupNo("PRERESTORE")
+	name := no + ".db"
+	dst := filepath.Join("backups", name)
+	if err := copyFile(offlineDBPath, dst); err != nil {
+		return nil, err
+	}
+	hash, err := fileHash(dst)
+	if err != nil {
+		return nil, err
+	}
+	record := &model.BackupRecord{
+		BackupNo: no, BackupType: "hot", FileName: name, FilePath: dst,
+		FileHash: hash, Encrypted: false, CreatedBy: username, Status: "created",
+	}
+	if err := storagedb.GetDB().Create(record).Error; err != nil {
+		return nil, err
+	}
+	return record, nil
+}
+
+func readBackupPayload(record model.BackupRecord, password string) ([]byte, error) {
+	if record.Encrypted {
+		return readEncryptedBackup(record.FilePath, password)
+	}
+	return os.ReadFile(record.FilePath)
+}
+
+func replaceDatabaseFile(data []byte) error {
+	tmpPath := offlineDBPath + ".restore.tmp"
+	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
+		return err
+	}
+	storagedb.Close()
+	if err := os.Rename(tmpPath, offlineDBPath); err != nil {
+		_ = os.Remove(tmpPath)
+		_ = storagedb.Init()
+		return err
+	}
+	return storagedb.Init()
+}
+
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	_, err = io.Copy(out, in)
+	return err
+}
+
+func writeEncryptedBackup(path string, plain []byte, password string) error {
+	salt := make([]byte, 16)
+	nonce := make([]byte, 12)
+	if _, err := rand.Read(salt); err != nil {
+		return err
+	}
+	if _, err := rand.Read(nonce); err != nil {
+		return err
+	}
+	key := deriveBackupKey(password, salt)
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return err
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return err
+	}
+	plainHash := sha256.Sum256(plain)
+	envelope := encryptedBackupFile{
+		Version:    1,
+		KDF:        "sha256-100000",
+		Salt:       base64.StdEncoding.EncodeToString(salt),
+		Nonce:      base64.StdEncoding.EncodeToString(nonce),
+		Ciphertext: base64.StdEncoding.EncodeToString(gcm.Seal(nil, nonce, plain, nil)),
+		PlainHash:  hex.EncodeToString(plainHash[:]),
+	}
+	data, err := json.Marshal(envelope)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0600)
+}
+
+func readEncryptedBackup(path string, password string) ([]byte, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var envelope encryptedBackupFile
+	if err := json.Unmarshal(data, &envelope); err != nil {
+		return nil, err
+	}
+	salt, err := base64.StdEncoding.DecodeString(envelope.Salt)
+	if err != nil {
+		return nil, err
+	}
+	nonce, err := base64.StdEncoding.DecodeString(envelope.Nonce)
+	if err != nil {
+		return nil, err
+	}
+	ciphertext, err := base64.StdEncoding.DecodeString(envelope.Ciphertext)
+	if err != nil {
+		return nil, err
+	}
+	key := deriveBackupKey(password, salt)
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+	plain, err := gcm.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		return nil, errors.New("备份密码错误或文件已损坏")
+	}
+	sum := sha256.Sum256(plain)
+	if hex.EncodeToString(sum[:]) != envelope.PlainHash {
+		return nil, errors.New("备份明文哈希校验失败")
+	}
+	return plain, nil
+}
+
+func deriveBackupKey(password string, salt []byte) []byte {
+	data := append([]byte(password), salt...)
+	sum := sha256.Sum256(data)
+	for i := 0; i < 100000; i++ {
+		next := sha256.Sum256(sum[:])
+		sum = next
+	}
+	return sum[:]
+}
+
+func fileHash(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+func newBackupNo(prefix string) string {
+	return fmt.Sprintf("%s-%s-%06d", prefix, time.Now().UTC().Format("20060102-150405"), time.Now().UTC().Nanosecond()/1000)
 }
 
 func taskDTO(task *model.OfflineTask) offlineTaskResponse {
@@ -915,8 +1284,12 @@ func roleFromContext(c *gin.Context) string {
 }
 
 func auditFilterFromQuery(c *gin.Context) storage.AuditLogFilter {
+	page := intFromQuery(c, "page", 1)
+	pageSize := firstIntFromQuery(c, []string{"pageSize", "page_size", "limit"}, 20)
 	return storage.AuditLogFilter{
-		Limit:    intFromQuery(c, "limit", 100),
+		Limit:    pageSize,
+		Page:     page,
+		PageSize: pageSize,
 		TimeFrom: timeFromQuery(c, "time_from"),
 		TimeTo:   timeFromQuery(c, "time_to"),
 		Username: strings.TrimSpace(c.Query("username")),
@@ -953,6 +1326,15 @@ func intFromQuery(c *gin.Context, key string, fallback int) int {
 		return fallback
 	}
 	return parsed
+}
+
+func firstIntFromQuery(c *gin.Context, keys []string, fallback int) int {
+	for _, key := range keys {
+		if c.Query(key) != "" {
+			return intFromQuery(c, key, fallback)
+		}
+	}
+	return fallback
 }
 
 func timeFromQuery(c *gin.Context, key string) time.Time {

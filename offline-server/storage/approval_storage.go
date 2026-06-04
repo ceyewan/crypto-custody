@@ -66,3 +66,29 @@ func (s *ApprovalStorage) ListApprovals(limit int) ([]model.Approval, error) {
 	}
 	return approvals, nil
 }
+
+func (s *ApprovalStorage) ListApprovalsPage(page, pageSize int) ([]model.Approval, int64, error) {
+	page, pageSize = normalizePage(page, pageSize, 100)
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	database := db.GetDB()
+	if database == nil {
+		return nil, 0, ErrDatabaseNotInitialized
+	}
+
+	query := database.Model(&model.Approval{})
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		log.Printf("统计审批记录失败: %v", err)
+		return nil, 0, ErrOperationFailed
+	}
+
+	var approvals []model.Approval
+	if err := query.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&approvals).Error; err != nil {
+		log.Printf("分页查询审批记录失败: %v", err)
+		return nil, 0, ErrOperationFailed
+	}
+	return approvals, total, nil
+}
