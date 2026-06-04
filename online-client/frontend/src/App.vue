@@ -23,7 +23,6 @@
             <el-menu-item v-if="isOfficer || isAuditor" index="/transactions"><i class="el-icon-s-finance"></i><span>交易管理</span></el-menu-item>
             <el-menu-item v-if="isAuditor" index="/audit-logs"><i class="el-icon-document"></i><span>审计日志</span></el-menu-item>
             <el-menu-item v-if="isAdmin" index="/backups"><i class="el-icon-box"></i><span>备份恢复</span></el-menu-item>
-            <el-menu-item v-if="isAdmin" index="/test-data"><i class="el-icon-data-analysis"></i><span>测试数据</span></el-menu-item>
           </el-menu>
         </el-aside>
         <el-main class="main">

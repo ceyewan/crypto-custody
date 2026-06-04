@@ -19,5 +19,5 @@ func Setup(r *gin.Engine) {
 	OfflineTaskRoutes(r) // 离线任务相关路由
 	AuditRoutes(r)       // 审计日志路由
 	BackupRoutes(r)      // 备份恢复路由
-	TestDataRoutes(r)    // 测试数据和批量任务路由
+	JobRoutes(r)         // 批量任务路由
 }

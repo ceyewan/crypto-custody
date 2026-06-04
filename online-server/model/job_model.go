@@ -2,7 +2,7 @@ package model
 
 import "gorm.io/gorm"
 
-// Job 记录批量导入、测试数据生成等批量任务。
+// Job 记录批量导入、余额同步等批量任务。
 type Job struct {
 	gorm.Model
 	JobNo        string `gorm:"column:job_no;uniqueIndex;size:80;not null;comment:任务编号"`

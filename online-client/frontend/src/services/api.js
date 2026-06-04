@@ -166,6 +166,10 @@ export const accountApi = {
     return apiClient.post(`/api/accounts/${id}/sync-balance`)
   },
 
+  syncBalances () {
+    return apiClient.post('/api/accounts/sync-balances')
+  },
+
   exportAccounts () {
     return apiClient.get('/api/accounts/export')
   },
@@ -222,8 +226,12 @@ export const transactionApi = {
     return apiClient.delete(`/api/transaction/admin/${id}`)
   },
 
-  createDraft (data) {
+  createTransaction (data) {
     return apiClient.post('/api/transactions', data)
+  },
+
+  importTransactions (data) {
+    return apiClient.post('/api/transactions/import', data)
   },
 
   getTransactionPage (params = {}) {
@@ -257,6 +265,9 @@ export const caseApi = {
   },
   create (data) {
     return apiClient.post('/api/cases', data)
+  },
+  importCases (data) {
+    return apiClient.post('/api/cases/import', data)
   },
   update (id, data) {
     return apiClient.put(`/api/cases/${id}`, data)
@@ -320,18 +331,6 @@ export const backupApi = {
   },
   restore (id, password = '') {
     return apiClient.post(`/api/backups/${id}/restore`, { password })
-  }
-}
-
-export const testDataApi = {
-  seed (data) {
-    return apiClient.post('/api/test-data/seed', data)
-  },
-  clear () {
-    return apiClient.post('/api/test-data/clear')
-  },
-  summary () {
-    return apiClient.get('/api/test-data/summary')
   }
 }
 

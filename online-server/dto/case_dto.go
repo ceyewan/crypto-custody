@@ -7,6 +7,10 @@ type CaseRequest struct {
 	Status      string `json:"status"`
 }
 
+type BatchImportCasesRequest struct {
+	Cases []CaseRequest `json:"cases" binding:"required"`
+}
+
 type CaseListRequest struct {
 	Page     int    `form:"page"`
 	PageSize int    `form:"pageSize"`

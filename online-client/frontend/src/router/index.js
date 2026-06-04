@@ -10,7 +10,6 @@ import Profile from '../views/Profile.vue'
 import Cases from '../views/Cases.vue'
 import AuditLogs from '../views/AuditLogs.vue'
 import Backups from '../views/Backups.vue'
-import TestData from '../views/TestData.vue'
 import store from '../store'
 
 Vue.use(VueRouter)
@@ -72,12 +71,6 @@ const routes = [
     path: '/backups',
     name: 'Backups',
     component: Backups,
-    meta: { requiresAuth: true, requiresAdmin: true }
-  },
-  {
-    path: '/test-data',
-    name: 'TestData',
-    component: TestData,
     meta: { requiresAuth: true, requiresAdmin: true }
   },
   {

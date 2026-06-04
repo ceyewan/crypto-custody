@@ -7,7 +7,7 @@ type PrepareTransactionRequest struct {
 	Amount      float64 `json:"amount" binding:"required,gt=0"`
 }
 
-// CreateTransactionRequest 是目标态交易草稿请求。
+// CreateTransactionRequest 是目标态交易创建请求，创建成功即生成待签名哈希。
 type CreateTransactionRequest struct {
 	CaseID        uint   `json:"caseId"`
 	CaseNo        string `json:"caseNo"`
@@ -18,6 +18,26 @@ type CreateTransactionRequest struct {
 	Value         string `json:"value" binding:"required"`
 	CoinType      string `json:"coinType"`
 	Reason        string `json:"reason"`
+}
+
+type ImportTransactionRequest struct {
+	CaseID        uint   `json:"caseId"`
+	CaseNo        string `json:"caseNo"`
+	TxNo          string `json:"txNo"`
+	TxType        string `json:"txType"`
+	FromAccountID uint   `json:"fromAccountId"`
+	FromAddress   string `json:"fromAddress" binding:"required"`
+	ToAddress     string `json:"toAddress" binding:"required"`
+	Value         string `json:"value" binding:"required"`
+	CoinType      string `json:"coinType"`
+	Reason        string `json:"reason"`
+	MessageHash   string `json:"messageHash"`
+	TxHash        string `json:"txHash"`
+	Status        string `json:"status"`
+}
+
+type BatchImportTransactionsRequest struct {
+	Transactions []ImportTransactionRequest `json:"transactions" binding:"required"`
 }
 
 type ImportSignatureRequest struct {
@@ -57,6 +77,7 @@ type TransactionListRequest struct {
 	PageSize int    `form:"pageSize" json:"pageSize"`
 	Status   string `form:"status" json:"status"`
 	Address  string `form:"address" json:"address"`
+	CaseNo   string `form:"caseNo" json:"caseNo"`
 }
 
 // 交易详情响应

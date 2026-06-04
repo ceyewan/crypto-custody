@@ -21,6 +21,7 @@ func CaseRoutes(r *gin.Engine) {
 		{
 			write.POST("", handler.CreateCase)
 			write.POST("/", handler.CreateCase)
+			write.POST("/import", handler.BatchImportCases)
 			write.PUT("/:id", handler.UpdateCase)
 			write.POST("/:id/accounts", handler.LinkCaseAccount)
 			write.DELETE("/:id/accounts/:accountId", handler.UnlinkCaseAccount)

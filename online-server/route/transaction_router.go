@@ -17,8 +17,9 @@ func TransactionRouter(r *gin.Engine) {
 		ops := transactions.Group("")
 		ops.Use(middleware.OfficerRequired())
 		{
-			ops.POST("", handler.CreateTransactionDraft)
-			ops.POST("/", handler.CreateTransactionDraft)
+			ops.POST("", handler.CreateTransactionPrepared)
+			ops.POST("/", handler.CreateTransactionPrepared)
+			ops.POST("/import", handler.BatchImportTransactions)
 			ops.POST("/:id/prepare", handler.PrepareTransactionV2)
 			ops.GET("/:id/export-sign-task", handler.ExportSignTask)
 			ops.POST("/:id/import-signature", handler.ImportTransactionSignature)

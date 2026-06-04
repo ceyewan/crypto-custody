@@ -1,0 +1,35 @@
+{
+  "accounts": [
+    {
+      "address": "0x1000000000000000000000000000000000000001",
+      "coinType": "ETH",
+      "accountType": "seized_original",
+      "balance": "12.500000000000000000",
+      "balanceSource": "manual",
+      "caseNo": "CASE-DEMO-001",
+      "keyMaterialHint": "none",
+      "description": "演示案件一的收缴原始账户"
+    },
+    {
+      "address": "0x1000000000000000000000000000000000000002",
+      "coinType": "ETH",
+      "accountType": "seized_original",
+      "balance": "3.250000000000000000",
+      "balanceSource": "manual",
+      "caseNo": "CASE-DEMO-001",
+      "keyMaterialHint": "none",
+      "description": "演示案件一的第二个收缴账户"
+    },
+    {
+      "address": "0x2000000000000000000000000000000000000001",
+      "coinType": "ETH",
+      "accountType": "custody_wallet",
+      "balance": "0",
+      "balanceSource": "manual",
+      "caseNo": "CASE-DEMO-002",
+      "keyMaterialHint": "offline_generated",
+      "offlineRefNo": "OFFLINE-DEMO-KEYGEN-001",
+      "description": "演示案件二的托管钱包"
+    }
+  ]
+}

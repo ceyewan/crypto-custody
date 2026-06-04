@@ -15,7 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func CreateTransactionDraft(c *gin.Context) {
+func CreateTransactionPrepared(c *gin.Context) {
 	var req dto.CreateTransactionRequest
 	if !utils.BindJSON(c, &req) {
 		return
@@ -41,18 +41,96 @@ func CreateTransactionDraft(c *gin.Context) {
 		utils.ResponseWithError(c, http.StatusInternalServerError, "生成交易编号失败: "+err.Error())
 		return
 	}
+	messageHash, generatedID, err := buildTransactionHash(req.FromAddress, req.ToAddress, req.Value)
+	if err != nil {
+		utils.ResponseWithError(c, http.StatusInternalServerError, err.Error())
+		return
+	}
 	tx := model.Transaction{
 		TxNo: txNo, CaseID: caseID, CaseNo: req.CaseNo,
 		TxType: txType, FromAccountID: fromAccountID, FromAddress: req.FromAddress,
 		ToAddress: req.ToAddress, Value: req.Value, CoinType: coinType,
-		Reason: req.Reason, Status: model.StatusDraft, CreatedBy: c.GetString("Username"),
+		Reason: req.Reason, MessageHash: messageHash, Status: model.StatusPending, CreatedBy: c.GetString("Username"),
 	}
 	if err := utils.GetDB().Create(&tx).Error; err != nil {
 		utils.ResponseWithError(c, http.StatusBadRequest, "创建交易失败: "+err.Error())
 		return
 	}
+	if err := rebindPreparedTransaction(messageHash, generatedID, tx.ID); err != nil {
+		utils.ResponseWithError(c, http.StatusInternalServerError, err.Error())
+		return
+	}
 	service.AuditAction(c, "transaction.create", "transaction", strconv.FormatUint(uint64(tx.ID), 10), tx.CaseNo, "success", "", tx)
-	utils.ResponseWithData(c, "交易草稿创建成功", tx)
+	utils.ResponseWithData(c, "交易创建成功，已生成待签名哈希", tx)
+}
+
+func BatchImportTransactions(c *gin.Context) {
+	var req dto.BatchImportTransactionsRequest
+	if !utils.BindJSON(c, &req) {
+		return
+	}
+	if len(req.Transactions) == 0 {
+		utils.ResponseWithError(c, http.StatusBadRequest, "没有可导入的交易")
+		return
+	}
+
+	success := 0
+	for _, item := range req.Transactions {
+		txNo := strings.TrimSpace(item.TxNo)
+		if txNo == "" {
+			generated, err := service.NewTransactionNo()
+			if err != nil {
+				service.AuditAction(c, "transaction.batch_import", "transaction", "", item.CaseNo, "failure", err.Error(), gin.H{"total": len(req.Transactions)})
+				utils.ResponseWithError(c, http.StatusInternalServerError, "生成交易编号失败: "+err.Error())
+				return
+			}
+			txNo = generated
+		}
+		txType := defaultString(item.TxType, "test")
+		coinType := defaultString(item.CoinType, "ETH")
+		status := model.StatusDraft
+		if item.Status != "" {
+			if parsed, ok := parseTransactionStatus(item.Status); ok {
+				status = parsed
+			}
+		}
+
+		var caseID *uint
+		if item.CaseID != 0 {
+			caseID = &item.CaseID
+		} else if item.CaseNo != "" {
+			var cs model.Case
+			if err := utils.GetDB().Where("case_no = ?", item.CaseNo).First(&cs).Error; err == nil {
+				caseID = &cs.ID
+			}
+		}
+		var fromAccountID *uint
+		if item.FromAccountID != 0 {
+			fromAccountID = &item.FromAccountID
+		} else if item.FromAddress != "" {
+			var account model.Account
+			if err := utils.GetDB().Where("address = ?", item.FromAddress).First(&account).Error; err == nil {
+				fromAccountID = &account.ID
+			}
+		}
+
+		tx := model.Transaction{
+			TxNo: txNo, CaseID: caseID, CaseNo: item.CaseNo,
+			TxType: txType, FromAccountID: fromAccountID, FromAddress: item.FromAddress,
+			ToAddress: item.ToAddress, Value: item.Value, CoinType: coinType,
+			Reason: item.Reason, MessageHash: item.MessageHash, TxHash: item.TxHash,
+			Status: status, CreatedBy: c.GetString("Username"),
+		}
+		if err := utils.GetDB().Create(&tx).Error; err != nil {
+			service.AuditAction(c, "transaction.batch_import", "transaction", "", tx.CaseNo, "failure", err.Error(), gin.H{"total": len(req.Transactions)})
+			utils.ResponseWithError(c, http.StatusBadRequest, "批量导入交易失败: "+err.Error())
+			return
+		}
+		success++
+	}
+
+	service.AuditAction(c, "transaction.batch_import", "transaction", "", "", "success", "", gin.H{"total": len(req.Transactions), "success": success})
+	utils.ResponseWithData(c, "批量导入交易成功", gin.H{"total": len(req.Transactions), "success": success, "failed": len(req.Transactions) - success})
 }
 
 func ListTransactionsV2(c *gin.Context) {
@@ -69,6 +147,9 @@ func ListTransactionsV2(c *gin.Context) {
 		if status, ok := parseTransactionStatus(req.Status); ok {
 			query = query.Where("status = ?", status)
 		}
+	}
+	if req.CaseNo != "" {
+		query = query.Where("case_no = ?", req.CaseNo)
 	}
 	if req.Address != "" {
 		query = query.Where("from_address = ? OR to_address = ?", req.Address, req.Address)
@@ -97,30 +178,10 @@ func PrepareTransactionV2(c *gin.Context) {
 		utils.ResponseWithError(c, http.StatusNotFound, "交易不存在")
 		return
 	}
-	amountText := strings.Fields(tx.Value)
-	amount := new(big.Float)
-	if len(amountText) > 0 {
-		amount.SetString(amountText[0])
-	} else {
-		amount.SetString(tx.Value)
-	}
-	tm, err := getTransactionManager()
-	if err != nil {
-		utils.ResponseWithError(c, http.StatusInternalServerError, "获取交易管理器失败: "+err.Error())
+	if _, err := ensureTransactionPrepared(c, &tx); err != nil {
+		utils.ResponseWithError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
-	_, messageHash, err := tm.CreateTransaction(tx.FromAddress, tx.ToAddress, amount)
-	if err != nil {
-		utils.ResponseWithError(c, http.StatusInternalServerError, "构建交易失败: "+err.Error())
-		return
-	}
-	tx.MessageHash = messageHash
-	tx.Status = model.StatusPending
-	if err := utils.GetDB().Save(&tx).Error; err != nil {
-		utils.ResponseWithError(c, http.StatusInternalServerError, "保存交易哈希失败: "+err.Error())
-		return
-	}
-	service.AuditAction(c, "transaction.prepare", "transaction", strconv.FormatUint(uint64(tx.ID), 10), tx.CaseNo, "success", "", tx)
 	utils.ResponseWithData(c, "交易构建成功", tx)
 }
 
@@ -134,8 +195,8 @@ func ExportSignTask(c *gin.Context) {
 		utils.ResponseWithError(c, http.StatusNotFound, "交易不存在")
 		return
 	}
-	if tx.MessageHash == "" {
-		utils.ResponseWithError(c, http.StatusBadRequest, "交易尚未生成待签名哈希")
+	if _, err := ensureTransactionPrepared(c, &tx); err != nil {
+		utils.ResponseWithError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 	taskNo, err := service.NewOfflineTaskNo()
@@ -158,6 +219,85 @@ func ExportSignTask(c *gin.Context) {
 	_ = utils.GetDB().Create(&task).Error
 	service.AuditAction(c, "transaction.export_sign_task", "transaction", strconv.FormatUint(uint64(tx.ID), 10), tx.CaseNo, "success", "", taskPackage)
 	utils.ResponseWithData(c, "签名任务导出成功", gin.H{"task": task, "payload": payload, "package": taskPackage})
+}
+
+func ensureTransactionPrepared(c *gin.Context, tx *model.Transaction) (bool, error) {
+	if tx.MessageHash != "" {
+		return false, nil
+	}
+	messageHash, generatedID, err := buildTransactionHash(tx.FromAddress, tx.ToAddress, tx.Value)
+	if err != nil {
+		return false, err
+	}
+	tx.MessageHash = messageHash
+	tx.Status = model.StatusPending
+	if err := utils.GetDB().Save(tx).Error; err != nil {
+		return false, errWithPrefix("保存交易哈希失败", err)
+	}
+	if err := rebindPreparedTransaction(messageHash, generatedID, tx.ID); err != nil {
+		return false, err
+	}
+	service.AuditAction(c, "transaction.prepare", "transaction", strconv.FormatUint(uint64(tx.ID), 10), tx.CaseNo, "success", "", tx)
+	return true, nil
+}
+
+func buildTransactionHash(fromAddress, toAddress, value string) (string, uint, error) {
+	amountText := strings.Fields(value)
+	amount := new(big.Float)
+	if len(amountText) > 0 {
+		if _, ok := amount.SetString(amountText[0]); !ok {
+			return "", 0, errWithMessage("交易金额格式错误: " + value)
+		}
+	} else {
+		if _, ok := amount.SetString(value); !ok {
+			return "", 0, errWithMessage("交易金额格式错误: " + value)
+		}
+	}
+	tm, err := getTransactionManager()
+	if err != nil {
+		return "", 0, errWithPrefix("获取交易管理器失败", err)
+	}
+	generatedID, messageHash, err := tm.CreateTransaction(fromAddress, toAddress, amount)
+	if err != nil {
+		return "", 0, errWithPrefix("构建交易失败", err)
+	}
+	return messageHash, generatedID, nil
+}
+
+func rebindPreparedTransaction(messageHash string, generatedID uint, transactionID uint) error {
+	tm, err := getTransactionManager()
+	if err != nil {
+		return errWithPrefix("获取交易管理器失败", err)
+	}
+	if err := tm.RebindTransactionRecord(messageHash, transactionID); err != nil {
+		return errWithPrefix("绑定待签名交易失败", err)
+	}
+	if generatedID != 0 && generatedID != transactionID {
+		if err := utils.GetDB().Unscoped().Delete(&model.Transaction{}, generatedID).Error; err != nil {
+			return errWithPrefix("清理临时交易记录失败", err)
+		}
+	}
+	return nil
+}
+
+func errWithPrefix(prefix string, err error) error {
+	return &prefixedError{prefix: prefix, err: err}
+}
+
+func errWithMessage(message string) error {
+	return &prefixedError{prefix: message}
+}
+
+type prefixedError struct {
+	prefix string
+	err    error
+}
+
+func (e *prefixedError) Error() string {
+	if e.err == nil {
+		return e.prefix
+	}
+	return e.prefix + ": " + e.err.Error()
 }
 
 func ImportTransactionSignature(c *gin.Context) {

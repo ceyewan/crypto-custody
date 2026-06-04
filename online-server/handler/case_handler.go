@@ -46,6 +46,55 @@ func CreateCase(c *gin.Context) {
 	utils.ResponseWithData(c, "案件创建成功", cs)
 }
 
+func BatchImportCases(c *gin.Context) {
+	var req dto.BatchImportCasesRequest
+	if !utils.BindJSON(c, &req) {
+		return
+	}
+	if len(req.Cases) == 0 {
+		utils.ResponseWithError(c, http.StatusBadRequest, "没有可导入的案件")
+		return
+	}
+
+	success := 0
+	for _, item := range req.Cases {
+		name := strings.TrimSpace(item.Name)
+		if name == "" {
+			continue
+		}
+		caseNo := strings.TrimSpace(item.CaseNo)
+		if caseNo == "" {
+			generated, err := service.NewCaseService().GenerateCaseNo()
+			if err != nil {
+				service.AuditAction(c, "case.batch_import", "case", "", "", "failure", err.Error(), gin.H{"total": len(req.Cases)})
+				utils.ResponseWithError(c, http.StatusInternalServerError, "生成案件编号失败: "+err.Error())
+				return
+			}
+			caseNo = generated
+		}
+		status := model.CaseStatusActive
+		if item.Status != "" {
+			status = model.CaseStatus(item.Status)
+		}
+		cs := model.Case{
+			CaseNo:      caseNo,
+			Name:        name,
+			Description: item.Description,
+			Status:      status,
+			CreatedBy:   c.GetString("Username"),
+		}
+		if err := utils.GetDB().Where("case_no = ?", cs.CaseNo).FirstOrCreate(&cs).Error; err != nil {
+			service.AuditAction(c, "case.batch_import", "case", "", caseNo, "failure", err.Error(), gin.H{"total": len(req.Cases)})
+			utils.ResponseWithError(c, http.StatusBadRequest, "批量导入案件失败: "+err.Error())
+			return
+		}
+		success++
+	}
+
+	service.AuditAction(c, "case.batch_import", "case", "", "", "success", "", gin.H{"total": len(req.Cases), "success": success})
+	utils.ResponseWithData(c, "批量导入案件成功", gin.H{"total": len(req.Cases), "success": success, "failed": len(req.Cases) - success})
+}
+
 func ListCases(c *gin.Context) {
 	var req dto.CaseListRequest
 	_ = c.ShouldBindQuery(&req)

@@ -1,0 +1,16 @@
+{
+  "cases": [
+    {
+      "caseNo": "CASE-DEMO-001",
+      "name": "涉案钱包归集演示",
+      "status": "active",
+      "description": "本地 JSON 导入样例案件，用于验证案件、账户和交易列表。"
+    },
+    {
+      "caseNo": "CASE-DEMO-002",
+      "name": "托管钱包签名演示",
+      "status": "active",
+      "description": "本地 JSON 导入样例案件，用于验证离线签名结果导入。"
+    }
+  ]
+}

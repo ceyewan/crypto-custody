@@ -1,0 +1,25 @@
+{
+  "transactions": [
+    {
+      "caseNo": "CASE-DEMO-001",
+      "txType": "test",
+      "fromAddress": "0x1000000000000000000000000000000000000001",
+      "toAddress": "0x2000000000000000000000000000000000000001",
+      "value": "0.25 ETH",
+      "coinType": "ETH",
+      "reason": "本地 JSON 导入演示交易",
+      "status": "draft"
+    },
+    {
+      "caseNo": "CASE-DEMO-002",
+      "txType": "withdraw",
+      "fromAddress": "0x2000000000000000000000000000000000000001",
+      "toAddress": "0x3000000000000000000000000000000000000001",
+      "value": "0.10 ETH",
+      "coinType": "ETH",
+      "reason": "托管钱包提取流程演示",
+      "messageHash": "demo-message-hash-001",
+      "status": "pending_signature"
+    }
+  ]
+}
