@@ -200,6 +200,9 @@ type ISeStorage interface {
 
 	// UpdateSeStatus 更新安全芯片状态
 	UpdateSeStatus(seID string, status model.SeStatus) error
+
+	// DeleteSe 删除未被活跃分片引用的安全芯片登记记录
+	DeleteSe(seID string) error
 }
 
 // IOfflineTaskStorage 定义离线任务存储接口

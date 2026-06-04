@@ -54,6 +54,9 @@ var (
 	// 在使用已存在的 se_id 或 CPLC 创建新记录时会触发此错误
 	ErrSeExists = errors.New("安全芯片记录已存在")
 
+	// ErrRecordInUse 表示记录仍被业务数据引用，不能直接删除
+	ErrRecordInUse = errors.New("记录仍在使用中")
+
 	// ErrOperationFailed 表示当操作失败时返回的通用错误
 	// 在数据库操作或其他系统操作失败时会触发此错误
 	ErrOperationFailed = errors.New("操作失败")

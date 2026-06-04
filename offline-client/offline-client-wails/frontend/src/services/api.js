@@ -137,6 +137,11 @@ export const seApi = {
             cplc: cplc,
             custody_location: custodyLocation
         })
+    },
+
+    // 删除未使用的安全芯片记录
+    deleteSecurityElement(seid) {
+        return apiClient.delete(`/se/${encodeURIComponent(seid)}`)
     }
 }
 

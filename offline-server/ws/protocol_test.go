@@ -986,6 +986,16 @@ func (f *fakeSeStorage) UpdateSeStatus(seID string, status model.SeStatus) error
 	return nil
 }
 
+func (f *fakeSeStorage) DeleteSe(seID string) error {
+	se, ok := f.byID[seID]
+	if !ok {
+		return storage.ErrRecordNotFound
+	}
+	delete(f.byID, seID)
+	delete(f.byCPLC, se.CPLC)
+	return nil
+}
+
 type fakeOfflineKeyStorage struct {
 	byAddress map[string]model.OfflineKey
 	created   *model.OfflineKey

@@ -42,6 +42,17 @@
                 <el-table-column label="最近使用时间" width="170">
                     <template slot-scope="scope">{{ formatTime(scope.row.last_used_at) }}</template>
                 </el-table-column>
+                <el-table-column label="操作" width="100" fixed="right">
+                    <template slot-scope="scope">
+                        <el-button
+                            type="text"
+                            size="small"
+                            icon="el-icon-delete"
+                            :loading="deletingSeId === scope.row.se_id"
+                            @click="deleteSe(scope.row)"
+                        >删除</el-button>
+                    </template>
+                </el-table-column>
             </el-table>
         </el-card>
 
@@ -83,7 +94,8 @@ export default {
             importDialogVisible: false,
             reading: false,
             importing: false,
-            loadingList: false
+            loadingList: false,
+            deletingSeId: ''
         }
     },
     computed: {
@@ -176,6 +188,31 @@ export default {
                 this.$message.error(error.response?.data?.error || '导入 SE 失败')
             } finally {
                 this.importing = false
+            }
+        },
+
+        async deleteSe(row) {
+            const seId = row?.se_id
+            if (!seId) return
+            try {
+                await this.$confirm(`确认删除 SE ${seId} 的登记记录？`, '删除 SE', {
+                    type: 'warning',
+                    confirmButtonText: '删除',
+                    cancelButtonText: '取消'
+                })
+            } catch {
+                return
+            }
+
+            this.deletingSeId = seId
+            try {
+                await serverSeApi.deleteSecurityElement(seId)
+                this.$message.success('SE 记录已删除')
+                await this.loadSecurityElements()
+            } catch (error) {
+                this.$message.error(error.response?.data?.error || '删除 SE 失败')
+            } finally {
+                this.deletingSeId = ''
             }
         },
 

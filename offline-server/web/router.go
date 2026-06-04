@@ -139,6 +139,7 @@ func initSeRouter(r *gin.Engine) {
 	{
 		seGroup.GET("/list", handler.ListSe)      // 获取安全芯片列表
 		seGroup.POST("/create", handler.CreateSe) // 创建安全芯片记录
+		seGroup.DELETE("/:se_id", handler.DeleteSe)
 	}
 }
 

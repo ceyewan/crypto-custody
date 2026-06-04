@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"offline-server/storage"
 	"offline-server/storage/model"
@@ -74,6 +75,50 @@ func ListSe(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"code": 0,
 		"data": data,
+	})
+}
+
+// DeleteSe 删除未被活跃分片引用的安全芯片登记记录。
+func DeleteSe(c *gin.Context) {
+	seID := c.Param("se_id")
+	if seID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":  400,
+			"error": "se_id不能为空",
+		})
+		return
+	}
+
+	seStorage := storage.GetSeStorage()
+	if err := seStorage.DeleteSe(seID); err != nil {
+		switch {
+		case errors.Is(err, storage.ErrRecordNotFound):
+			c.JSON(http.StatusNotFound, gin.H{
+				"code":  404,
+				"error": "安全芯片记录不存在",
+			})
+		case errors.Is(err, storage.ErrRecordInUse):
+			c.JSON(http.StatusConflict, gin.H{
+				"code":  409,
+				"error": "该 SE 已绑定活跃密钥分片，不能删除",
+			})
+		case errors.Is(err, storage.ErrInvalidParameter):
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code":  400,
+				"error": "无效的请求参数",
+			})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"code":  500,
+				"error": "删除安全芯片记录失败: " + err.Error(),
+			})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"success": true,
 	})
 }
 

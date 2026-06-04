@@ -196,3 +196,44 @@ func (s *SeStorage) UpdateSeStatus(seID string, status model.SeStatus) error {
 	}
 	return nil
 }
+
+// DeleteSe 删除未被活跃分片引用的安全芯片登记记录。
+func (s *SeStorage) DeleteSe(seID string) error {
+	if seID == "" {
+		return ErrInvalidParameter
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	database := db.GetDB()
+	if database == nil {
+		return ErrDatabaseNotInitialized
+	}
+
+	var se model.Se
+	if err := database.Where("se_id = ?", seID).First(&se).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return ErrRecordNotFound
+		}
+		log.Printf("查询安全芯片记录失败: %v", err)
+		return ErrOperationFailed
+	}
+
+	var activeShardCount int64
+	if err := database.Model(&model.KeyShard{}).
+		Where("se_cplc = ? AND status = ?", se.CPLC, model.KeyShardStatusActive).
+		Count(&activeShardCount).Error; err != nil {
+		log.Printf("查询安全芯片关联分片失败: %v", err)
+		return ErrOperationFailed
+	}
+	if activeShardCount > 0 {
+		return ErrRecordInUse
+	}
+
+	if err := database.Unscoped().Delete(&se).Error; err != nil {
+		log.Printf("删除安全芯片记录失败: %v", err)
+		return ErrOperationFailed
+	}
+	return nil
+}
