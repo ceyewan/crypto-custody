@@ -33,7 +33,7 @@ COPY --from=builder /out/offline-server /app/offline-server
 COPY bin/gg20_sm_manager_linux_amd64 /app/bin/gg20_sm_manager_linux_amd64
 
 RUN chmod 755 /app/offline-server /app/bin/gg20_sm_manager_linux_amd64 \
-    && mkdir -p /app/data /app/logs /app/private_keys
+    && mkdir -p /app/data/offline_tasks /app/logs /app/private_keys
 
 ENV TZ=Asia/Singapore \
     OFFLINE_MANAGER_BIN=/app/bin/gg20_sm_manager_linux_amd64 \
