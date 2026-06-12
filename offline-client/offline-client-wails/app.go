@@ -150,8 +150,8 @@ func (a *App) OpenFile() (map[string]string, error) {
 		DefaultDirectory: downloadsDir(),
 		Filters: []wailsruntime.FileFilter{
 			{
-				DisplayName: "冷备份文件 (*.enc;*.cold.enc)",
-				Pattern:     "*.enc;*.cold.enc",
+				DisplayName: "冷备份文件 (*.enc)",
+				Pattern:     "*.enc",
 			},
 			{
 				DisplayName: "所有文件 (*.*)",
